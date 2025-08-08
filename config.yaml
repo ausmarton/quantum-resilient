@@ -1,0 +1,160 @@
+# QuantumResilient Framework Configuration
+
+# Framework Settings
+framework:
+  name: "QuantumResilient Framework"
+  version: "0.1.0"
+  log_level: "INFO"
+  output_directory: "results"
+
+# Research Objectives Configuration
+objectives:
+  objective_1:
+    name: "Algorithm Selection Criteria"
+    enabled: true
+    iterations: 1000
+    
+  objective_2:
+    name: "Modular Framework Development"
+    enabled: true
+    test_transactions: 1000
+    
+  objective_3:
+    name: "Comprehensive Benchmarking"
+    enabled: true
+    benchmark_iterations: 1000
+    data_sizes: [64, 1024, 4096, 16384]
+    
+  objective_4:
+    name: "Performance Comparison"
+    enabled: true
+    comparison_iterations: 500
+    
+  objective_5:
+    name: "Engineering Recommendations"
+    enabled: true
+
+# Algorithm Configuration
+algorithms:
+  classical:
+    - name: "RSA-2048"
+      key_size: 2048
+      security_level: 112
+      quantum_resistant: false
+      
+    - name: "AES-256"
+      key_size: 256
+      security_level: 256
+      quantum_resistant: false
+      
+  pqc:
+    - name: "Kyber512"
+      variant: "Kyber512"
+      key_size: 512
+      security_level: 128
+      quantum_resistant: true
+      nist_standardized: true
+      
+    - name: "Dilithium2"
+      variant: "Dilithium2"
+      key_size: 256
+      security_level: 128
+      quantum_resistant: true
+      nist_standardized: true
+
+# Benchmark Configuration
+benchmarks:
+  latency_test:
+    iterations: 1000
+    data_sizes: [64, 1024, 4096, 16384]
+    warmup_iterations: 100
+    
+  throughput_test:
+    batch_sizes: [100, 1000, 10000]
+    duration_seconds: 300
+    max_latency_ms: 100
+    
+  resource_test:
+    cpu_monitoring: true
+    memory_monitoring: true
+    network_monitoring: false
+    disk_monitoring: false
+
+# AML Pipeline Configuration
+aml_pipeline:
+  risk_threshold: 0.7
+  max_latency_ms: 100
+  batch_size: 1
+  transaction_types:
+    - "transfer"
+    - "withdrawal"
+    - "deposit"
+  currencies:
+    - "USD"
+    - "EUR"
+    - "GBP"
+    - "JPY"
+  risk_indicators:
+    - "high_value"
+    - "cross_border"
+    - "rapid_movement"
+    - "structured_transactions"
+    - "pep_related"
+    - "sanctioned_entities"
+    - "unusual_patterns"
+
+# Reporting Configuration
+reporting:
+  output_formats:
+    - "json"
+    - "markdown"
+    - "html"
+  visualizations:
+    - "latency_comparison"
+    - "throughput_analysis"
+    - "resource_utilization"
+    - "statistical_analysis"
+  executive_summary: true
+  technical_report: true
+  detailed_analysis: true
+
+# Deployment Configuration
+deployment:
+  docker:
+    image_name: "pqc-research"
+    tag: "latest"
+    port: 8080
+    
+  kubernetes:
+    namespace: "pqc-research"
+    replicas: 1
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "8Gi"
+        cpu: "4000m"
+        
+  gcp:
+    project_id: "your-project-id"
+    region: "us-central1"
+    cluster_name: "pqc-research-cluster"
+
+# Development Configuration
+development:
+  testing:
+    unit_tests: true
+    integration_tests: true
+    benchmark_tests: true
+    coverage_threshold: 80
+    
+  linting:
+    flake8: true
+    mypy: true
+    black: true
+    
+  documentation:
+    sphinx: true
+    api_docs: true
+    user_guides: true

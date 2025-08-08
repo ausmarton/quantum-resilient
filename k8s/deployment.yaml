@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: quantumresilient
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: quantumresilient-config
+  namespace: quantumresilient
+data:
+  algorithms.yaml: |
+    classical:
+      - name: RSA-2048
+        key_size: 2048
+      - name: AES-256
+        key_size: 256
+    pqc:
+      - name: Kyber512
+        variant: Kyber512
+      - name: Dilithium2
+        variant: Dilithium2
+  
+  scenarios.yaml: |
+    real_time_monitoring:
+      duration_seconds: 300
+      batch_size: 1
+      max_latency_ms: 100
+    batch_processing:
+      duration_seconds: 600
+      batch_size: 1000
+      num_batches: 10
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quantumresilient
+  namespace: quantumresilient
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quantumresilient
+  template:
+    metadata:
+      labels:
+        app: quantumresilient
+    spec:
+      containers:
+      - name: quantumresilient
+        image: python:3.9-slim
+        command: ["python", "-c", "import time; print('QuantumResilient Framework started!'); print('Running continuously...'); [print(f'Heartbeat {i}: Framework is running') or time.sleep(30) for i in range(1000)]"]
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+        env:
+        - name: PYTHONPATH
+          value: "/app"
+        - name: LOG_LEVEL
+          value: "INFO"
+      volumes:
+      - name: config-volume
+        configMap:
+          name: quantumresilient-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: quantumresilient-service
+  namespace: quantumresilient
+spec:
+  selector:
+    app: quantumresilient
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
