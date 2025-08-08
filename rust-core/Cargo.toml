@@ -1,0 +1,18 @@
+[package]
+name = "rust-core"
+version = "0.1.0"
+edition = "2021"
+description = "Core library for PQC vs classical cryptography benchmarking in real-time streaming pipelines"
+authors = ["Quantum Resilient Team"]
+
+[lib]
+name = "rust_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pqc-bench"
+path = "src/main.rs"
+
+[dependencies]
+# No external dependencies yet
+
