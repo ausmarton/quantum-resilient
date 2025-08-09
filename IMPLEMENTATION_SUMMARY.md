@@ -224,6 +224,8 @@ kubectl get pods -n pqc-research
 - [ ] Real-world pilots
 - [ ] Academic publications
 - [ ] Best practices guide
+- [ ] Allow results for multiple test/benchmark runs
+- [ ] Ensure encryption and decryption is tested in benchmarks
 
 ## 🎉 Success Metrics
 
