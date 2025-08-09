@@ -301,7 +301,7 @@ class AMLDataGenerator:
 
 async def run_aml_simulation():
     """Run AML simulation with different crypto algorithms"""
-    algorithms = ['RSA-2048', 'AES-256', 'Kyber512', 'Dilithium2']
+    algorithms = ['RSA-2048', 'AES-256', 'ML-KEM-512', 'ML-DSA-44']
     results = {}
     
     for algorithm in algorithms:

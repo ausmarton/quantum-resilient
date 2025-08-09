@@ -11,8 +11,7 @@ framework:
 objectives:
   objective_1:
     name: "Algorithm Selection Criteria"
-    enabled: true
-    iterations: 1000
+    enabled: false  # Already completed per user requirements
     
   objective_2:
     name: "Modular Framework Development"
@@ -23,7 +22,7 @@ objectives:
     name: "Comprehensive Benchmarking"
     enabled: true
     benchmark_iterations: 1000
-    data_sizes: [64, 1024, 4096, 16384]
+    data_sizes: [64, 1024, 4096, 16384, 65536]
     
   objective_4:
     name: "Performance Comparison"
@@ -32,53 +31,128 @@ objectives:
     
   objective_5:
     name: "Engineering Recommendations"
-    enabled: true
+    enabled: false  # Report drafting only per user requirements
 
-# Algorithm Configuration
+# Algorithm Configuration - Updated with NIST standardized names
 algorithms:
   classical:
     - name: "RSA-2048"
       key_size: 2048
       security_level: 112
       quantum_resistant: false
+      category: "asymmetric_encryption"
+      
+    - name: "RSA-4096"
+      key_size: 4096
+      security_level: 128
+      quantum_resistant: false
+      category: "asymmetric_encryption"
+      
+    - name: "ECDSA-P256"
+      key_size: 256
+      security_level: 128
+      quantum_resistant: false
+      category: "digital_signature"
+      
+    - name: "ECDSA-P384"
+      key_size: 384
+      security_level: 192
+      quantum_resistant: false
+      category: "digital_signature"
+      
+    - name: "ECDH-P256"
+      key_size: 256
+      security_level: 128
+      quantum_resistant: false
+      category: "key_exchange"
+      
+    - name: "ECDH-P384"
+      key_size: 384
+      security_level: 192
+      quantum_resistant: false
+      category: "key_exchange"
       
     - name: "AES-256"
       key_size: 256
       security_level: 256
       quantum_resistant: false
+      category: "symmetric_encryption"
       
   pqc:
-    - name: "Kyber512"
-      variant: "Kyber512"
+    - name: "ML-KEM-512"
+      variant: "ML-KEM-512"
       key_size: 512
       security_level: 128
       quantum_resistant: true
       nist_standardized: true
+      category: "key_encapsulation"
       
-    - name: "Dilithium2"
-      variant: "Dilithium2"
+    - name: "ML-KEM-768"
+      variant: "ML-KEM-768"
+      key_size: 768
+      security_level: 192
+      quantum_resistant: true
+      nist_standardized: true
+      category: "key_encapsulation"
+      
+    - name: "ML-KEM-1024"
+      variant: "ML-KEM-1024"
+      key_size: 1024
+      security_level: 256
+      quantum_resistant: true
+      nist_standardized: true
+      category: "key_encapsulation"
+      
+    - name: "ML-DSA-44"
+      variant: "ML-DSA-44"
       key_size: 256
       security_level: 128
       quantum_resistant: true
       nist_standardized: true
+      category: "digital_signature"
+      
+    - name: "ML-DSA-65"
+      variant: "ML-DSA-65"
+      key_size: 384
+      security_level: 192
+      quantum_resistant: true
+      nist_standardized: true
+      category: "digital_signature"
+      
+    - name: "ML-DSA-87"
+      variant: "ML-DSA-87"
+      key_size: 512
+      security_level: 256
+      quantum_resistant: true
+      nist_standardized: true
+      category: "digital_signature"
 
 # Benchmark Configuration
 benchmarks:
   latency_test:
     iterations: 1000
-    data_sizes: [64, 1024, 4096, 16384]
+    data_sizes: [64, 1024, 4096, 16384, 65536]
     warmup_iterations: 100
+    confidence_level: 0.95
     
   throughput_test:
-    batch_sizes: [100, 1000, 10000]
+    batch_sizes: [100, 1000, 10000, 100000]
     duration_seconds: 300
     max_latency_ms: 100
+    concurrent_operations: [1, 4, 8, 16]
     
   resource_test:
     cpu_monitoring: true
     memory_monitoring: true
-    network_monitoring: false
+    network_monitoring: true
     disk_monitoring: false
+    sampling_interval_ms: 100
+    
+  stress_test:
+    max_concurrent_connections: 1000
+    ramp_up_time_seconds: 60
+    hold_time_seconds: 300
+    ramp_down_time_seconds: 60
 
 # AML Pipeline Configuration
 aml_pipeline:
@@ -89,11 +163,16 @@ aml_pipeline:
     - "transfer"
     - "withdrawal"
     - "deposit"
+    - "exchange"
+    - "payment"
   currencies:
     - "USD"
     - "EUR"
     - "GBP"
     - "JPY"
+    - "CHF"
+    - "CAD"
+    - "AUD"
   risk_indicators:
     - "high_value"
     - "cross_border"
@@ -102,21 +181,28 @@ aml_pipeline:
     - "pep_related"
     - "sanctioned_entities"
     - "unusual_patterns"
+    - "suspicious_timing"
+    - "multiple_accounts"
 
 # Reporting Configuration
 reporting:
   output_formats:
     - "json"
-    - "markdown"
+    - "csv"
+    - "excel"
     - "html"
   visualizations:
     - "latency_comparison"
     - "throughput_analysis"
     - "resource_utilization"
     - "statistical_analysis"
+    - "performance_trends"
+    - "algorithm_comparison"
+    - "cost_analysis"
   executive_summary: true
   technical_report: true
   detailed_analysis: true
+  interactive_dashboard: true
 
 # Deployment Configuration
 deployment:

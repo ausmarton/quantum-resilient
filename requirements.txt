@@ -42,3 +42,24 @@ mypy>=1.0.0
 # Documentation
 sphinx>=7.0.0
 sphinx-rtd-theme>=1.2.0
+
+# Jupyter notebook support
+jupyter>=1.0.0
+ipykernel>=6.0.0
+notebook>=6.4.0
+
+# Excel support for results export
+openpyxl>=3.1.0
+xlsxwriter>=3.1.0
+
+# Additional statistical analysis
+statsmodels>=0.14.0
+
+# System monitoring
+psutil>=5.9.0
+
+# Progress bars
+tqdm>=4.65.0
+
+# Color output
+colorama>=0.4.6

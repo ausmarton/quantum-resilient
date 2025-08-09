@@ -118,10 +118,45 @@ impl CryptoBenchmark {
 
     fn simulate_crypto_operation(&self, operation_name: &str, data_size: usize) {
         let base_duration = match self.algorithm_name.as_str() {
+            // Classical algorithms
             "RSA-2048" => match operation_name {
-                "key_generation" => 100,
-                "encryption" => 5 + (data_size / 100),
-                "decryption" => 10 + (data_size / 50),
+                "key_generation" => 150,
+                "encryption" => 8 + (data_size / 50),
+                "decryption" => 15 + (data_size / 25),
+                "signing" => 12 + (data_size / 40),
+                "verification" => 3 + (data_size / 100),
+                _ => 1,
+            },
+            "RSA-4096" => match operation_name {
+                "key_generation" => 600,
+                "encryption" => 25 + (data_size / 30),
+                "decryption" => 50 + (data_size / 15),
+                "signing" => 40 + (data_size / 25),
+                "verification" => 8 + (data_size / 60),
+                _ => 1,
+            },
+            "ECDSA-P256" => match operation_name {
+                "key_generation" => 20,
+                "signing" => 5 + (data_size / 200),
+                "verification" => 8 + (data_size / 150),
+                _ => 1,
+            },
+            "ECDSA-P384" => match operation_name {
+                "key_generation" => 35,
+                "signing" => 8 + (data_size / 150),
+                "verification" => 12 + (data_size / 100),
+                _ => 1,
+            },
+            "ECDH-P256" => match operation_name {
+                "key_generation" => 20,
+                "key_exchange" => 15 + (data_size / 200),
+                "shared_secret" => 10 + (data_size / 250),
+                _ => 1,
+            },
+            "ECDH-P384" => match operation_name {
+                "key_generation" => 35,
+                "key_exchange" => 25 + (data_size / 150),
+                "shared_secret" => 18 + (data_size / 200),
                 _ => 1,
             },
             "AES-256" => match operation_name {
@@ -130,16 +165,41 @@ impl CryptoBenchmark {
                 "decryption" => 2 + (data_size / 1000),
                 _ => 1,
             },
-            "Kyber512" => match operation_name {
-                "key_generation" => 50,
-                "encryption" => 8 + (data_size / 200),
-                "decryption" => 12 + (data_size / 150),
+            // PQC algorithms (ML-KEM and ML-DSA)
+            "ML-KEM-512" => match operation_name {
+                "key_generation" => 60,
+                "encapsulation" => 10 + (data_size / 150),
+                "decapsulation" => 15 + (data_size / 120),
                 _ => 1,
             },
-            "Dilithium2" => match operation_name {
-                "key_generation" => 80,
-                "signing" => 15 + (data_size / 100),
-                "verification" => 20 + (data_size / 80),
+            "ML-KEM-768" => match operation_name {
+                "key_generation" => 90,
+                "encapsulation" => 15 + (data_size / 120),
+                "decapsulation" => 22 + (data_size / 100),
+                _ => 1,
+            },
+            "ML-KEM-1024" => match operation_name {
+                "key_generation" => 120,
+                "encapsulation" => 20 + (data_size / 100),
+                "decapsulation" => 30 + (data_size / 80),
+                _ => 1,
+            },
+            "ML-DSA-44" => match operation_name {
+                "key_generation" => 100,
+                "signing" => 20 + (data_size / 80),
+                "verification" => 25 + (data_size / 60),
+                _ => 1,
+            },
+            "ML-DSA-65" => match operation_name {
+                "key_generation" => 150,
+                "signing" => 30 + (data_size / 60),
+                "verification" => 40 + (data_size / 45),
+                _ => 1,
+            },
+            "ML-DSA-87" => match operation_name {
+                "key_generation" => 200,
+                "signing" => 45 + (data_size / 40),
+                "verification" => 60 + (data_size / 30),
                 _ => 1,
             },
             _ => 1,
@@ -153,7 +213,7 @@ impl CryptoBenchmark {
         self.system.used_memory() as i64
     }
 
-    fn get_cpu_usage(&mut self) -> f64 {
+    fn get_cpu_usage(&self) -> f64 {
         self.system.refresh_cpu();
         self.system.global_cpu_info().cpu_usage().into()
     }
@@ -244,12 +304,12 @@ impl OQSCrypto {
     #[new]
     fn new(algorithm_name: String) -> Self {
         let key_size = match algorithm_name.as_str() {
-            "Kyber512" => 512,
-            "Kyber768" => 768,
-            "Kyber1024" => 1024,
-            "Dilithium2" => 256,
-            "Dilithium3" => 384,
-            "Dilithium5" => 512,
+            "ML-KEM-512" => 512,
+            "ML-KEM-768" => 768,
+            "ML-KEM-1024" => 1024,
+            "ML-DSA-44" => 256,
+            "ML-DSA-65" => 384,
+            "ML-DSA-87" => 512,
             _ => 256,
         };
         
@@ -264,37 +324,17 @@ impl OQSCrypto {
         let start_time = Instant::now();
         
         // Simulate PQC key generation with realistic characteristics
-        let public_key_size = match self.algorithm_name.as_str() {
-            "Kyber512" => 800,
-            "Kyber768" => 1184,
-            "Kyber1024" => 1568,
-            "Dilithium2" => 1312,
-            "Dilithium3" => 1952,
-            "Dilithium5" => 2592,
-            _ => 800,
-        };
-        
-        let secret_key_size = match self.algorithm_name.as_str() {
-            "Kyber512" => 1632,
-            "Kyber768" => 2400,
-            "Kyber1024" => 3168,
-            "Dilithium2" => 2528,
-            "Dilithium3" => 4000,
-            "Dilithium5" => 4864,
-            _ => 1632,
+        let (public_key_size, secret_key_size, key_gen_time) = match self.algorithm_name.as_str() {
+            "ML-KEM-512" => (800, 1632, 60),
+            "ML-KEM-768" => (1184, 2400, 90),
+            "ML-KEM-1024" => (1568, 3168, 120),
+            "ML-DSA-44" => (1312, 2528, 100),
+            "ML-DSA-65" => (1952, 4000, 150),
+            "ML-DSA-87" => (2592, 4864, 200),
+            _ => (800, 1632, 60),
         };
         
         // Simulate key generation time
-        let key_gen_time = match self.algorithm_name.as_str() {
-            "Kyber512" => 50,
-            "Kyber768" => 75,
-            "Kyber1024" => 100,
-            "Dilithium2" => 80,
-            "Dilithium3" => 120,
-            "Dilithium5" => 160,
-            _ => 50,
-        };
-        
         std::thread::sleep(std::time::Duration::from_millis(key_gen_time.try_into().unwrap()));
         
         let public_key = vec![0u8; public_key_size];
@@ -306,39 +346,47 @@ impl OQSCrypto {
         Ok((public_key, secret_key))
     }
 
-    fn encrypt(&mut self, data: &[u8], public_key: &[u8]) -> PyResult<Vec<u8>> {
+    fn encapsulate(&mut self, data: &[u8], public_key: &[u8]) -> PyResult<(Vec<u8>, Vec<u8>)> {
         let start_time = Instant::now();
         
-        // Simulate PQC encryption
-        let ciphertext_size = match self.algorithm_name.as_str() {
-            "Kyber512" => 768,
-            "Kyber768" => 1088,
-            "Kyber1024" => 1568,
-            _ => 768,
+        // Simulate PQC encapsulation (for ML-KEM)
+        let (ciphertext_size, shared_secret_size, encapsulation_time) = match self.algorithm_name.as_str() {
+            "ML-KEM-512" => (768, 32, 10),
+            "ML-KEM-768" => (1088, 32, 15),
+            "ML-KEM-1024" => (1568, 32, 20),
+            _ => (768, 32, 10),
         };
         
-        let encryption_time = 5 + (data.len() / 100);
-        std::thread::sleep(std::time::Duration::from_millis(encryption_time.try_into().unwrap()));
+        let operation_time = encapsulation_time + (data.len() / 150);
+        std::thread::sleep(std::time::Duration::from_millis(operation_time.try_into().unwrap()));
         
         let ciphertext = vec![0u8; ciphertext_size];
+        let shared_secret = vec![0u8; shared_secret_size];
         
         let latency = start_time.elapsed().as_millis() as f64;
-        self.record_metric("encryption", latency, data.len());
+        self.record_metric("encapsulation", latency, data.len());
         
-        Ok(ciphertext)
+        Ok((ciphertext, shared_secret))
     }
 
-    fn decrypt(&mut self, ciphertext: &[u8], secret_key: &[u8]) -> PyResult<Vec<u8>> {
+    fn decapsulate(&mut self, ciphertext: &[u8], secret_key: &[u8]) -> PyResult<Vec<u8>> {
         let start_time = Instant::now();
         
-        // Simulate PQC decryption
-        let decryption_time = 8 + (ciphertext.len() / 80);
-        std::thread::sleep(std::time::Duration::from_millis(decryption_time.try_into().unwrap()));
+        // Simulate PQC decapsulation (for ML-KEM)
+        let decapsulation_time = match self.algorithm_name.as_str() {
+            "ML-KEM-512" => 15,
+            "ML-KEM-768" => 22,
+            "ML-KEM-1024" => 30,
+            _ => 15,
+        };
+        
+        let operation_time = decapsulation_time + (ciphertext.len() / 120);
+        std::thread::sleep(std::time::Duration::from_millis(operation_time.try_into().unwrap()));
         
         let shared_secret = vec![0u8; 32];
         
         let latency = start_time.elapsed().as_millis() as f64;
-        self.record_metric("decryption", latency, ciphertext.len());
+        self.record_metric("decapsulation", latency, ciphertext.len());
         
         Ok(shared_secret)
     }
@@ -346,16 +394,16 @@ impl OQSCrypto {
     fn sign(&mut self, data: &[u8], secret_key: &[u8]) -> PyResult<Vec<u8>> {
         let start_time = Instant::now();
         
-        // Simulate PQC signing
-        let signature_size = match self.algorithm_name.as_str() {
-            "Dilithium2" => 2701,
-            "Dilithium3" => 3366,
-            "Dilithium5" => 4886,
-            _ => 2701,
+        // Simulate PQC signing (for ML-DSA)
+        let (signature_size, signing_time) = match self.algorithm_name.as_str() {
+            "ML-DSA-44" => (2701, 20),
+            "ML-DSA-65" => (3366, 30),
+            "ML-DSA-87" => (4886, 45),
+            _ => (2701, 20),
         };
         
-        let signing_time = 10 + (data.len() / 50);
-        std::thread::sleep(std::time::Duration::from_millis(signing_time.try_into().unwrap()));
+        let operation_time = signing_time + (data.len() / 80);
+        std::thread::sleep(std::time::Duration::from_millis(operation_time.try_into().unwrap()));
         
         let signature = vec![0u8; signature_size];
         
@@ -368,9 +416,16 @@ impl OQSCrypto {
     fn verify(&mut self, data: &[u8], signature: &[u8], public_key: &[u8]) -> PyResult<bool> {
         let start_time = Instant::now();
         
-        // Simulate PQC verification
-        let verification_time = 15 + (data.len() / 40);
-        std::thread::sleep(std::time::Duration::from_millis(verification_time.try_into().unwrap()));
+        // Simulate PQC verification (for ML-DSA)
+        let verification_time = match self.algorithm_name.as_str() {
+            "ML-DSA-44" => 25,
+            "ML-DSA-65" => 40,
+            "ML-DSA-87" => 60,
+            _ => 25,
+        };
+        
+        let operation_time = verification_time + (data.len() / 60);
+        std::thread::sleep(std::time::Duration::from_millis(operation_time.try_into().unwrap()));
         
         let latency = start_time.elapsed().as_millis() as f64;
         self.record_metric("verification", latency, data.len());
@@ -397,6 +452,16 @@ impl OQSCrypto {
         self.metrics.entry(operation_name.to_string())
             .or_insert_with(Vec::new)
             .push(metric);
+    }
+
+    // Legacy methods for backward compatibility
+    fn encrypt(&mut self, data: &[u8], public_key: &[u8]) -> PyResult<Vec<u8>> {
+        let (ciphertext, _) = self.encapsulate(data, public_key)?;
+        Ok(ciphertext)
+    }
+
+    fn decrypt(&mut self, ciphertext: &[u8], secret_key: &[u8]) -> PyResult<Vec<u8>> {
+        self.decapsulate(ciphertext, secret_key)
     }
 }
 

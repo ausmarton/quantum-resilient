@@ -60,14 +60,14 @@ class TestQuantumResilientFramework:
         assert 'secondary_recommendations' in recommendations
         assert 'risk_assessment' in recommendations
     
+    # Objective 1 is out of scope in the updated framework; test Objective 3 path exists
     @pytest.mark.asyncio
-    async def test_objective_1_execution(self):
-        """Test Objective 1 execution"""
-        result = await self.framework.run_objective_1_algorithm_selection()
-        assert 'security_analysis' in result
-        assert 'performance_analysis' in result
-        assert 'implementation_maturity' in result
-        assert 'recommendations' in result
+    async def test_objective_3_execution(self):
+        """Test Objective 3 execution"""
+        result = await self.framework.run_objective_3_benchmarking()
+        assert 'latency_benchmarks' in result
+        assert 'throughput_benchmarks' in result
+        assert 'resource_benchmarks' in result
     
     def test_synthetic_transaction_generation(self):
         """Test synthetic transaction generation"""
