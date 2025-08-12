@@ -24,22 +24,33 @@ The diagram shows only the components and interactions necessary to understand h
 
 ```mermaid
 flowchart TB
-    subgraph Research_Framework["Python Research Orchestrator"]
-        CFG["config.yaml"] --> ORCH["QuantumResilientFramework\n+ComprehensiveBenchmarker"]
-        ORCH --> REPORT["Reporting & Summaries"]
-        ORCH --> RESULTS["results/ artifacts\n(JSON, CSV, XLSX, HTML)"]
+    %% Logical architecture and flows
+    subgraph python["Python Layer (Control)"]
+        cfg["config.yaml"]
+        orch["QuantumResilientFramework"]
+        bench["Benchmark Runner"]
+        aml["AML Pipeline (risk, compliance, alerts)"]
+        report["Reporting"]
+        viz["Charts & Dashboard"]
+        results["results/ artifacts (JSON, CSV, XLSX, HTML)"]
+        cfg --> orch
+        orch --> bench
+        orch --> aml
+        orch --> report
+        bench --> viz
+        viz --> results
+        report --> results
     end
 
-    subgraph Rust_Core["Rust Core (PyO3 module: pqc_core)"]
-        CRYPTO["CryptoBenchmark / OQSCrypto"]
-        PIPE["PipelineSimulator"]
+    subgraph rust["Rust Core (Execution via PyO3: pqc_core)"]
+        classAlgos["CryptoBenchmark\n(Classical: RSA, ECDSA/ECDH, AES)"]
+        pqcAlgos["OQSCrypto\n(PQC: ML-KEM, ML-DSA)"]
+        pipeSim["PipelineSimulator"]
     end
 
-    ORCH <--> |PyO3| CRYPTO
-    ORCH <--> |PyO3| PIPE
-    ORCH --> AML["Real‑world AML Simulation\n(risk, compliance, alerts)"]
-    AML -. measures .-> RESULTS
-    REPORT -. consumes .-> RESULTS
+    bench <--> |"PyO3: latency/throughput/resource/stress"| classAlgos
+    bench <--> |"PyO3: latency/throughput/resource/stress"| pqcAlgos
+    aml <--> |"PyO3"| pipeSim
 ```
 
 ## Technical appendix: Reproducibility notes
@@ -82,24 +93,33 @@ The same codebase runs locally, in Docker, and on Kubernetes without change; onl
 
 ```mermaid
 flowchart LR
-    subgraph Local["Local Dev"]
-        VENV["Python venv"] --> CORE1["pqc_core (local build)"]
-        RESULTS1["results/ (host)"]
+    %% Environment portability
+    subgraph local["Local Development"]
+        venv["Python venv + pqc_core (local build)"]
+        cfgL["config.yaml"]
+        resL["results/ (host filesystem)"]
+        cfgL --> venv
+        venv --> resL
     end
 
-    subgraph Docker["Container"]
-        PYIMG["Python Runtime"] --> CORE2["pqc_core (built in image)"]
-        VOL["Bind‑mount results/"]
+    subgraph docker["Docker Container"]
+        img["Image: Python + pqc_core"]
+        cfgD["config via file/env"]
+        volD["Bind mount: results/"]
+        cfgD --> img
+        img --> volD
     end
 
-    subgraph K8s["Kubernetes"]
-        DEPLOY["Deployment / Pods"] --> CORE3["pqc_core (image)"]
-        PVC["Persistent Volume for results/"]
-        CM["ConfigMap: config.yaml"]
+    subgraph k8s["Kubernetes"]
+        pod["Pod: Python + pqc_core"]
+        cm["ConfigMap: config.yaml"]
+        pvc["PVC: results/ persistent storage"]
+        cm --> pod
+        pod --> pvc
     end
 
-    CORE1===Shared_Codebase===CORE2
-    CORE2===Shared_Codebase===CORE3
+    venv === |"Same codebase, same config schema"| img
+    img === |"Same codebase, same config schema"| pod
 ```
 
 - **Local**: Build `pqc_core` with Cargo or `maturin` and run orchestrator scripts directly; artifacts land in the working directory.
