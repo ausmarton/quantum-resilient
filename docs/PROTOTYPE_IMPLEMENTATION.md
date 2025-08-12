@@ -24,33 +24,12 @@ The diagram shows only the components and interactions necessary to understand h
 
 ```mermaid
 flowchart TB
-    %% Logical architecture and flows
-    subgraph python["Python Layer (Control)"]
-        cfg["config.yaml"]
-        orch["QuantumResilientFramework"]
-        bench["Benchmark Runner"]
-        aml["AML Pipeline (risk, compliance, alerts)"]
-        report["Reporting"]
-        viz["Charts & Dashboard"]
-        results["results/ artifacts (JSON, CSV, XLSX, HTML)"]
-        cfg --> orch
-        orch --> bench
-        orch --> aml
-        orch --> report
-        bench --> viz
-        viz --> results
-        report --> results
-    end
-
-    subgraph rust["Rust Core (Execution via PyO3: pqc_core)"]
-        classAlgos["CryptoBenchmark\n(Classical: RSA, ECDSA/ECDH, AES)"]
-        pqcAlgos["OQSCrypto\n(PQC: ML-KEM, ML-DSA)"]
-        pipeSim["PipelineSimulator"]
-    end
-
-    bench <--> |"PyO3: latency/throughput/resource/stress"| classAlgos
-    bench <--> |"PyO3: latency/throughput/resource/stress"| pqcAlgos
-    aml <--> |"PyO3"| pipeSim
+    %% Minimal logical view: control and data flow
+    cfg["config.yaml"] --> orch["Python Orchestrator"]
+    orch -- "calls via PyO3" --> core["Rust Core (pqc_core)"]
+    core -- "metrics + timings" --> orch
+    orch --> results["results/ (data + charts)"]
+    orch --> reports["Reports (summaries)"]
 ```
 
 ## Technical appendix: Reproducibility notes
@@ -93,33 +72,16 @@ The same codebase runs locally, in Docker, and on Kubernetes without change; onl
 
 ```mermaid
 flowchart LR
-    %% Environment portability
-    subgraph local["Local Development"]
-        venv["Python venv + pqc_core (local build)"]
-        cfgL["config.yaml"]
-        resL["results/ (host filesystem)"]
-        cfgL --> venv
-        venv --> resL
+    %% Environment portability (no cross-environment arrows)
+    subgraph Local["Local"]
+        cfgL["config.yaml"] --> appL["App (Python + pqc_core)"] --> resL["results/"]
     end
-
-    subgraph docker["Docker Container"]
-        img["Image: Python + pqc_core"]
-        cfgD["config via file/env"]
-        volD["Bind mount: results/"]
-        cfgD --> img
-        img --> volD
+    subgraph Docker["Docker"]
+        cfgD["file/env config"] --> appD["App (image: Python + pqc_core)"] --> resD["bind-mounted results/"]
     end
-
-    subgraph k8s["Kubernetes"]
-        pod["Pod: Python + pqc_core"]
-        cm["ConfigMap: config.yaml"]
-        pvc["PVC: results/ persistent storage"]
-        cm --> pod
-        pod --> pvc
+    subgraph K8s["Kubernetes"]
+        cfgK["ConfigMap"] --> appK["App (Pod)"] --> resK["PVC: results/"]
     end
-
-    venv === |"Same codebase, same config schema"| img
-    img === |"Same codebase, same config schema"| pod
 ```
 
 - **Local**: Build `pqc_core` with Cargo or `maturin` and run orchestrator scripts directly; artifacts land in the working directory.
