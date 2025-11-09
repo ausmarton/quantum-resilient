@@ -296,5 +296,6 @@ fn read_proc_net_dev_bytes() -> (Option<u64>, Option<u64>) {
 pub mod metrics;
 pub mod adapters;
 pub mod workload;
+pub mod modes;
 
 
