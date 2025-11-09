@@ -71,6 +71,10 @@ jobs:
         run: chmod +x scripts/*.sh || true
       - name: Emit metrics via Rust helper
         run: cargo run --quiet --release --manifest-path src/rust_core/Cargo.toml --bin emit_metrics
+      - name: Build/install PyO3 extension (pqc_core)
+        run: |
+          python -m pip install maturin
+          maturin develop -m src/rust_core/Cargo.toml
 
       - name: Short integration run (orchestrator)
         env:
@@ -83,6 +87,10 @@ jobs:
           NUMEXPR_NUM_THREADS: "1"
         run: |
           pqc-orchestrator --config ./configs/default.yaml || python -m python_orchestrator.cli --config ./configs/default.yaml
+      - name: Execute notebook to verify
+        run: |
+          python -m pip install nbconvert
+          jupyter nbconvert --to notebook --inplace --execute results/analysis.ipynb
 
       - name: Reproducibility check (local)
         env:

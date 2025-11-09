@@ -306,5 +306,6 @@ pub mod metrics;
 pub mod adapters;
 pub mod workload;
 pub mod modes;
+pub mod pyo3_mod;
 
 
