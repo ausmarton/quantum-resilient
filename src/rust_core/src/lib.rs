@@ -43,6 +43,8 @@ pub enum OperationKind {
 	Decapsulate,
 	Sign,
 	Verify,
+	BulkEncrypt,
+	BulkDecrypt,
 }
 
 #[derive(Clone, Debug, Default, serde::Serialize)]
@@ -195,5 +197,6 @@ fn sample_resources() -> (Option<u64>, Option<u64>, Option<u64>) {
 
 pub mod metrics;
 pub mod adapters;
+pub mod workload;
 
 
