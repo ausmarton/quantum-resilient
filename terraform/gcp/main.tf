@@ -50,7 +50,7 @@ resource "google_service_account" "orchestrator" {
 // Grant object admin on the results bucket
 resource "google_storage_bucket_iam_member" "orchestrator_bucket_writer" {
   bucket = google_storage_bucket.results_bucket.name
-  role   = "roles/storage.objectAdmin"
+  role   = "roles/storage.objectCreator"
   member = "serviceAccount:${google_service_account.orchestrator.email}"
 }
 
