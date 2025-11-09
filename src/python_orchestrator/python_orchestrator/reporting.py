@@ -186,6 +186,18 @@ def run_analysis_and_report(results_dir: str) -> None:
 		except Exception:
 			env_snapshot = None
 	write_json_summary(summary_df, summary_json, env_snapshot)
+	# Write aggregated_metrics.json alias
+	aggregated_json = out_dir / "aggregated_metrics.json"
+	try:
+		aggregated_json.write_text(summary_json.read_text(encoding="utf-8"), encoding="utf-8")
+	except Exception:
+		pass
+	# Write env.json alias
+	if env_path.exists():
+		try:
+			(out_dir / "env.json").write_text(env_path.read_text(encoding="utf-8"), encoding="utf-8")
+		except Exception:
+			pass
 	# Charts
 	charts_dir = out_dir / "charts"
 	chart_files = generate_charts(df, charts_dir)

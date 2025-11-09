@@ -152,6 +152,7 @@ fn record_latency<T, F: FnOnce() -> CryptoResult<T>>(collector: &Arc<dyn Metrics
 	let latency_micros = elapsed.as_micros() as u64;
 	let latency_ms = (latency_micros as f64) / 1000.0;
 	let metrics = OperationMetrics {
+		timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
 		operation: op,
 		latency_micros,
 		cpu_user_micros: None,

@@ -49,6 +49,8 @@ pub enum OperationKind {
 
 #[derive(Clone, Debug, Default, serde::Serialize)]
 pub struct OperationMetrics {
+	#[serde(with = "chrono::serde::ts_seconds_option", skip_serializing_if = "Option::is_none")]
+	pub timestamp_seconds_utc: Option<i64>,
 	pub operation: OperationKind,
 	pub latency_micros: u64,
 	pub cpu_user_micros: Option<u64>,
@@ -156,11 +158,12 @@ impl<A: CryptoAdapter + ?Sized> InstrumentedAdapter<A> {
 		let start = Instant::now();
 		let result = f(&self.inner);
 		let elapsed = start.elapsed();
-		let (cpu_user_micros, cpu_system_micros, max_rss_bytes) = sample_resources();
+		let (cpu_user_micros, cpu_system_micros, max_rss_bytes, disk_bytes, net_tx, net_rx) = sample_resources();
 		let latency_micros = elapsed.as_micros() as u64;
 		let latency_ms = (latency_micros as f64) / 1000.0;
 		let throughput = if latency_micros > 0 { 1_000_000.0 / (latency_micros as f64) } else { 0.0 };
 		let metrics = OperationMetrics {
+			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
 			operation,
 			latency_micros,
 			cpu_user_micros,
@@ -183,9 +186,9 @@ impl<A: CryptoAdapter + ?Sized> InstrumentedAdapter<A> {
 			throughput_ops_per_sec: Some(throughput),
 			avg_cpu_percent: None,
 			avg_memory_mb: max_rss_bytes.map(|b| (b as f64) / (1024.0 * 1024.0)),
-			disk_io_bytes: None,
-			net_tx_bytes: None,
-			net_rx_bytes: None,
+			disk_io_bytes: disk_bytes,
+			net_tx_bytes: net_tx,
+			net_rx_bytes: net_rx,
 		};
 		self.collector.record(&metrics);
 		result
@@ -223,7 +226,7 @@ impl<A: CryptoAdapter + ?Sized> CryptoAdapter for InstrumentedAdapter<A> {
 	}
 }
 
-fn sample_resources() -> (Option<u64>, Option<u64>, Option<u64>) {
+fn sample_resources() -> (Option<u64>, Option<u64>, Option<u64>, Option<u64>, Option<u64>, Option<u64>) {
 	unsafe {
 		let mut usage: libc::rusage = std::mem::zeroed();
 		if libc::getrusage(libc::RUSAGE_SELF, &mut usage as *mut _) == 0 {
@@ -235,11 +238,59 @@ fn sample_resources() -> (Option<u64>, Option<u64>, Option<u64>) {
 				.saturating_add(usage.ru_stime.tv_usec as u64);
 			// ru_maxrss is in kilobytes on Linux
 			let rss_bytes = (usage.ru_maxrss as u64).saturating_mul(1024);
-			(Some(user_us), Some(sys_us), Some(rss_bytes))
+			let disk = read_proc_self_io_bytes();
+			let (net_rx, net_tx) = read_proc_net_dev_bytes();
+			(Some(user_us), Some(sys_us), Some(rss_bytes), disk, net_tx, net_rx)
 		} else {
-			(None, None, None)
+			(None, None, None, None, None, None)
 		}
 	}
+}
+
+fn read_proc_self_io_bytes() -> Option<u64> {
+	if cfg!(target_os = "linux") {
+		if let Ok(content) = std::fs::read_to_string("/proc/self/io") {
+			let mut sum: u128 = 0;
+			for line in content.lines() {
+				if let Some((k, v)) = line.split_once(":") {
+					let key = k.trim();
+					let val_str = v.trim();
+					if key == "read_bytes" || key == "write_bytes" {
+						if let Ok(val) = val_str.parse::<u128>() {
+							sum = sum.saturating_add(val);
+						}
+					}
+				}
+			}
+			return Some(sum as u64);
+		}
+	}
+	None
+}
+
+fn read_proc_net_dev_bytes() -> (Option<u64>, Option<u64>) {
+	if cfg!(target_os = "linux") {
+		if let Ok(content) = std::fs::read_to_string("/proc/net/dev") {
+			let mut rx: u128 = 0;
+			let mut tx: u128 = 0;
+			for line in content.lines().skip(2) {
+				// format: iface:  rx_bytes ... tx_bytes ...
+				if let Some((_iface, rest)) = line.split_once(":") {
+					let parts: Vec<&str> = rest.split_whitespace().collect();
+					if parts.len() >= 16 {
+						if let Ok(rxb) = parts[0].parse::<u128>() {
+							rx = rx.saturating_add(rxb);
+						}
+						if let Ok(txb) = parts[8].parse::<u128>() {
+							tx = tx.saturating_add(txb);
+						}
+					}
+				}
+			}
+			return (Some(rx as u64), Some(tx as u64));
+		}
+	}
+	(None, None)
 }
 
 pub mod metrics;
