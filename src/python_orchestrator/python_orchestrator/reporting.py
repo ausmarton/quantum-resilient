@@ -94,8 +94,51 @@ def write_markdown_summary(summary_df: pd.DataFrame, out_path: Path) -> None:
 	out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def write_json_summary(summary_df: pd.DataFrame, out_path: Path) -> None:
-	out_path.write_text(summary_df.to_json(orient="records", indent=2), encoding="utf-8")
+def write_json_summary(summary_df: pd.DataFrame, out_path: Path, env_snapshot: dict | None = None) -> None:
+	records = []
+	for _, r in summary_df.iterrows():
+		records.append({
+			"algorithm": r.get("algorithm"),
+			"parameter_set": r.get("op"),
+			"operations": {
+				"keygen_time_ms": None,
+				"encapsulate_time_ms": None,
+				"decrypt_time_ms": None,
+				"encrypt_time_ms": None,
+				"sign_time_ms": None,
+				"verify_time_ms": None,
+			},
+			"sizes": {
+				"public_key_bytes": None,
+				"secret_key_bytes": None,
+				"signature_bytes": None,
+				"ciphertext_bytes": None,
+				"storage_overhead_pct": None,
+			},
+			"performance": {
+				"throughput_ops_per_sec": r.get("throughput_ops_per_s_mean"),
+				"latency_p50": r.get("p50_ms"),
+				"latency_p95": r.get("p95_ms"),
+				"latency_p99": r.get("p99_ms"),
+				"stddev": r.get("std_ms"),
+				"CI_95": {
+					"lower_ms": r.get("ci95_lower_ms"),
+					"upper_ms": r.get("ci95_upper_ms"),
+				},
+				"p_value": None,
+			},
+			"resources": {
+				"avg_cpu_percent": None,
+				"avg_memory_mb": r.get("max_rss_mb_mean"),
+				"disk_io_bytes": None,
+				"net_tx_bytes": None,
+				"net_rx_bytes": None,
+			},
+			"context": {
+				"env_snapshot": env_snapshot,
+			},
+		})
+	out_path.write_text(json.dumps(records, indent=2), encoding="utf-8")
 
 
 def write_notebook(results_dir: Path, summary_csv: Path, charts_dir: Path, out_path: Path) -> None:
@@ -134,7 +177,15 @@ def run_analysis_and_report(results_dir: str) -> None:
 	summary_csv = out_dir / "summary.csv"
 	summary_json = out_dir / "summary.json"
 	summary_df.to_csv(summary_csv, index=False)
-	write_json_summary(summary_df, summary_json)
+	# Read environment snapshot if present
+	env_snapshot = None
+	env_path = out_dir / "environment.json"
+	if env_path.exists():
+		try:
+			env_snapshot = json.loads(env_path.read_text(encoding="utf-8"))
+		except Exception:
+			env_snapshot = None
+	write_json_summary(summary_df, summary_json, env_snapshot)
 	# Charts
 	charts_dir = out_dir / "charts"
 	chart_files = generate_charts(df, charts_dir)

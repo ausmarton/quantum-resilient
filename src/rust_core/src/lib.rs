@@ -54,6 +54,30 @@ pub struct OperationMetrics {
 	pub cpu_user_micros: Option<u64>,
 	pub cpu_system_micros: Option<u64>,
 	pub max_rss_bytes: Option<u64>,
+	// context
+	pub algorithm: Option<String>,
+	pub parameter_set: Option<String>,
+	// sizes
+	pub public_key_bytes: Option<u64>,
+	pub secret_key_bytes: Option<u64>,
+	pub signature_bytes: Option<u64>,
+	pub ciphertext_bytes: Option<u64>,
+	pub storage_overhead_pct: Option<f64>,
+	// per-op named times (ms)
+	pub keygen_time_ms: Option<f64>,
+	pub encapsulate_time_ms: Option<f64>,
+	pub decapsulate_time_ms: Option<f64>,
+	pub encrypt_time_ms: Option<f64>,
+	pub decrypt_time_ms: Option<f64>,
+	pub sign_time_ms: Option<f64>,
+	pub verify_time_ms: Option<f64>,
+	// instantaneous performance/resource hints
+	pub throughput_ops_per_sec: Option<f64>,
+	pub avg_cpu_percent: Option<f64>,
+	pub avg_memory_mb: Option<f64>,
+	pub disk_io_bytes: Option<u64>,
+	pub net_tx_bytes: Option<u64>,
+	pub net_rx_bytes: Option<u64>,
 }
 
 pub trait MetricsCollector: Send + Sync {
@@ -133,12 +157,35 @@ impl<A: CryptoAdapter + ?Sized> InstrumentedAdapter<A> {
 		let result = f(&self.inner);
 		let elapsed = start.elapsed();
 		let (cpu_user_micros, cpu_system_micros, max_rss_bytes) = sample_resources();
+		let latency_micros = elapsed.as_micros() as u64;
+		let latency_ms = (latency_micros as f64) / 1000.0;
+		let throughput = if latency_micros > 0 { 1_000_000.0 / (latency_micros as f64) } else { 0.0 };
 		let metrics = OperationMetrics {
 			operation,
-			latency_micros: elapsed.as_micros() as u64,
+			latency_micros,
 			cpu_user_micros,
 			cpu_system_micros,
 			max_rss_bytes,
+			algorithm: Some(self.inner.name().to_string()),
+			parameter_set: None,
+			public_key_bytes: Some(self.inner.public_key_size() as u64),
+			secret_key_bytes: Some(self.inner.secret_key_size() as u64),
+			signature_bytes: Some(self.inner.signature_size() as u64),
+			ciphertext_bytes: None,
+			storage_overhead_pct: None,
+			keygen_time_ms: if matches!(operation, OperationKind::Keygen) { Some(latency_ms) } else { None },
+			encapsulate_time_ms: if matches!(operation, OperationKind::Encapsulate) { Some(latency_ms) } else { None },
+			decapsulate_time_ms: if matches!(operation, OperationKind::Decapsulate) { Some(latency_ms) } else { None },
+			encrypt_time_ms: if matches!(operation, OperationKind::BulkEncrypt) { Some(latency_ms) } else { None },
+			decrypt_time_ms: if matches!(operation, OperationKind::BulkDecrypt) { Some(latency_ms) } else { None },
+			sign_time_ms: if matches!(operation, OperationKind::Sign) { Some(latency_ms) } else { None },
+			verify_time_ms: if matches!(operation, OperationKind::Verify) { Some(latency_ms) } else { None },
+			throughput_ops_per_sec: Some(throughput),
+			avg_cpu_percent: None,
+			avg_memory_mb: max_rss_bytes.map(|b| (b as f64) / (1024.0 * 1024.0)),
+			disk_io_bytes: None,
+			net_tx_bytes: None,
+			net_rx_bytes: None,
 		};
 		self.collector.record(&metrics);
 		result

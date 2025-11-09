@@ -149,12 +149,34 @@ fn record_latency<T, F: FnOnce() -> CryptoResult<T>>(collector: &Arc<dyn Metrics
 	let start = Instant::now();
 	let res = f();
 	let elapsed = start.elapsed();
+	let latency_micros = elapsed.as_micros() as u64;
+	let latency_ms = (latency_micros as f64) / 1000.0;
 	let metrics = OperationMetrics {
 		operation: op,
-		latency_micros: elapsed.as_micros() as u64,
+		latency_micros,
 		cpu_user_micros: None,
 		cpu_system_micros: None,
 		max_rss_bytes: None,
+		algorithm: None,
+		parameter_set: None,
+		public_key_bytes: None,
+		secret_key_bytes: None,
+		signature_bytes: None,
+		ciphertext_bytes: None,
+		storage_overhead_pct: None,
+		keygen_time_ms: if matches!(op, OperationKind::Keygen) { Some(latency_ms) } else { None },
+		encapsulate_time_ms: if matches!(op, OperationKind::Encapsulate) { Some(latency_ms) } else { None },
+		decapsulate_time_ms: if matches!(op, OperationKind::Decapsulate) { Some(latency_ms) } else { None },
+		encrypt_time_ms: if matches!(op, OperationKind::BulkEncrypt) { Some(latency_ms) } else { None },
+		decrypt_time_ms: if matches!(op, OperationKind::BulkDecrypt) { Some(latency_ms) } else { None },
+		sign_time_ms: if matches!(op, OperationKind::Sign) { Some(latency_ms) } else { None },
+		verify_time_ms: if matches!(op, OperationKind::Verify) { Some(latency_ms) } else { None },
+		throughput_ops_per_sec: if latency_micros > 0 { Some(1_000_000.0 / (latency_micros as f64)) } else { Some(0.0) },
+		avg_cpu_percent: None,
+		avg_memory_mb: None,
+		disk_io_bytes: None,
+		net_tx_bytes: None,
+		net_rx_bytes: None,
 	};
 	collector.record(&metrics);
 	res
