@@ -13,6 +13,7 @@ import seaborn as sns
 import nbformat
 
 from .analysis import compute_summary, load_metrics_df
+from .analysis import paired_comparisons
 
 
 def generate_charts(df: pd.DataFrame, out_dir: Path) -> List[Path]:
@@ -198,6 +199,26 @@ def run_analysis_and_report(results_dir: str) -> None:
 			(out_dir / "env.json").write_text(env_path.read_text(encoding="utf-8"), encoding="utf-8")
 		except Exception:
 			pass
+	# Optional comparisons: if at least two algorithms per op, compute basic paired tests for the top two by count
+	try:
+		comparisons = []
+		if not df.empty:
+			for op, gop in df.groupby("op"):
+				alg_counts = gop["algorithm"].value_counts()
+				if len(alg_counts.index) >= 2:
+					a, b = alg_counts.index[:2]
+					stats = paired_comparisons(df, op=str(op), group_a=str(a), group_b=str(b))
+					if stats:
+						comparisons.append({
+							"op": str(op),
+							"group_a": str(a),
+							"group_b": str(b),
+							**stats,
+						})
+		if comparisons:
+			(out_dir / "comparisons.json").write_text(json.dumps(comparisons, indent=2), encoding="utf-8")
+	except Exception:
+		pass
 	# Charts
 	charts_dir = out_dir / "charts"
 	chart_files = generate_charts(df, charts_dir)

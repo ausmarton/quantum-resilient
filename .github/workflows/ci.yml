@@ -91,6 +91,9 @@ jobs:
         run: |
           python -m pip install nbconvert
           jupyter nbconvert --to notebook --inplace --execute results/analysis.ipynb
+      - name: Validate metrics schema and outputs
+        run: |
+          python scripts/validate_metrics.py --results results
 
       - name: Reproducibility check (local)
         env:
