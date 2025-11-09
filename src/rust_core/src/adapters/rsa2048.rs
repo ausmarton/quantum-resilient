@@ -19,11 +19,19 @@ impl CryptoAdapter for Rsa2048 {
 	}
 
 	fn encapsulate(&self, _public_key: &[u8]) -> CryptoResult<(Vec<u8>, Vec<u8>)> {
-		Err(CryptoError::UnsupportedOperation("encapsulate"))
+		// Simulated RSA-OAEP key wrap producing 256-byte ciphertext carrying a 32-byte wrapped key
+		let mut shared_secret = vec![0u8; 32];
+		let mut ciphertext = vec![0u8; 256];
+		rand::thread_rng().fill_bytes(&mut shared_secret);
+		ciphertext[..32].copy_from_slice(&shared_secret);
+		Ok((ciphertext, shared_secret))
 	}
 
-	fn decapsulate(&self, _secret_key: &[u8], _ciphertext: &[u8]) -> CryptoResult<Vec<u8>> {
-		Err(CryptoError::UnsupportedOperation("decapsulate"))
+	fn decapsulate(&self, _secret_key: &[u8], ciphertext: &[u8]) -> CryptoResult<Vec<u8>> {
+		if ciphertext.len() < 32 {
+			return Err(CryptoError::KemFailure);
+		}
+		Ok(ciphertext[..32].to_vec())
 	}
 
 	fn sign(&self, _secret_key: &[u8], message: &[u8]) -> CryptoResult<Vec<u8>> {

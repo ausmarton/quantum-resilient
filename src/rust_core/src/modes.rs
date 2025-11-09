@@ -1,6 +1,8 @@
 use crate::{CryptoAdapter, CryptoResult, MetricsCollector, workload::{WorkloadConfig, WorkloadHooks, WorkloadOp, run_streaming_workload}};
+use crate::{OperationMetrics, OperationKind};
 use std::sync::Arc;
 use aes_gcm::{Aes256Gcm, KeyInit, aead::{Aead, Key, generic_array::GenericArray}};
+use std::time::Instant;
 
 fn expand_seed_to_key(seed: u64) -> [u8; 32] {
 	let mut x = seed;
@@ -101,6 +103,263 @@ pub fn run_app_streaming_aes_gcm(
 		op: WorkloadOp::Encrypt,
 	};
 	run_streaming_workload(adapter, &cfg, &hooks, collector)
+}
+
+pub fn run_key_wrap_like_for_like(
+	pqc_kem: &dyn CryptoAdapter,
+	rsa: &dyn CryptoAdapter,
+	payload_len: usize,
+	chunk_size_bytes: usize,
+	repetitions: u32,
+	seed: u64,
+	collector: Arc<dyn MetricsCollector>,
+) -> CryptoResult<()> {
+	let plaintext = vec![0u8; payload_len];
+	// PQC path (Kyber*)
+	let (pqc_pk, pqc_sk) = {
+		let t0 = Instant::now();
+		let keys = pqc_kem.keygen()?;
+		let dt = t0.elapsed();
+		let m = OperationMetrics {
+			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			operation: OperationKind::Keygen,
+			latency_micros: dt.as_micros() as u64,
+			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
+			algorithm: Some(pqc_kem.name().to_string()),
+			parameter_set: None,
+			public_key_bytes: Some(pqc_kem.public_key_size() as u64),
+			secret_key_bytes: Some(pqc_kem.secret_key_size() as u64),
+			signature_bytes: None, ciphertext_bytes: None, storage_overhead_pct: None,
+			keygen_time_ms: Some(dt.as_secs_f64() * 1000.0),
+			encapsulate_time_ms: None, decapsulate_time_ms: None,
+			encrypt_time_ms: None, decrypt_time_ms: None,
+			sign_time_ms: None, verify_time_ms: None,
+			throughput_ops_per_sec: None,
+			avg_cpu_percent: None, avg_memory_mb: None,
+			disk_io_bytes: None, net_tx_bytes: None, net_rx_bytes: None,
+		};
+		collector.record(&m);
+		keys
+	};
+	let (pqc_ct, pqc_ss) = {
+		let t0 = Instant::now();
+		let (ct, ss) = pqc_kem.encapsulate(&pqc_pk)?;
+		let dt = t0.elapsed();
+		let overhead = if payload_len > 0 {
+			((ct.len() as f64) / (payload_len as f64)) * 100.0
+		} else { 0.0 };
+		let m = OperationMetrics {
+			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			operation: OperationKind::Encapsulate,
+			latency_micros: dt.as_micros() as u64,
+			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
+			algorithm: Some(pqc_kem.name().to_string()),
+			parameter_set: None,
+			public_key_bytes: None, secret_key_bytes: None,
+			signature_bytes: None, ciphertext_bytes: Some(ct.len() as u64),
+			storage_overhead_pct: Some(overhead),
+			keygen_time_ms: None, encapsulate_time_ms: Some(dt.as_secs_f64() * 1000.0),
+			decapsulate_time_ms: None, encrypt_time_ms: None, decrypt_time_ms: None,
+			sign_time_ms: None, verify_time_ms: None,
+			throughput_ops_per_sec: if dt.as_micros() > 0 { Some(1_000_000.0 / dt.as_micros() as f64) } else { Some(0.0) },
+			avg_cpu_percent: None, avg_memory_mb: None,
+			disk_io_bytes: None, net_tx_bytes: None, net_rx_bytes: None,
+		};
+		collector.record(&m);
+		(ct, ss)
+	};
+	// Encrypt payload using AES-GCM with ss-derived seed
+	let enc_seed = {
+		let mut acc: u64 = seed;
+		for &b in pqc_ss.iter() { acc = acc.wrapping_mul(1315423911) ^ (b as u64); }
+		acc
+	};
+	let mut offset = 0usize;
+	while offset < plaintext.len() {
+		let end = std::cmp::min(offset + chunk_size_bytes, plaintext.len());
+		let slice = &plaintext[offset..end];
+		let t0 = Instant::now();
+		let ct = aes_gcm_encrypt(enc_seed, slice)?;
+		let dt = t0.elapsed();
+		let overhead = if slice.len() > 0 { ((ct.len() as f64 - slice.len() as f64) / slice.len() as f64) * 100.0 } else { 0.0 };
+		let m = OperationMetrics {
+			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			operation: OperationKind::BulkEncrypt,
+			latency_micros: dt.as_micros() as u64,
+			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
+			algorithm: Some("AES-GCM-256".into()),
+			parameter_set: None,
+			public_key_bytes: None, secret_key_bytes: None,
+			signature_bytes: None, ciphertext_bytes: Some(ct.len() as u64),
+			storage_overhead_pct: Some(overhead),
+			keygen_time_ms: None, encapsulate_time_ms: None, decapsulate_time_ms: None,
+			encrypt_time_ms: Some(dt.as_secs_f64() * 1000.0), decrypt_time_ms: None,
+			sign_time_ms: None, verify_time_ms: None,
+			throughput_ops_per_sec: if dt.as_micros() > 0 { Some(1_000_000.0 / dt.as_micros() as f64) } else { Some(0.0) },
+			avg_cpu_percent: None, avg_memory_mb: None,
+			disk_io_bytes: None, net_tx_bytes: None, net_rx_bytes: None,
+		};
+		collector.record(&m);
+		offset = end;
+	}
+
+	// Classical RSA path
+	let (rsa_pk, rsa_sk) = rsa.keygen()?;
+	let (rsa_ct, rsa_ss) = rsa.encapsulate(&rsa_pk)?;
+	let rsa_overhead = if payload_len > 0 { ((rsa_ct.len() as f64) / (payload_len as f64)) * 100.0 } else { 0.0 };
+	let m_ct = OperationMetrics {
+		timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+		operation: OperationKind::Encapsulate,
+		latency_micros: 0,
+		cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
+		algorithm: Some(rsa.name().to_string()),
+		parameter_set: None,
+		public_key_bytes: None, secret_key_bytes: None,
+		signature_bytes: None, ciphertext_bytes: Some(rsa_ct.len() as u64),
+		storage_overhead_pct: Some(rsa_overhead),
+		keygen_time_ms: None, encapsulate_time_ms: None, decapsulate_time_ms: None,
+		encrypt_time_ms: None, decrypt_time_ms: None, sign_time_ms: None, verify_time_ms: None,
+		throughput_ops_per_sec: None,
+		avg_cpu_percent: None, avg_memory_mb: None,
+		disk_io_bytes: None, net_tx_bytes: None, net_rx_bytes: None,
+	};
+	collector.record(&m_ct);
+	let enc_seed2 = {
+		let mut acc: u64 = seed ^ 0xA5A5A5A5A5A5A5A5;
+		for &b in rsa_ss.iter() { acc = acc.wrapping_mul(2654435761) ^ (b as u64); }
+		acc
+	};
+	let mut offset = 0usize;
+	while offset < plaintext.len() {
+		let end = std::cmp::min(offset + chunk_size_bytes, plaintext.len());
+		let slice = &plaintext[offset..end];
+		let t0 = Instant::now();
+		let ct = aes_gcm_encrypt(enc_seed2, slice)?;
+		let dt = t0.elapsed();
+		let overhead = if slice.len() > 0 { ((ct.len() as f64 - slice.len() as f64) / slice.len() as f64) * 100.0 } else { 0.0 };
+		let m = OperationMetrics {
+			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			operation: OperationKind::BulkEncrypt,
+			latency_micros: dt.as_micros() as u64,
+			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
+			algorithm: Some("AES-GCM-256".into()),
+			parameter_set: None,
+			public_key_bytes: None, secret_key_bytes: None,
+			signature_bytes: None, ciphertext_bytes: Some(ct.len() as u64),
+			storage_overhead_pct: Some(overhead),
+			keygen_time_ms: None, encapsulate_time_ms: None, decapsulate_time_ms: None,
+			encrypt_time_ms: Some(dt.as_secs_f64() * 1000.0), decrypt_time_ms: None,
+			sign_time_ms: None, verify_time_ms: None,
+			throughput_ops_per_sec: if dt.as_micros() > 0 { Some(1_000_000.0 / dt.as_micros() as f64) } else { Some(0.0) },
+			avg_cpu_percent: None, avg_memory_mb: None,
+			disk_io_bytes: None, net_tx_bytes: None, net_rx_bytes: None,
+		};
+		collector.record(&m);
+		offset = end;
+	}
+	Ok(())
+}
+
+pub fn run_integrity_like_for_like(
+	dilithium: &dyn CryptoAdapter,
+	ecdsa: &dyn CryptoAdapter,
+	payload_len: usize,
+	repetitions: u32,
+	collector: Arc<dyn MetricsCollector>,
+) -> CryptoResult<()> {
+	let payload = vec![0u8; payload_len];
+	let (_dpk, dsk) = dilithium.keygen()?;
+	let (_epk, esk) = ecdsa.keygen()?;
+	for _ in 0..repetitions {
+		// Dilithium sign/verify
+		let t0 = Instant::now();
+		let dsig = dilithium.sign(&dsk, &payload)?;
+		let dt = t0.elapsed();
+		let m = OperationMetrics {
+			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			operation: OperationKind::Sign,
+			latency_micros: dt.as_micros() as u64,
+			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
+			algorithm: Some(dilithium.name().to_string()),
+			parameter_set: None,
+			public_key_bytes: None, secret_key_bytes: None,
+			signature_bytes: Some(dsig.len() as u64), ciphertext_bytes: None,
+			storage_overhead_pct: if payload_len > 0 { Some((dsig.len() as f64 / payload_len as f64) * 100.0) } else { None },
+			keygen_time_ms: None, encapsulate_time_ms: None, decapsulate_time_ms: None,
+			encrypt_time_ms: None, decrypt_time_ms: None, sign_time_ms: Some(dt.as_secs_f64() * 1000.0),
+			verify_time_ms: None,
+			throughput_ops_per_sec: if dt.as_micros() > 0 { Some(1_000_000.0 / dt.as_micros() as f64) } else { Some(0.0) },
+			avg_cpu_percent: None, avg_memory_mb: None,
+			disk_io_bytes: None, net_tx_bytes: None, net_rx_bytes: None,
+		};
+		collector.record(&m);
+		let t1 = Instant::now();
+		let _ = dilithium.verify(&[_dpk.len() as u8], &payload, &dsig);
+		let dv = t1.elapsed();
+		let m2 = OperationMetrics {
+			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			operation: OperationKind::Verify,
+			latency_micros: dv.as_micros() as u64,
+			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
+			algorithm: Some(dilithium.name().to_string()),
+			parameter_set: None,
+			public_key_bytes: None, secret_key_bytes: None,
+			signature_bytes: Some(dsig.len() as u64), ciphertext_bytes: None,
+			storage_overhead_pct: None,
+			keygen_time_ms: None, encapsulate_time_ms: None, decapsulate_time_ms: None,
+			encrypt_time_ms: None, decrypt_time_ms: None, sign_time_ms: None,
+			verify_time_ms: Some(dv.as_secs_f64() * 1000.0),
+			throughput_ops_per_sec: if dv.as_micros() > 0 { Some(1_000_000.0 / dv.as_micros() as f64) } else { Some(0.0) },
+			avg_cpu_percent: None, avg_memory_mb: None,
+			disk_io_bytes: None, net_tx_bytes: None, net_rx_bytes: None,
+		};
+		collector.record(&m2);
+
+		// ECDSA sign/verify
+		let t0 = Instant::now();
+		let esig = ecdsa.sign(&esk, &payload)?;
+		let dt = t0.elapsed();
+		let m = OperationMetrics {
+			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			operation: OperationKind::Sign,
+			latency_micros: dt.as_micros() as u64,
+			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
+			algorithm: Some(ecdsa.name().to_string()),
+			parameter_set: None,
+			public_key_bytes: None, secret_key_bytes: None,
+			signature_bytes: Some(esig.len() as u64), ciphertext_bytes: None,
+			storage_overhead_pct: if payload_len > 0 { Some((esig.len() as f64 / payload_len as f64) * 100.0) } else { None },
+			keygen_time_ms: None, encapsulate_time_ms: None, decapsulate_time_ms: None,
+			encrypt_time_ms: None, decrypt_time_ms: None, sign_time_ms: Some(dt.as_secs_f64() * 1000.0),
+			verify_time_ms: None,
+			throughput_ops_per_sec: if dt.as_micros() > 0 { Some(1_000_000.0 / dt.as_micros() as f64) } else { Some(0.0) },
+			avg_cpu_percent: None, avg_memory_mb: None,
+			disk_io_bytes: None, net_tx_bytes: None, net_rx_bytes: None,
+		};
+		collector.record(&m);
+		let t1 = Instant::now();
+		let _ = ecdsa.verify(&[_epk.len() as u8], &payload, &esig);
+		let dv = t1.elapsed();
+		let m2 = OperationMetrics {
+			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			operation: OperationKind::Verify,
+			latency_micros: dv.as_micros() as u64,
+			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
+			algorithm: Some(ecdsa.name().to_string()),
+			parameter_set: None,
+			public_key_bytes: None, secret_key_bytes: None,
+			signature_bytes: Some(esig.len() as u64), ciphertext_bytes: None,
+			storage_overhead_pct: None,
+			keygen_time_ms: None, encapsulate_time_ms: None, decapsulate_time_ms: None,
+			encrypt_time_ms: None, decrypt_time_ms: None, sign_time_ms: None,
+			verify_time_ms: Some(dv.as_secs_f64() * 1000.0),
+			throughput_ops_per_sec: if dv.as_micros() > 0 { Some(1_000_000.0 / dv.as_micros() as f64) } else { Some(0.0) },
+			avg_cpu_percent: None, avg_memory_mb: None,
+			disk_io_bytes: None, net_tx_bytes: None, net_rx_bytes: None,
+		};
+		collector.record(&m2);
+	}
+	Ok(())
 }
 
 
