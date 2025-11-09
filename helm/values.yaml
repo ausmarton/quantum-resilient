@@ -1,6 +1,12 @@
 replicaCount: 1
 
-image:
+rustCoreImage:
+  repository: pqc-benchmarking-skeleton
+  tag: latest
+  pullPolicy: IfNotPresent
+  metricsPort: 9100
+
+orchestratorImage:
   repository: pqc-benchmarking-skeleton
   tag: latest
   pullPolicy: IfNotPresent
@@ -8,5 +14,17 @@ image:
 service:
   type: ClusterIP
   port: 80
+
+prometheus:
+  scrape: true
+
+results:
+  bucket: ""   # set to GCS bucket name or leave empty for local PVC
+
+orchestrator:
+  configMapName: "experiment-config"
+  configFileName: "experiment.yaml"
+  outputDir: "/results"
+  serviceAccountName: ""   # set to SA bound to GCS writer if using GCS
 
 

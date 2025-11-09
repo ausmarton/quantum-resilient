@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "pqc-benchmark.fullname" . }}-orchestrator
+  labels:
+    app: {{ include "pqc-benchmark.name" . }}-orchestrator
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: {{ include "pqc-benchmark.name" . }}-orchestrator
+    spec:
+      {{- if .Values.orchestrator.serviceAccountName }}
+      serviceAccountName: {{ .Values.orchestrator.serviceAccountName }}
+      {{- end }}
+      restartPolicy: Never
+      containers:
+        - name: orchestrator
+          image: "{{ .Values.orchestratorImage.repository }}:{{ .Values.orchestratorImage.tag }}"
+          imagePullPolicy: {{ .Values.orchestratorImage.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Running orchestrator placeholder";
+              sleep 1;
+          volumeMounts:
+            - name: cfg
+              mountPath: /app/configs
+            - name: results
+              mountPath: {{ .Values.orchestrator.outputDir }}
+      volumes:
+        - name: cfg
+          configMap:
+            name: {{ .Values.orchestrator.configMapName }}
+            items:
+              - key: {{ .Values.orchestrator.configFileName }}
+                path: {{ .Values.orchestrator.configFileName }}
+        - name: results
+          emptyDir: {}
+
+

@@ -21,4 +21,15 @@ variable "node_machine_type" {
   default     = "e2-standard-2"
 }
 
+variable "bucket_name" {
+	description = "GCS bucket name for results"
+	type        = string
+}
+
+variable "workload_sa_name" {
+	description = "Service account name for orchestrator workload"
+	type        = string
+	default     = "pqc-orchestrator-sa"
+}
+
 

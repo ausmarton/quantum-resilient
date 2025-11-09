@@ -1,23 +1,32 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "pqc-benchmark.fullname" . }}
+  name: {{ include "pqc-benchmark.fullname" . }}-rust-core
   labels:
-    app: {{ include "pqc-benchmark.name" . }}
+    app: {{ include "pqc-benchmark.name" . }}-rust-core
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      app: {{ include "pqc-benchmark.name" . }}
+      app: {{ include "pqc-benchmark.name" . }}-rust-core
   template:
     metadata:
       labels:
-        app: {{ include "pqc-benchmark.name" . }}
+        app: {{ include "pqc-benchmark.name" . }}-rust-core
+      {{- if .Values.prometheus.scrape }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "{{ .Values.rustCoreImage.metricsPort }}"
+      {{- end }}
     spec:
       containers:
-        - name: pqc-benchmark
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["echo", "Placeholder Helm deployment; no functional code."]
+        - name: rust-core
+          image: "{{ .Values.rustCoreImage.repository }}:{{ .Values.rustCoreImage.tag }}"
+          imagePullPolicy: {{ .Values.rustCoreImage.pullPolicy }}
+          command: ["sh", "-c", "echo 'rust-core placeholder'; sleep infinity"]
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.rustCoreImage.metricsPort }}
 
 

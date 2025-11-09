@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pqc-benchmark.fullname" . }}-rust-core
+  labels:
+    app: {{ include "pqc-benchmark.name" . }}-rust-core
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: {{ include "pqc-benchmark.name" . }}-rust-core
+  ports:
+    - name: metrics
+      port: {{ .Values.rustCoreImage.metricsPort }}
+      targetPort: metrics
+
+
