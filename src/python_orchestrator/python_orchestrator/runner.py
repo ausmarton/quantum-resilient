@@ -9,6 +9,7 @@ from .adapters import load_rust_adapters, select_adapters, CryptoAdapter
 from .env_snapshot import write_snapshot_json
 from .metrics import aggregate_jsonl_to_csv, write_raw_events_csv
 from .reporting import run_analysis_and_report
+from .schema_validate import validate_metrics_jsonl
 
 
 def run_experiment(config_path: str) -> None:
@@ -47,5 +48,10 @@ def run_experiment(config_path: str) -> None:
 	write_raw_events_csv(str(out_dir))
 	# Analytics and report
 	run_analysis_and_report(str(out_dir))
+	# Metrics schema validation
+	schema_path = Path("configs/metrics_schema.yaml")
+	if schema_path.exists():
+		report = validate_metrics_jsonl(jsonl_path, str(schema_path))
+		(out_dir / "metrics_validation.json").write_text(__import__("json").dumps(report, indent=2), encoding="utf-8")
 
 

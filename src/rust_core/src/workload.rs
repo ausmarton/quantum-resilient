@@ -25,6 +25,16 @@ pub struct WorkloadConfig {
 	pub repetitions: u32,
 	pub seed: u64,
 	pub op: WorkloadOp,
+	pub retries: u32,
+	pub retry_backoff_ms: u64,
+	pub backpressure_mode: BackpressureMode,
+	pub max_lag_ms: u64,
+}
+
+#[derive(Clone, Debug)]
+pub enum BackpressureMode {
+	Block,
+	Drop,
 }
 
 #[derive(Default, Clone, Debug)]
@@ -89,6 +99,36 @@ pub fn run_streaming_workload(
 				None
 			};
 
+			// Backpressure: if we're behind schedule and mode is Drop
+			if let Some(target) = iter_start_target {
+				let now = Instant::now();
+				if now > target {
+					let lag_ms = (now - target).as_millis() as u64;
+					if matches!(cfg.backpressure_mode, BackpressureMode::Drop) && lag_ms > cfg.max_lag_ms {
+						// Record drop event
+						let m = OperationMetrics {
+							timestamp_seconds_utc: Some(chrono::Utc::now()),
+							operation: OperationKind::Dropped,
+							latency_micros: 0,
+							attempts: Some(0),
+							error: None,
+							cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
+							algorithm: None, parameter_set: None,
+							public_key_bytes: None, secret_key_bytes: None,
+							signature_bytes: None, ciphertext_bytes: None,
+							storage_overhead_pct: None,
+							keygen_time_ms: None, encapsulate_time_ms: None, decapsulate_time_ms: None,
+							encrypt_time_ms: None, decrypt_time_ms: None, sign_time_ms: None, verify_time_ms: None,
+							throughput_ops_per_sec: None,
+							avg_cpu_percent: None, avg_memory_mb: None,
+							disk_io_bytes: None, net_tx_bytes: None, net_rx_bytes: None,
+						};
+						collector.record(&m);
+						continue;
+					}
+				}
+			}
+
 			let payload = match cfg.op {
 				WorkloadOp::Verify => verify_msg.as_ref().unwrap().clone(),
 				_ => deterministic_payload(&mut rng, cfg.payload_bytes),
@@ -96,27 +136,25 @@ pub fn run_streaming_workload(
 
 			match cfg.op {
 				WorkloadOp::Sign => {
-					record_latency(&collector, OperationKind::Sign, || adapter.sign(&sk, &payload))?;
+					let _ = record_latency_retry(&collector, OperationKind::Sign, cfg.retries, cfg.retry_backoff_ms, || adapter.sign(&sk, &payload));
 				}
 				WorkloadOp::Verify => {
-					record_latency(&collector, OperationKind::Verify, || {
-						adapter.verify(&pk, &payload, verify_sig.as_ref().unwrap())
-					})?;
+					let _ = record_latency_retry(&collector, OperationKind::Verify, cfg.retries, cfg.retry_backoff_ms, || adapter.verify(&pk, &payload, verify_sig.as_ref().unwrap()));
 				}
 				WorkloadOp::KemEncapsulate => {
-					record_latency(&collector, OperationKind::Encapsulate, || adapter.encapsulate(&pk))?;
+					let _ = record_latency_retry(&collector, OperationKind::Encapsulate, cfg.retries, cfg.retry_backoff_ms, || adapter.encapsulate(&pk));
 				}
 				WorkloadOp::KemDecapsulate => {
 					let ct = kem_ciphertext.as_ref().expect("ciphertext for decapsulate");
-					record_latency(&collector, OperationKind::Decapsulate, || adapter.decapsulate(&sk, ct))?;
+					let _ = record_latency_retry(&collector, OperationKind::Decapsulate, cfg.retries, cfg.retry_backoff_ms, || adapter.decapsulate(&sk, ct));
 				}
 				WorkloadOp::Encrypt => {
 					let encrypt = hooks.encrypt.as_ref().ok_or_else(|| CryptoError::UnsupportedOperation("encrypt"))?;
-					record_latency(&collector, OperationKind::BulkEncrypt, || encrypt(&payload))?;
+					let _ = record_latency_retry(&collector, OperationKind::BulkEncrypt, cfg.retries, cfg.retry_backoff_ms, || encrypt(&payload));
 				}
 				WorkloadOp::Decrypt => {
 					let decrypt = hooks.decrypt.as_ref().ok_or_else(|| CryptoError::UnsupportedOperation("decrypt"))?;
-					record_latency(&collector, OperationKind::BulkDecrypt, || decrypt(&payload))?;
+					let _ = record_latency_retry(&collector, OperationKind::BulkDecrypt, cfg.retries, cfg.retry_backoff_ms, || decrypt(&payload));
 				}
 			}
 
@@ -151,10 +189,13 @@ fn record_latency<T, F: FnOnce() -> CryptoResult<T>>(collector: &Arc<dyn Metrics
 	let elapsed = start.elapsed();
 	let latency_micros = elapsed.as_micros() as u64;
 	let latency_ms = (latency_micros as f64) / 1000.0;
+	let op_clone = op.clone();
 	let metrics = OperationMetrics {
-		timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+		timestamp_seconds_utc: Some(chrono::Utc::now()),
 		operation: op,
 		latency_micros,
+		attempts: Some(1),
+		error: None,
 		cpu_user_micros: None,
 		cpu_system_micros: None,
 		max_rss_bytes: None,
@@ -165,13 +206,13 @@ fn record_latency<T, F: FnOnce() -> CryptoResult<T>>(collector: &Arc<dyn Metrics
 		signature_bytes: None,
 		ciphertext_bytes: None,
 		storage_overhead_pct: None,
-		keygen_time_ms: if matches!(op, OperationKind::Keygen) { Some(latency_ms) } else { None },
-		encapsulate_time_ms: if matches!(op, OperationKind::Encapsulate) { Some(latency_ms) } else { None },
-		decapsulate_time_ms: if matches!(op, OperationKind::Decapsulate) { Some(latency_ms) } else { None },
-		encrypt_time_ms: if matches!(op, OperationKind::BulkEncrypt) { Some(latency_ms) } else { None },
-		decrypt_time_ms: if matches!(op, OperationKind::BulkDecrypt) { Some(latency_ms) } else { None },
-		sign_time_ms: if matches!(op, OperationKind::Sign) { Some(latency_ms) } else { None },
-		verify_time_ms: if matches!(op, OperationKind::Verify) { Some(latency_ms) } else { None },
+		keygen_time_ms: if matches!(op_clone.clone(), OperationKind::Keygen) { Some(latency_ms) } else { None },
+		encapsulate_time_ms: if matches!(op_clone.clone(), OperationKind::Encapsulate) { Some(latency_ms) } else { None },
+		decapsulate_time_ms: if matches!(op_clone.clone(), OperationKind::Decapsulate) { Some(latency_ms) } else { None },
+		encrypt_time_ms: if matches!(op_clone.clone(), OperationKind::BulkEncrypt) { Some(latency_ms) } else { None },
+		decrypt_time_ms: if matches!(op_clone.clone(), OperationKind::BulkDecrypt) { Some(latency_ms) } else { None },
+		sign_time_ms: if matches!(op_clone.clone(), OperationKind::Sign) { Some(latency_ms) } else { None },
+		verify_time_ms: if matches!(op_clone, OperationKind::Verify) { Some(latency_ms) } else { None },
 		throughput_ops_per_sec: if latency_micros > 0 { Some(1_000_000.0 / (latency_micros as f64)) } else { Some(0.0) },
 		avg_cpu_percent: None,
 		avg_memory_mb: None,
@@ -181,6 +222,73 @@ fn record_latency<T, F: FnOnce() -> CryptoResult<T>>(collector: &Arc<dyn Metrics
 	};
 	collector.record(&metrics);
 	res
+}
+
+fn record_latency_retry<T, F: Fn() -> CryptoResult<T>>(collector: &Arc<dyn MetricsCollector>, op: OperationKind, retries: u32, backoff_ms: u64, f: F) -> CryptoResult<T> {
+	let start = Instant::now();
+	let mut attempts: u32 = 0;
+	loop {
+		attempts += 1;
+		match f() {
+			Ok(val) => {
+				let elapsed = start.elapsed();
+				let latency_micros = elapsed.as_micros() as u64;
+				let latency_ms = (latency_micros as f64) / 1000.0;
+				let metrics = OperationMetrics {
+					timestamp_seconds_utc: Some(chrono::Utc::now()),
+					operation: op.clone(),
+					latency_micros,
+					attempts: Some(attempts),
+					error: None,
+					cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
+					algorithm: None, parameter_set: None,
+					public_key_bytes: None, secret_key_bytes: None,
+					signature_bytes: None, ciphertext_bytes: None,
+					storage_overhead_pct: None,
+					keygen_time_ms: if matches!(op.clone(), OperationKind::Keygen) { Some(latency_ms) } else { None },
+					encapsulate_time_ms: if matches!(op.clone(), OperationKind::Encapsulate) { Some(latency_ms) } else { None },
+					decapsulate_time_ms: if matches!(op.clone(), OperationKind::Decapsulate) { Some(latency_ms) } else { None },
+					encrypt_time_ms: if matches!(op.clone(), OperationKind::BulkEncrypt) { Some(latency_ms) } else { None },
+					decrypt_time_ms: if matches!(op.clone(), OperationKind::BulkDecrypt) { Some(latency_ms) } else { None },
+					sign_time_ms: if matches!(op.clone(), OperationKind::Sign) { Some(latency_ms) } else { None },
+					verify_time_ms: if matches!(op.clone(), OperationKind::Verify) { Some(latency_ms) } else { None },
+					throughput_ops_per_sec: if latency_micros > 0 { Some(1_000_000.0 / (latency_micros as f64)) } else { Some(0.0) },
+					avg_cpu_percent: None, avg_memory_mb: None,
+					disk_io_bytes: None, net_tx_bytes: None, net_rx_bytes: None,
+				};
+				collector.record(&metrics);
+				return Ok(val);
+			}
+			Err(e) => {
+				if attempts > retries {
+					let elapsed = start.elapsed();
+					let latency_micros = elapsed.as_micros() as u64;
+					let metrics = OperationMetrics {
+						timestamp_seconds_utc: Some(chrono::Utc::now()),
+						operation: op.clone(),
+						latency_micros,
+						attempts: Some(attempts),
+						error: Some(format!("{:?}", e)),
+						cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
+						algorithm: None, parameter_set: None,
+						public_key_bytes: None, secret_key_bytes: None,
+						signature_bytes: None, ciphertext_bytes: None,
+						storage_overhead_pct: None,
+						keygen_time_ms: None, encapsulate_time_ms: None, decapsulate_time_ms: None,
+						encrypt_time_ms: None, decrypt_time_ms: None, sign_time_ms: None, verify_time_ms: None,
+						throughput_ops_per_sec: None,
+						avg_cpu_percent: None, avg_memory_mb: None,
+						disk_io_bytes: None, net_tx_bytes: None, net_rx_bytes: None,
+					};
+					collector.record(&metrics);
+					return Err(e);
+				}
+				if backoff_ms > 0 {
+					sleep(Duration::from_millis(backoff_ms));
+				}
+			}
+		}
+	}
 }
 
 fn compute_iterations(tps: u32, duration_secs: u64) -> u64 {

@@ -101,6 +101,10 @@ pub fn run_app_streaming_aes_gcm(
 		repetitions,
 		seed,
 		op: WorkloadOp::Encrypt,
+		retries: 0,
+		retry_backoff_ms: 0,
+		backpressure_mode: crate::workload::BackpressureMode::Block,
+		max_lag_ms: 0,
 	};
 	run_streaming_workload(adapter, &cfg, &hooks, collector)
 }
@@ -121,9 +125,11 @@ pub fn run_key_wrap_like_for_like(
 		let keys = pqc_kem.keygen()?;
 		let dt = t0.elapsed();
 		let m = OperationMetrics {
-			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			timestamp_seconds_utc: Some(chrono::Utc::now()),
 			operation: OperationKind::Keygen,
 			latency_micros: dt.as_micros() as u64,
+			attempts: Some(1),
+			error: None,
 			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
 			algorithm: Some(pqc_kem.name().to_string()),
 			parameter_set: None,
@@ -149,9 +155,11 @@ pub fn run_key_wrap_like_for_like(
 			((ct.len() as f64) / (payload_len as f64)) * 100.0
 		} else { 0.0 };
 		let m = OperationMetrics {
-			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			timestamp_seconds_utc: Some(chrono::Utc::now()),
 			operation: OperationKind::Encapsulate,
 			latency_micros: dt.as_micros() as u64,
+			attempts: Some(1),
+			error: None,
 			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
 			algorithm: Some(pqc_kem.name().to_string()),
 			parameter_set: None,
@@ -183,9 +191,11 @@ pub fn run_key_wrap_like_for_like(
 		let dt = t0.elapsed();
 		let overhead = if slice.len() > 0 { ((ct.len() as f64 - slice.len() as f64) / slice.len() as f64) * 100.0 } else { 0.0 };
 		let m = OperationMetrics {
-			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			timestamp_seconds_utc: Some(chrono::Utc::now()),
 			operation: OperationKind::BulkEncrypt,
 			latency_micros: dt.as_micros() as u64,
+			attempts: Some(1),
+			error: None,
 			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
 			algorithm: Some("AES-GCM-256".into()),
 			parameter_set: None,
@@ -208,9 +218,11 @@ pub fn run_key_wrap_like_for_like(
 	let (rsa_ct, rsa_ss) = rsa.encapsulate(&rsa_pk)?;
 	let rsa_overhead = if payload_len > 0 { ((rsa_ct.len() as f64) / (payload_len as f64)) * 100.0 } else { 0.0 };
 	let m_ct = OperationMetrics {
-		timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+		timestamp_seconds_utc: Some(chrono::Utc::now()),
 		operation: OperationKind::Encapsulate,
 		latency_micros: 0,
+		attempts: Some(1),
+		error: None,
 		cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
 		algorithm: Some(rsa.name().to_string()),
 		parameter_set: None,
@@ -238,9 +250,11 @@ pub fn run_key_wrap_like_for_like(
 		let dt = t0.elapsed();
 		let overhead = if slice.len() > 0 { ((ct.len() as f64 - slice.len() as f64) / slice.len() as f64) * 100.0 } else { 0.0 };
 		let m = OperationMetrics {
-			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			timestamp_seconds_utc: Some(chrono::Utc::now()),
 			operation: OperationKind::BulkEncrypt,
 			latency_micros: dt.as_micros() as u64,
+			attempts: Some(1),
+			error: None,
 			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
 			algorithm: Some("AES-GCM-256".into()),
 			parameter_set: None,
@@ -276,9 +290,11 @@ pub fn run_integrity_like_for_like(
 		let dsig = dilithium.sign(&dsk, &payload)?;
 		let dt = t0.elapsed();
 		let m = OperationMetrics {
-			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			timestamp_seconds_utc: Some(chrono::Utc::now()),
 			operation: OperationKind::Sign,
 			latency_micros: dt.as_micros() as u64,
+			attempts: Some(1),
+			error: None,
 			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
 			algorithm: Some(dilithium.name().to_string()),
 			parameter_set: None,
@@ -297,9 +313,11 @@ pub fn run_integrity_like_for_like(
 		let _ = dilithium.verify(&[_dpk.len() as u8], &payload, &dsig);
 		let dv = t1.elapsed();
 		let m2 = OperationMetrics {
-			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			timestamp_seconds_utc: Some(chrono::Utc::now()),
 			operation: OperationKind::Verify,
 			latency_micros: dv.as_micros() as u64,
+			attempts: Some(1),
+			error: None,
 			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
 			algorithm: Some(dilithium.name().to_string()),
 			parameter_set: None,
@@ -320,9 +338,11 @@ pub fn run_integrity_like_for_like(
 		let esig = ecdsa.sign(&esk, &payload)?;
 		let dt = t0.elapsed();
 		let m = OperationMetrics {
-			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			timestamp_seconds_utc: Some(chrono::Utc::now()),
 			operation: OperationKind::Sign,
 			latency_micros: dt.as_micros() as u64,
+			attempts: Some(1),
+			error: None,
 			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
 			algorithm: Some(ecdsa.name().to_string()),
 			parameter_set: None,
@@ -341,9 +361,11 @@ pub fn run_integrity_like_for_like(
 		let _ = ecdsa.verify(&[_epk.len() as u8], &payload, &esig);
 		let dv = t1.elapsed();
 		let m2 = OperationMetrics {
-			timestamp_seconds_utc: Some(chrono::Utc::now().timestamp()),
+			timestamp_seconds_utc: Some(chrono::Utc::now()),
 			operation: OperationKind::Verify,
 			latency_micros: dv.as_micros() as u64,
+			attempts: Some(1),
+			error: None,
 			cpu_user_micros: None, cpu_system_micros: None, max_rss_bytes: None,
 			algorithm: Some(ecdsa.name().to_string()),
 			parameter_set: None,
