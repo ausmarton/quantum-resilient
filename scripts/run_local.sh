@@ -18,8 +18,10 @@ if command -v python3 >/dev/null 2>&1; then
 		python3 -m maturin develop -m "${ROOT}/src/rust_core/Cargo.toml"
 	fi
 	python3 -m pip install -q -e "${ROOT}/src/python_orchestrator" || true
-	echo "[run_local] Emitting metrics and running orchestrator..."
+	echo "[run_local] Emitting metrics and running comparisons..."
 	cargo run --quiet --release --manifest-path "${ROOT}/src/rust_core/Cargo.toml" --bin emit_metrics || true
+	cargo run --quiet --release --manifest-path "${ROOT}/src/rust_core/Cargo.toml" --bin run_comparisons || true
+	echo "[run_local] Running orchestrator..."
 	python3 -m python_orchestrator.cli --config "${ROOT}/configs/default.yaml" || true
 	echo "[run_local] Results written to ${ROOT}/results"
 else
