@@ -1,0 +1,55 @@
+# Placeholder schema describing metrics output structure
+schema: "metrics"
+version: 0
+
+labels:
+  algorithm: { type: "string" }                 # e.g., Kyber512, RSA-2048, AES-GCM-256
+  op:                                           # operation kind
+    type: "string"
+    enum: ["sign", "verify", "kem_encapsulate", "kem_decapsulate", "bulk_encrypt", "bulk_decrypt"]
+  comparison_mode: { type: "string" }           # pqc_vs_classical | pqc_only | classical_only
+  chunk_size_bytes: { type: "integer" }
+  storage_backend: { type: "string" }           # filesystem | gcs | s3 | memory
+  symmetric_cipher: { type: "string" }          # AES-GCM-256
+  classical_key_exchange: { type: "string" }    # ECDHE-P256
+  classical_signature: { type: "string" }       # RSA-2048 | ECDSA-P256
+  pqc_algorithm: { type: "string" }             # Kyber512 | Kyber768 | Dilithium2 | Dilithium3
+  environment:
+    type: "object"
+    properties:
+      gcp:
+        type: "object"
+        properties:
+          region: { type: "string", default: "us-central1" }
+          vm_type: { type: "string", default: "n1-standard-8" }
+  network_emulation:
+    type: "object"
+    properties:
+      latency_ms: { type: "integer" }
+      jitter_ms: { type: "integer" }
+      bandwidth_mbps: { type: "number" }
+      packet_loss_percent: { type: "number" }
+  workload:
+    type: "object"
+    properties:
+      concurrency: { type: "integer" }
+      repetitions: { type: "integer", default: 30 }
+      warmup_seconds: { type: "integer", default: 10 }
+
+series:
+  - name: "latency_ms"
+    type: "histogram"                  # supports bucketed latencies and percentiles
+    unit: "milliseconds"
+  - name: "throughput_ops_per_s"
+    type: "gauge"
+    unit: "ops/s"
+  - name: "memory_bytes"
+    type: "gauge"
+    unit: "bytes"
+  - name: "error_rate_pct"
+    type: "gauge"
+    unit: "percent"
+  - name: "cpu_utilization_pct"
+    type: "gauge"
+    unit: "percent"
+

@@ -1,9 +1,39 @@
 # Placeholder configuration for local runs
 benchmark:
-  algorithm: "PQC_ALGO_PLACEHOLDER"
-  dataset: "synthetic"
-  trials: 1
-  concurrency: 1
+  comparison_mode: "pqc_vs_classical"   # pqc_vs_classical | pqc_only | classical_only
+  repetitions: 30
+  warmup_seconds: 10
+  workload:
+    type: "kem_encapsulate"            # sign | verify | kem_encapsulate | kem_decapsulate | bulk_encrypt | bulk_decrypt
+    concurrency: 1
+    chunk_size_bytes: 16384
+  algorithms:
+    pqc:
+      - "Kyber512"
+      - "Kyber768"
+      - "Dilithium2"
+      - "Dilithium3"
+    classical:
+      key_exchange:
+        - "ECDHE-P256"
+      signature:
+        - "RSA-2048"
+        - "ECDSA-P256"
+    symmetric:
+      - "AES-GCM-256"
+  network_emulation:
+    latency_ms: 0
+    jitter_ms: 0
+    bandwidth_mbps: 0
+    packet_loss_percent: 0
+storage_backend:
+  type: "filesystem"                   # filesystem | gcs | s3 | memory
+  config:
+    path: "./results"
+environment:
+  gcp:
+    region: "us-central1"
+    vm_type: "n1-standard-8"
 output:
   directory: "./results"
   format: "csv"
