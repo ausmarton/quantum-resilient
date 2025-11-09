@@ -1,10 +1,50 @@
 version: "3.9"
+
 services:
-  pqc-benchmark:
-    image: pqc-benchmarking-skeleton:latest
+  rust-core:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    command: ["echo", "Placeholder compose; no functional code."]
+    container_name: pqc-rust-core
+    environment:
+      - METRICS_ADDR=0.0.0.0:9100
+    command: ["echo", "rust-core placeholder; expose /metrics on 9100 when implemented"]
+    ports:
+      - "9100:9100"
+    volumes:
+      - ../configs:/app/configs:ro
+      - ../results:/app/results
+    networks:
+      - pqc-net
+
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: pqc-orchestrator
+    depends_on:
+      - rust-core
+    command: ["echo", "python orchestrator placeholder; will consume configs and write results"]
+    volumes:
+      - ../configs:/app/configs:ro
+      - ../results:/app/results
+    networks:
+      - pqc-net
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: pqc-prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - rust-core
+    networks:
+      - pqc-net
+
+networks:
+  pqc-net:
+    driver: bridge
 
 
