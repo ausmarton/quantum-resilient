@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pqc-benchmark.fullname" . }}
+  labels:
+    app: {{ include "pqc-benchmark.name" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "pqc-benchmark.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "pqc-benchmark.name" . }}
+    spec:
+      containers:
+        - name: pqc-benchmark
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["echo", "Placeholder Helm deployment; no functional code."]
+
+

@@ -1,0 +1,12 @@
+replicaCount: 1
+
+image:
+  repository: pqc-benchmarking-skeleton
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+
+

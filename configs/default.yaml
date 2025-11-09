@@ -1,0 +1,11 @@
+# Placeholder configuration for local runs
+benchmark:
+  algorithm: "PQC_ALGO_PLACEHOLDER"
+  dataset: "synthetic"
+  trials: 1
+  concurrency: 1
+output:
+  directory: "./results"
+  format: "csv"
+
+

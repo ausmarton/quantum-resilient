@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pqc-benchmark
+  labels:
+    app: pqc-benchmark
+
+

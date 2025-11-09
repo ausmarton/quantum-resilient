@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pqc-benchmark
+  namespace: pqc-benchmark
+  labels:
+    app: pqc-benchmark
+spec:
+  selector:
+    app: pqc-benchmark
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
+
+

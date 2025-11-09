@@ -1,46 +1,10 @@
-version: '3.8'
-
+version: "3.9"
 services:
-  quantumresilient:
+  pqc-benchmark:
+    image: pqc-benchmarking-skeleton:latest
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    volumes:
-      - ../results:/app/results
-      - ../src:/app/src
-    environment:
-      - PYTHONPATH=/app
-      - RUST_LOG=info
-      - LOG_LEVEL=INFO
-    ports:
-      - "8080:8080"
-    command: ["python", "python_orchestrator/main.py", "--objective", "1"]
-    restart: unless-stopped
+    command: ["echo", "Placeholder compose; no functional code."]
 
-  quantumresilient-benchmark:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    volumes:
-      - ../results:/app/results
-      - ../src:/app/src
-    environment:
-      - PYTHONPATH=/app
-      - RUST_LOG=info
-      - LOG_LEVEL=INFO
-    command: ["python", "python_orchestrator/main.py", "--objective", "3"]
-    restart: unless-stopped
 
-  quantumresilient-comparison:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    volumes:
-      - ../results:/app/results
-      - ../src:/app/src
-    environment:
-      - PYTHONPATH=/app
-      - RUST_LOG=info
-      - LOG_LEVEL=INFO
-    command: ["python", "python_orchestrator/main.py", "--objective", "4"]
-    restart: unless-stopped
