@@ -36,7 +36,7 @@ impl Display for CryptoError {
 
 impl Error for CryptoError {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize)]
 pub enum OperationKind {
 	Keygen,
 	Encapsulate,
@@ -45,7 +45,7 @@ pub enum OperationKind {
 	Verify,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize)]
 pub struct OperationMetrics {
 	pub operation: OperationKind,
 	pub latency_micros: u64,
@@ -175,7 +175,25 @@ impl<A: CryptoAdapter + ?Sized> CryptoAdapter for InstrumentedAdapter<A> {
 }
 
 fn sample_resources() -> (Option<u64>, Option<u64>, Option<u64>) {
-	(None, None, None)
+	unsafe {
+		let mut usage: libc::rusage = std::mem::zeroed();
+		if libc::getrusage(libc::RUSAGE_SELF, &mut usage as *mut _) == 0 {
+			let user_us = (usage.ru_utime.tv_sec as u64)
+				.saturating_mul(1_000_000)
+				.saturating_add(usage.ru_utime.tv_usec as u64);
+			let sys_us = (usage.ru_stime.tv_sec as u64)
+				.saturating_mul(1_000_000)
+				.saturating_add(usage.ru_stime.tv_usec as u64);
+			// ru_maxrss is in kilobytes on Linux
+			let rss_bytes = (usage.ru_maxrss as u64).saturating_mul(1024);
+			(Some(user_us), Some(sys_us), Some(rss_bytes))
+		} else {
+			(None, None, None)
+		}
+	}
 }
+
+pub mod metrics;
+pub mod adapters;
 
 
