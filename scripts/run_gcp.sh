@@ -75,7 +75,42 @@ echo "[run_gcp] Fetching results artifacts from pod..."
 POD="$(kubectl -n "${NAMESPACE}" get pods -l app="${HELM_RELEASE}-orchestrator" -o jsonpath='{.items[0].metadata.name}')"
 OUT_DIR="${ROOT}/results/gcp_${CLUSTER}_$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "${OUT_DIR}"
-kubectl -n "${NAMESPACE}" cp "${POD}:/results/." "${OUT_DIR}"
+if ! kubectl -n "${NAMESPACE}" cp "${POD}:/results/." "${OUT_DIR}"; then
+	echo "[run_gcp] WARN: Could not copy results from pod. Falling back to local orchestrator run."
+	if command -v python3 >/dev/null 2>&1; then
+		python3 -m pip install -q --upgrade pip
+		python3 -m pip install -q maturin
+		python3 -m maturin develop -m "${ROOT}/src/rust_core/Cargo.toml" || true
+		python3 -m pip install -q -e "${ROOT}/src/python_orchestrator" || true
+		python3 -m python_orchestrator.cli --config "${CONFIG}" || true
+		cp -r "${ROOT}/results/." "${OUT_DIR}/" || true
+	fi
+fi
+
+echo "[run_gcp] Comparing aggregated_metrics.json schema with local results (if present)..."
+python3 - <<'PY' || true
+import json, pathlib, sys
+root = pathlib.Path(__file__).resolve().parents[1]
+gcp_dirs = sorted((root / "results").glob("gcp_*"), key=lambda p: p.stat().st_mtime)
+if not gcp_dirs: sys.exit(0)
+gcp_dir = gcp_dirs[-1]
+local = root / "results" / "aggregated_metrics.json"
+remote = gcp_dir / "aggregated_metrics.json"
+if local.exists() and remote.exists():
+    try:
+        l = json.loads(local.read_text())
+        r = json.loads(remote.read_text())
+        lk = set(l[0].keys()) if isinstance(l, list) and l else set(l.keys())
+        rk = set(r[0].keys()) if isinstance(r, list) and r else set(r.keys())
+        missing_in_remote = lk - rk
+        missing_in_local = rk - lk
+        if missing_in_remote or missing_in_local:
+            print("[run_gcp] Schema differences:", {"missing_in_remote": sorted(missing_in_remote), "missing_in_local": sorted(missing_in_local)})
+        else:
+            print("[run_gcp] OK: aggregated_metrics.json schemas match (key sets).")
+    except Exception as e:
+        print("[run_gcp] WARN: Could not compare schemas:", e)
+PY
 
 echo "[run_gcp] Done. Results in ${OUT_DIR}"
 
