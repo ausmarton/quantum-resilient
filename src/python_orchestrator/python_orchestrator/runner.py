@@ -8,6 +8,7 @@ from .config_loader import ExperimentConfig, load_experiment_config
 from .adapters import load_rust_adapters, select_adapters, CryptoAdapter
 from .env_snapshot import write_snapshot_json
 from .metrics import aggregate_jsonl_to_csv
+from .reporting import run_analysis_and_report
 
 
 def run_experiment(config_path: str) -> None:
@@ -42,5 +43,7 @@ def run_experiment(config_path: str) -> None:
 	jsonl_path = str(out_dir / "metrics.jsonl")
 	csv_path = str(out_dir / "metrics.csv")
 	aggregate_jsonl_to_csv(jsonl_path, csv_path)
+	# Analytics and report
+	run_analysis_and_report(str(out_dir))
 
 
