@@ -1,0 +1,38 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pqc-benchmark-orchestrator
+  namespace: pqc-benchmark
+  labels:
+    app: pqc-benchmark-orchestrator
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: pqc-benchmark-orchestrator
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: orchestrator
+          image: docker.io/library/pqc-benchmarking-skeleton:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--config"
+            - "/app/configs/experiment.yaml"
+          volumeMounts:
+            - name: cfg
+              mountPath: /app/configs
+            - name: results
+              mountPath: /results
+      volumes:
+        - name: cfg
+          configMap:
+            name: experiment-config
+            items:
+              - key: experiment.yaml
+                path: experiment.yaml
+        - name: results
+          emptyDir: {}
+
+

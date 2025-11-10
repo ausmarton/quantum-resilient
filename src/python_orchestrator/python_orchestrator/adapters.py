@@ -18,11 +18,11 @@ class CryptoAdapter(Protocol):
 
 def load_rust_adapters() -> List[CryptoAdapter]:
 	try:
-		import pqc_core  # type: ignore
+		import rust_core  # type: ignore
 	except Exception:
 		return []
 	try:
-		return list(pqc_core.list_adapters())  # type: ignore[attr-defined]
+		return list(rust_core.list_adapters())  # type: ignore[attr-defined]
 	except Exception:
 		return []
 

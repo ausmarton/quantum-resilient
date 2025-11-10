@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: pqc-benchmark
-          image: pqc-benchmarking-skeleton:latest
+          image: docker.io/library/pqc-benchmarking-skeleton:latest
           command: ["echo", "Placeholder deployment; no functional code."]
           imagePullPolicy: IfNotPresent
 

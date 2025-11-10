@@ -19,12 +19,9 @@ spec:
         - name: orchestrator
           image: "{{ .Values.orchestratorImage.repository }}:{{ .Values.orchestratorImage.tag }}"
           imagePullPolicy: {{ .Values.orchestratorImage.pullPolicy }}
-          command:
-            - /bin/sh
-            - -c
-            - |
-              echo "Running orchestrator placeholder";
-              sleep 1;
+          args:
+            - "--config"
+            - "/app/configs/{{ .Values.orchestrator.configFileName }}"
           volumeMounts:
             - name: cfg
               mountPath: /app/configs

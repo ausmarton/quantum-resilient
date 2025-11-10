@@ -36,6 +36,16 @@ Prereqs: Docker (optional), Rust toolchain, Python 3.11+ (for CLI).
 - Docker Compose (Prometheus + placeholders):
   - `bash scripts/run_local.sh`
 
+Local Kubernetes (minikube/podman)
+----------------------------------
+- Ensure `kubectl` context points to your local cluster (e.g., minikube).
+- Run:
+  - `bash scripts/run_local_k8s.sh --config ./configs/default.yaml`
+- Results will be copied to `./results/local_k8s_<timestamp>/`.
+- Optional metrics port-forward:
+  - `kubectl -n pqc-benchmark port-forward svc/pqc-benchmark-rust-core 9100:9100`
+  - Then open `http://localhost:9100/metrics`
+
 Quickstart (GCP/GKE)
 --------------------
 - Provision & run:

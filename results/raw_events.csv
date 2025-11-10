@@ -1,0 +1,5 @@
+algorithm,attempts,avg_cpu_percent,avg_memory_mb,ciphertext_bytes,cpu_system_micros,cpu_user_micros,decapsulate_time_ms,decrypt_time_ms,disk_io_bytes,encapsulate_time_ms,encrypt_time_ms,error,keygen_time_ms,latency_micros,max_rss_bytes,net_rx_bytes,net_tx_bytes,operation,parameter_set,public_key_bytes,secret_key_bytes,sign_time_ms,signature_bytes,storage_overhead_pct,throughput_ops_per_sec,timestamp_seconds_utc,verify_time_ms
+Kyber512,1,,38.09375,,19141,18158,,,20480,,,,0.01,10,39944192,3369382357,392731804,Keygen,,800,1632,,0,,100000.0,1762717323,
+Kyber512,1,,38.09375,,19186,18202,,,24576,,,,0.001,1,39944192,3369382357,392731804,Keygen,,800,1632,,0,,1000000.0,1762717323,
+Kyber512,1,,38.09375,,19196,18211,,,24576,0.0,,,,0,39944192,3369382357,392731804,Encapsulate,,800,1632,,0,,0.0,1762717323,
+synthetic,0,,,,,,,,,,,,,0,,,,Dropped,,,,,,,,1762717323,

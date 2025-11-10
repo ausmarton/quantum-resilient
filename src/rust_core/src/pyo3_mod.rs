@@ -5,7 +5,7 @@ use crate::adapters::{
 	dilithium2::Dilithium2, dilithium3::Dilithium3, ecdhe_p256::EcdheP256, ecdsa_p256::EcdsaP256,
 	kyber512::Kyber512, kyber768::Kyber768, rsa2048::Rsa2048,
 };
-use crate::{CryptoAdapter, CryptoResult};
+use crate::CryptoAdapter;
 
 #[pyclass(name = "Adapter")]
 pub struct PyAdapter {
@@ -32,21 +32,21 @@ impl PyAdapter {
 	fn signature_size(&self) -> usize {
 		self.inner.signature_size()
 	}
-	fn keygen<'py>(&self, py: Python<'py>) -> PyResult<(&'py PyBytes, &'py PyBytes)> {
+	fn keygen<'py>(&self, py: Python<'py>) -> PyResult<(Bound<'py, PyBytes>, Bound<'py, PyBytes>)> {
 		let (pk, sk) = self.inner.keygen().map_err(to_py)?;
-		Ok((PyBytes::new(py, &pk), PyBytes::new(py, &sk)))
+		Ok((PyBytes::new_bound(py, &pk), PyBytes::new_bound(py, &sk)))
 	}
-	fn encapsulate<'py>(&self, py: Python<'py>, public_key: &[u8]) -> PyResult<(&'py PyBytes, &'py PyBytes)> {
+	fn encapsulate<'py>(&self, py: Python<'py>, public_key: &[u8]) -> PyResult<(Bound<'py, PyBytes>, Bound<'py, PyBytes>)> {
 		let (ct, ss) = self.inner.encapsulate(public_key).map_err(to_py)?;
-		Ok((PyBytes::new(py, &ct), PyBytes::new(py, &ss)))
+		Ok((PyBytes::new_bound(py, &ct), PyBytes::new_bound(py, &ss)))
 	}
-	fn decapsulate<'py>(&self, py: Python<'py>, secret_key: &[u8], ciphertext: &[u8]) -> PyResult<&'py PyBytes> {
+	fn decapsulate<'py>(&self, py: Python<'py>, secret_key: &[u8], ciphertext: &[u8]) -> PyResult<Bound<'py, PyBytes>> {
 		let ss = self.inner.decapsulate(secret_key, ciphertext).map_err(to_py)?;
-		Ok(PyBytes::new(py, &ss))
+		Ok(PyBytes::new_bound(py, &ss))
 	}
-	fn sign<'py>(&self, py: Python<'py>, secret_key: &[u8], message: &[u8]) -> PyResult<&'py PyBytes> {
+	fn sign<'py>(&self, py: Python<'py>, secret_key: &[u8], message: &[u8]) -> PyResult<Bound<'py, PyBytes>> {
 		let sig = self.inner.sign(secret_key, message).map_err(to_py)?;
-		Ok(PyBytes::new(py, &sig))
+		Ok(PyBytes::new_bound(py, &sig))
 	}
 	fn verify(&self, public_key: &[u8], message: &[u8], signature: &[u8]) -> PyResult<()> {
 		self.inner.verify(public_key, message, signature).map_err(to_py)?;
@@ -78,9 +78,9 @@ pub fn list_adapters(py: Python<'_>) -> PyResult<Vec<Py<PyAdapter>>> {
 }
 
 #[pymodule]
-pub fn pqc_core(py: Python<'_>, m: &PyModule) -> PyResult<()> {
+pub fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 	m.add_class::<PyAdapter>()?;
-	m.add_function(pyo3::wrap_pyfunction!(list_adapters, m)?)?;
+	m.add_function(wrap_pyfunction!(list_adapters, m)?)?;
 	Ok(())
 }
 

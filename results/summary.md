@@ -1,3 +1,7 @@
-# Summary
+# Benchmark Summary
 
-No metrics available.
+| algorithm   | op          |   n |   p50_ms |   p95_ms |   p99_ms |   mean_ms |     std_ms |   ci95_lower_ms |   ci95_upper_ms |   throughput_ops_per_s_mean |   cpu_user_s_mean |   cpu_system_s_mean |   max_rss_mb_mean |
+|:------------|:------------|----:|---------:|---------:|---------:|----------:|-----------:|----------------:|----------------:|----------------------------:|------------------:|--------------------:|------------------:|
+| Kyber512    | Encapsulate |   1 |   0      |  0       |  0       |    0      | 0          |       0         |       0         |                         nan |          0.018211 |           0.019196  |           38.0938 |
+| Kyber512    | Keygen      |   2 |   0.0055 |  0.00955 |  0.00991 |    0.0055 | 0.00636396 |      -0.0516779 |       0.0626779 |                      550000 |          0.01818  |           0.0191635 |           38.0938 |
+| synthetic   | Dropped     |   1 |   0      |  0       |  0       |    0      | 0          |       0         |       0         |                         nan |        nan        |         nan         |          nan      |
