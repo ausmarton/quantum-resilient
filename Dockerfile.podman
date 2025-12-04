@@ -51,24 +51,31 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user for security
-RUN useradd -m -u 1000 -s /bin/bash appuser
+# Create non-root user for Kubernetes security
+RUN adduser --disabled-password --gecos "" --uid 1000 qruser
 
-# Create app and results directories
+# Create app directories
 WORKDIR /app
-RUN mkdir -p /app/results && chown -R appuser:appuser /app
+RUN mkdir -p /app/results /app/scenarios && chown -R qruser:qruser /app
 
 # Copy the built binary from builder stage
 COPY --from=builder /app/target/release/pqc-bench /app/pqc-bench
 
-# Copy scenario files
+# Copy default scenario files
 COPY scenarios /app/scenarios
 
 # Set ownership
-RUN chown -R appuser:appuser /app
+RUN chown -R qruser:qruser /app
+
+# Environment variables for Kubernetes configuration
+ENV QR_SCENARIO_PATH=/app/scenarios/active_scenario.yaml
+ENV QR_RESULTS_DIR=/app/results
+ENV QR_CONTROL_PLANE_PORT=6060
+ENV QR_PROM_PORT=9898
+ENV RUST_LOG=info
 
 # Switch to non-root user
-USER appuser
+USER qruser
 
 # Expose Prometheus metrics port
 EXPOSE 9898

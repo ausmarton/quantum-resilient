@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: quantum-resilient
+  labels:
+    app: quantum-resilient
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: quantum-resilient
+  endpoints:
+    - port: prom
+      interval: 5s
+      path: /metrics
+      scheme: http
+  namespaceSelector:
+    matchNames:
+      - default
+

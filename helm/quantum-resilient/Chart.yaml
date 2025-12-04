@@ -1,0 +1,19 @@
+apiVersion: v2
+name: quantum-resilient
+version: 0.1.0
+appVersion: "0.1.0"
+description: Helm chart for PQC (Post-Quantum Cryptography) benchmarking framework
+type: application
+keywords:
+  - pqc
+  - quantum
+  - cryptography
+  - benchmark
+  - kyber
+  - security
+maintainers:
+  - name: Quantum Resilient Team
+home: https://github.com/quantum-resilient/quantum-resilient
+sources:
+  - https://github.com/quantum-resilient/quantum-resilient
+

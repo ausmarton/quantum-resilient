@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "quantum-resilient.fullname" . }}
+  labels:
+    {{- include "quantum-resilient.labels" . | nindent 4 }}
+    component: benchmark
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "quantum-resilient.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- toYaml .Values.podAnnotations | nindent 8 }}
+      labels:
+        {{- include "quantum-resilient.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "quantum-resilient.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: pqc-bench
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: control
+              containerPort: {{ .Values.service.controlPort }}
+              protocol: TCP
+            - name: prom
+              containerPort: {{ .Values.service.promPort }}
+              protocol: TCP
+          env:
+            - name: QR_SCENARIO_PATH
+              value: /app/scenarios/active_scenario.yaml
+            - name: QR_RESULTS_DIR
+              value: /app/results
+            - name: QR_CONTROL_PLANE_PORT
+              value: {{ .Values.service.controlPort | quote }}
+            - name: QR_PROM_PORT
+              value: {{ .Values.service.promPort | quote }}
+            - name: RUST_LOG
+              value: {{ .Values.env.RUST_LOG }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.service.controlPort }}
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.service.controlPort }}
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          volumeMounts:
+            - name: scenario-config
+              mountPath: /app/scenarios/active_scenario.yaml
+              subPath: active_scenario.yaml
+              readOnly: true
+            {{- if .Values.persistence.enabled }}
+            - name: results
+              mountPath: /app/results
+            {{- end }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+      volumes:
+        - name: scenario-config
+          configMap:
+            name: {{ include "quantum-resilient.fullname" . }}-scenario
+        {{- if .Values.persistence.enabled }}
+        - name: results
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-results" (include "quantum-resilient.fullname" .)) }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+

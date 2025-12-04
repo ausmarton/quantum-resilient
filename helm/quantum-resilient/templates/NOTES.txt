@@ -1,0 +1,49 @@
+🔐 Quantum-Resilient PQC Benchmark Framework deployed!
+
+1. Get the application URL:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "quantum-resilient.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.type }}
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+  watch kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "quantum-resilient.fullname" . }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+  # Control Plane (health checks, workers status, shutdown):
+  kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "quantum-resilient.fullname" . }} {{ .Values.service.controlPort }}:{{ .Values.service.controlPort }}
+  
+  # Prometheus Metrics:
+  kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "quantum-resilient.fullname" . }} {{ .Values.service.promPort }}:{{ .Values.service.promPort }}
+{{- end }}
+
+2. Check health status:
+   curl http://localhost:{{ .Values.service.controlPort }}/healthz
+   curl http://localhost:{{ .Values.service.controlPort }}/readyz
+   curl http://localhost:{{ .Values.service.controlPort }}/workers
+
+3. View Prometheus metrics:
+   curl http://localhost:{{ .Values.service.promPort }}/metrics | grep pqc_
+
+4. View logs:
+   kubectl logs -l app.kubernetes.io/name={{ include "quantum-resilient.name" . }} -f
+
+5. Graceful shutdown:
+   curl -X POST http://localhost:{{ .Values.service.controlPort }}/shutdown
+
+6. Check results:
+   kubectl exec -it $(kubectl get pods -l app.kubernetes.io/name={{ include "quantum-resilient.name" . }} -o jsonpath='{.items[0].metadata.name}') -- ls -la /app/results
+
+{{- if .Values.serviceMonitor.enabled }}
+
+📊 ServiceMonitor enabled - Prometheus Operator will automatically scrape metrics.
+{{- end }}
+
+{{- if .Values.autoscaling.enabled }}
+
+⚖️ HPA enabled - Pods will scale based on pqc_queue_length metric (target: {{ .Values.autoscaling.targetQueueLength }}).
+{{- end }}
+

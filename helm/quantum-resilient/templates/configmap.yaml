@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "quantum-resilient.fullname" . }}-scenario
+  labels:
+    {{- include "quantum-resilient.labels" . | nindent 4 }}
+    component: config
+data:
+  active_scenario.yaml: |
+    {{- include "quantum-resilient.scenarioConfig" . | nindent 4 }}
+

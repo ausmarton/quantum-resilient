@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quantum-resilient
+  labels:
+    app: quantum-resilient
+    component: benchmark
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quantum-resilient
+  template:
+    metadata:
+      labels:
+        app: quantum-resilient
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9898"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: quantum-resilient
+      terminationGracePeriodSeconds: 10
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: pqc-bench
+          image: localhost/pqc-bench:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: control
+              containerPort: 6060
+              protocol: TCP
+            - name: prom
+              containerPort: 9898
+              protocol: TCP
+          env:
+            - name: QR_SCENARIO_PATH
+              value: /app/scenarios/active_scenario.yaml
+            - name: QR_RESULTS_DIR
+              value: /app/results
+            - name: QR_CONTROL_PLANE_PORT
+              value: "6060"
+            - name: QR_PROM_PORT
+              value: "9898"
+            - name: RUST_LOG
+              value: info
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 6060
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 6060
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: scenario-config
+              mountPath: /app/scenarios/active_scenario.yaml
+              subPath: active_scenario.yaml
+              readOnly: true
+            - name: results
+              mountPath: /app/results
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: scenario-config
+          configMap:
+            name: quantum-resilient-scenario
+        - name: results
+          persistentVolumeClaim:
+            claimName: quantum-resilient-results
+

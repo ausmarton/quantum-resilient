@@ -10,6 +10,7 @@ use rust_core::{
     SysInfoSampler, start_control_plane_server,
 };
 use rust_core::telemetry::start_metrics_server;
+use std::env;
 use tokio::signal;
 use tracing::info;
 
@@ -18,13 +19,48 @@ use tracing::info;
 #[command(name = "pqc-bench")]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// Path to the scenario YAML file
+    /// Path to the scenario YAML file (overrides QR_SCENARIO_PATH env var)
     #[arg(long)]
-    scenario: String,
+    scenario: Option<String>,
 
-    /// Control plane server port (default: 6060)
-    #[arg(long, default_value = "6060")]
-    control_port: u16,
+    /// Control plane server port (default: 6060, or QR_CONTROL_PLANE_PORT env var)
+    #[arg(long)]
+    control_port: Option<u16>,
+}
+
+/// Resolves the scenario path from CLI argument or environment variable
+fn resolve_scenario_path(cli_arg: Option<String>) -> Result<String, String> {
+    // Priority: CLI argument > QR_SCENARIO_PATH env var
+    if let Some(path) = cli_arg {
+        return Ok(path);
+    }
+
+    if let Ok(env_path) = env::var("QR_SCENARIO_PATH") {
+        if !env_path.is_empty() {
+            return Ok(env_path);
+        }
+    }
+
+    Err(
+        "No scenario specified. Use --scenario <path> or set QR_SCENARIO_PATH environment variable."
+            .to_string(),
+    )
+}
+
+/// Resolves the control plane port from CLI argument or environment variable
+fn resolve_control_port(cli_arg: Option<u16>) -> u16 {
+    // Priority: CLI argument > QR_CONTROL_PLANE_PORT env var > default 6060
+    if let Some(port) = cli_arg {
+        return port;
+    }
+
+    if let Ok(env_port) = env::var("QR_CONTROL_PLANE_PORT") {
+        if let Ok(port) = env_port.parse::<u16>() {
+            return port;
+        }
+    }
+
+    6060 // default
 }
 
 #[tokio::main]
@@ -34,8 +70,19 @@ async fn main() {
     // Parse command line arguments
     let args = Args::parse();
 
+    // Resolve scenario path from CLI or environment
+    let scenario_path = match resolve_scenario_path(args.scenario) {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    println!("Scenario path: {}", scenario_path);
+
     // Load scenario from YAML file
-    let scenario = match load_scenario(&args.scenario) {
+    let scenario = match load_scenario(&scenario_path) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("Error: {}", e);
@@ -160,7 +207,8 @@ async fn main() {
     control_state.set_metrics_server_running(true);
 
     // Start control plane server
-    let control_addr = format!("0.0.0.0:{}", args.control_port);
+    let control_port = resolve_control_port(args.control_port);
+    let control_addr = format!("0.0.0.0:{}", control_port);
     println!("Starting control plane server on {}", control_addr);
     let _control_handle = start_control_plane_server(&control_addr, control_state).await;
 
@@ -178,7 +226,7 @@ async fn main() {
     println!("========================================");
     println!("Pipeline starting...");
     println!("Prometheus: http://{}/metrics", prometheus_endpoint);
-    println!("Control plane: http://127.0.0.1:{}/healthz", args.control_port);
+    println!("Control plane: http://127.0.0.1:{}/healthz", control_port);
     println!("========================================");
     println!();
 

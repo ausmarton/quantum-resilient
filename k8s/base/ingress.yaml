@@ -1,0 +1,32 @@
+# Optional: Ingress for external access to metrics and control plane
+# Uncomment and configure for production use
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: quantum-resilient
+  labels:
+    app: quantum-resilient
+    component: network
+  annotations:
+    # nginx.ingress.kubernetes.io/rewrite-target: /
+    # kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host: quantum-resilient.local
+      http:
+        paths:
+          - path: /metrics
+            pathType: Prefix
+            backend:
+              service:
+                name: quantum-resilient
+                port:
+                  number: 9898
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: quantum-resilient
+                port:
+                  number: 6060
+

@@ -1,0 +1,153 @@
+# Default values for quantum-resilient Helm chart
+# This is a YAML-formatted file.
+
+# Number of replicas (overridden by HPA if autoscaling enabled)
+replicaCount: 1
+
+# Container image configuration
+image:
+  repository: localhost/pqc-bench
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Image pull secrets (if using private registry)
+imagePullSecrets: []
+
+# Override the name of the chart
+nameOverride: ""
+fullnameOverride: ""
+
+# Service account configuration
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9898"
+  prometheus.io/path: "/metrics"
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+# Service configuration
+service:
+  type: ClusterIP
+  controlPort: 6060
+  promPort: 9898
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: quantum-resilient.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Resource limits and requests
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "2"
+    memory: "2Gi"
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 10
+  # Custom metric: pqc_queue_length
+  # Target 75% of queue_capacity (2000) = 1500
+  targetQueueLength: 1500
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity rules
+affinity: {}
+
+# Termination grace period (seconds)
+terminationGracePeriodSeconds: 10
+
+# Persistence configuration for results
+persistence:
+  enabled: true
+  accessMode: ReadWriteOnce
+  size: 2Gi
+  storageClass: ""
+  # existingClaim: ""
+
+# Prometheus ServiceMonitor (requires Prometheus Operator)
+serviceMonitor:
+  enabled: true
+  interval: 5s
+  scrapeTimeout: 10s
+  namespace: ""
+  additionalLabels: {}
+
+# Environment variables
+env:
+  RUST_LOG: info
+
+# Scenario configuration
+# This will be mounted as a ConfigMap
+scenario:
+  # If customScenario is provided, it overrides the default
+  customScenario: ""
+  # Default scenario configuration
+  default:
+    id: cluster_smoke_test
+    description: "Default Kubernetes cluster smoke test"
+    workload:
+      msgs_per_sec: 20
+      msg_size_bytes: 128
+      duration_sec: 5
+      pattern: constant
+    algorithm:
+      adapter: noop
+      operation: sign
+    metrics:
+      prometheus_endpoint: "0.0.0.0:9898"
+      jsonl_out: "/app/results/results.jsonl"
+    execution:
+      mode: fixed_pool
+      workers: 4
+      queue_capacity: 2000
+
+# Probes configuration
+probes:
+  liveness:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    initialDelaySeconds: 3
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
