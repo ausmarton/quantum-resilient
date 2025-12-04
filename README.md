@@ -82,6 +82,26 @@ quantum-resilient/
 │       ├── Chart.yaml
 │       ├── values.yaml
 │       └── templates/
+├── analysis/             # Research analysis environment
+│   ├── notebooks/            # Jupyter notebooks
+│   │   ├── 00_setup.ipynb
+│   │   ├── 01_load_results.ipynb
+│   │   └── ...
+│   ├── scripts/              # CLI analysis tools
+│   │   ├── fetch_results.py
+│   │   ├── merge_jsonl.py
+│   │   ├── compute_statistics.py
+│   │   ├── effect_sizes.py
+│   │   ├── plot_latency.py
+│   │   └── ...
+│   ├── requirements.txt
+│   ├── pyproject.toml
+│   ├── run_full_pipeline.sh
+│   └── README.md
+├── iac/                  # Infrastructure as Code
+│   └── terraform/
+│       ├── gcp/              # GCP/GKE deployment
+│       └── modules/          # Reusable modules
 ├── Makefile
 ├── Dockerfile.podman
 └── README.md
@@ -783,6 +803,152 @@ terraform destroy \
   -var="project_id=YOUR_PROJECT_ID" \
   -var="bucket_name=qr-results-YOUR_PROJECT_ID"
 ```
+
+## Running the Analysis Suite
+
+The framework includes a comprehensive Python-based analysis suite for processing benchmark results and generating publication-quality figures.
+
+### Prerequisites
+
+- Python 3.10+
+- pip or conda
+
+### Installation
+
+```bash
+cd analysis
+
+# Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+# or: venv\Scripts\activate  # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Quick Start: Full Pipeline
+
+Run the complete analysis pipeline with a single command:
+
+```bash
+# From local results
+./run_full_pipeline.sh exp_001 file:///path/to/results
+
+# From GCS
+./run_full_pipeline.sh exp_001 gs://qr-results/exp_001
+
+# From S3/MinIO
+./run_full_pipeline.sh exp_001 s3://bucket/exp_001
+```
+
+The pipeline will:
+1. Fetch results from storage
+2. Merge JSONL files from all workers
+3. Compute statistical summaries
+4. Generate plots (latency, throughput, queue delay)
+5. Export to Parquet and CSV
+
+### Individual Scripts
+
+```bash
+# Fetch results
+python scripts/fetch_results.py \
+  --experiment-id exp_001 \
+  --uri gs://qr-results/exp_001 \
+  --out data/exp_001/
+
+# Merge JSONL files
+python scripts/merge_jsonl.py \
+  --input data/exp_001/raw \
+  --output data/exp_001/merged
+
+# Compute statistics
+python scripts/compute_statistics.py \
+  --input data/exp_001/merged/merged.jsonl \
+  --output data/exp_001/stats
+
+# Calculate effect sizes between experiments
+python scripts/effect_sizes.py \
+  --exp-a data/exp_rsa/merged/merged.jsonl \
+  --exp-b data/exp_kyber/merged/merged.jsonl \
+  --metric latency_us \
+  --out data/comparisons/rsa_vs_kyber.json
+
+# Generate plots
+python scripts/plot_latency.py \
+  --input data/exp_001/merged/merged.jsonl \
+  --output figures/exp_001/
+
+python scripts/plot_throughput.py \
+  --input data/exp_001/merged/merged.jsonl \
+  --output figures/exp_001/
+```
+
+### Jupyter Notebooks
+
+Interactive analysis is available via JupyterLab:
+
+```bash
+cd analysis
+jupyter lab
+```
+
+Available notebooks:
+
+| Notebook | Description |
+|----------|-------------|
+| `00_setup.ipynb` | Environment verification and GCP authentication |
+| `01_load_results.ipynb` | Load and explore experiment data |
+| `02_latency_analysis.ipynb` | Latency distributions and comparisons |
+| `03_throughput_analysis.ipynb` | Throughput over time analysis |
+| `04_queue_delay_analysis.ipynb` | Queue delay correlation with load |
+| `05_adapter_comparison.ipynb` | RSA vs ECDSA vs Kyber comparison |
+| `06_effect_size.ipynb` | Statistical significance testing |
+| `07_cluster_scaling_behavior.ipynb` | Kubernetes autoscaling analysis |
+| `99_generate_figures.ipynb` | Publication-quality figure generation |
+
+### Output Structure
+
+After running the pipeline:
+
+```
+analysis/
+├── data/
+│   └── exp_001/
+│       ├── raw/              # Original JSONL files
+│       ├── merged/
+│       │   ├── merged.jsonl  # Combined, sorted events
+│       │   └── merged.parquet
+│       ├── stats/
+│       │   ├── summary.json  # Statistical summary
+│       │   ├── latency_hist.png
+│       │   ├── queue_hist.png
+│       │   └── throughput_curve.png
+│       └── exports/
+│           ├── exp_001.parquet
+│           └── exp_001.csv
+└── figures/
+    └── exp_001/
+        ├── latency_cdf.png
+        ├── latency_pdf.png
+        ├── latency_tail.png
+        ├── throughput_timeseries.png
+        └── queue_delay_distribution.png
+```
+
+### Effect Size Metrics
+
+The analysis suite computes standard effect size metrics for algorithm comparisons:
+
+| Metric | Description | Interpretation |
+|--------|-------------|----------------|
+| Cohen's d | Standardized mean difference | <0.2 negligible, 0.2-0.5 small, 0.5-0.8 medium, >0.8 large |
+| Hedge's g | Bias-corrected Cohen's d | Same as Cohen's d |
+| Glass's Δ | Uses control group std | Same as Cohen's d |
+| Cliff's δ | Non-parametric | <0.147 negligible, 0.147-0.33 small, 0.33-0.474 medium, >0.474 large |
+| Wasserstein | Earth mover's distance | In original units |
+| KS statistic | Distribution distance | 0-1, with p-value |
 
 ## Development
 
