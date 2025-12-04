@@ -66,6 +66,10 @@ quantum-resilient/
 ├── run_minikube.sh         # Minikube K8s experiment runner
 ├── deploy_gcp.sh           # GKE deployment script
 ├── fetch_and_analyse_from_gcs.sh  # GCS results fetcher
+├── run_all_experiments.sh  # Master orchestration script
+├── orchestration/          # Experiment orchestration
+│   ├── experiment_matrix.yaml  # Declarative experiment config
+│   └── generate_scenarios.py   # Scenario auto-generator
 ├── terraform/
 │   └── gke/                # Terraform module for GKE
 │       ├── main.tf         # GKE cluster + node pool
@@ -1564,6 +1568,133 @@ reproducibility/output/batch_001/
 | CV (Throughput) | < 10% | 10-25% | > 25% |
 | p99 CV | < 15% | 15-30% | > 30% |
 | KS p-value | > 0.05 | 0.01-0.05 | < 0.01 |
+
+## Complete Experiment Orchestration
+
+The framework includes a master orchestration system that can execute all experiments across all environments with a single command.
+
+### Experiment Matrix
+
+Define your complete experiment configuration in `orchestration/experiment_matrix.yaml`:
+
+```yaml
+experiments:
+  - algorithm: rsa2048
+    payload_sizes: [256, 1024, 4096]
+    rates: [100, 500, 2000]
+    runs: 5
+    
+  - algorithm: kyber512
+    payload_sizes: [256, 1024, 4096]
+    rates: [100, 500, 2000]
+    runs: 5
+    
+  - algorithm: hybrid_kyber_dilithium
+    payload_sizes: [256, 1024, 4096]
+    rates: [100, 500, 2000]
+    runs: 5
+```
+
+### Single Command Execution
+
+Run all experiments across all environments:
+
+```bash
+./run_all_experiments.sh \
+  --matrix orchestration/experiment_matrix.yaml \
+  --envs native,minikube,gcp \
+  --project my-gcp-project \
+  --bucket pqc-bench-results
+```
+
+### What It Does
+
+1. **Generate Scenarios**: Creates individual scenario YAML files for each configuration
+2. **Execute Experiments**: Runs each scenario in native, Minikube, and GCP environments
+3. **Aggregate Results**: Computes statistics across all runs
+4. **Generate Figures**: Creates publication-quality combined plots
+5. **Hypothesis Testing**: Performs statistical significance tests
+6. **Build Report**: Generates dissertation-ready final report
+
+### Output Structure
+
+```
+final-results/
+├── index.json              # Master experiment index
+├── aggregated_stats.json   # Aggregated statistics
+├── aggregated_stats.csv    # CSV format
+├── hypothesis_tests.json   # Statistical test results
+├── report.md               # Dissertation-ready report
+├── figures/
+│   ├── combined_ecdf.png
+│   ├── scaling_curves.png
+│   ├── native_vs_minikube_vs_gcp.png
+│   ├── classical_vs_pqc.png
+│   └── ...
+├── stats/
+│   ├── effect_sizes.json
+│   └── environment_deltas.json
+└── tables/
+    ├── latency_summary.csv
+    └── hypothesis_summary.json
+```
+
+### Individual Analysis Scripts
+
+Run analysis components separately:
+
+```bash
+# Generate scenarios
+python orchestration/generate_scenarios.py \
+  --matrix orchestration/experiment_matrix.yaml \
+  --output generated-scenarios
+
+# Aggregate results
+python analysis/aggregate_results.py \
+  --index final-results/index.json \
+  --output final-results
+
+# Generate combined CDFs
+python analysis/plot_combined_cdfs.py \
+  --index final-results/index.json \
+  --output final-results/figures
+
+# Generate scaling curves
+python analysis/plot_scaling_curves.py \
+  --index final-results/index.json \
+  --output final-results/figures
+
+# Run hypothesis tests
+python analysis/hypothesis_tests.py \
+  --index final-results/index.json \
+  --matrix orchestration/experiment_matrix.yaml \
+  --output final-results/hypothesis_tests.json
+
+# Build final report
+python analysis/build_final_report.py \
+  --index final-results/index.json \
+  --stats final-results/aggregated_stats.json \
+  --hypothesis final-results/hypothesis_tests.json \
+  --figures final-results/figures \
+  --output final-results
+```
+
+### Hypothesis Testing
+
+The framework performs rigorous statistical testing:
+
+- **Mann-Whitney U test**: Non-parametric test for distribution differences
+- **Kolmogorov-Smirnov test**: Tests distribution shape similarity
+- **Welch's t-test**: Tests mean differences (unequal variances)
+- **Holm-Bonferroni correction**: Controls family-wise error rate
+
+### Effect Sizes
+
+Reports Cohen's d with interpretations:
+- |d| < 0.2: Negligible
+- |d| < 0.5: Small
+- |d| < 0.8: Medium
+- |d| ≥ 0.8: Large
 
 ## Development
 

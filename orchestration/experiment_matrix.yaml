@@ -1,0 +1,136 @@
+# =============================================================================
+# experiment_matrix.yaml - Declarative experiment configuration
+#
+# Defines all scenarios for the dissertation benchmarking study:
+# - Algorithms: RSA, ECDSA, Kyber, Dilithium, Hybrid
+# - Payload sizes: 256B, 1KB, 4KB
+# - Workload rates: 100, 500, 2000 msg/s
+# - Repeats: 5 runs per configuration for statistical rigor
+# =============================================================================
+
+# Global defaults
+defaults:
+  duration_sec: 30
+  runs: 5
+  rng_seed_base: 42
+  execution:
+    mode: fixed_pool
+    workers: 4
+    queue_capacity: 4000
+
+# Environment configurations
+environments:
+  native:
+    enabled: true
+    script: run_local.sh
+    output_base: results/native
+  
+  minikube:
+    enabled: true
+    script: run_minikube.sh
+    output_base: results/minikube
+  
+  gcp:
+    enabled: true
+    script: deploy_gcp.sh
+    output_base: results/gcp
+    requires:
+      - project
+      - bucket
+      - region
+
+# Experiment definitions
+experiments:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Classical Cryptography Baselines
+  # ─────────────────────────────────────────────────────────────────────────
+  
+  - algorithm: rsa2048
+    description: "RSA-2048 signature baseline"
+    adapter: rsa2048
+    operation: sign
+    payload_sizes: [256, 1024, 4096]
+    rates: [100, 500, 2000]
+    runs: 5
+    category: classical
+    
+  - algorithm: ecdsa_p256
+    description: "ECDSA P-256 signature baseline"
+    adapter: ecdsa_p256
+    operation: sign
+    payload_sizes: [256, 1024, 4096]
+    rates: [100, 500, 2000]
+    runs: 5
+    category: classical
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Post-Quantum Cryptography
+  # ─────────────────────────────────────────────────────────────────────────
+  
+  - algorithm: kyber512
+    description: "Kyber-512 KEM + AES-GCM encryption"
+    adapter: kyber
+    operation: kem_aead_encrypt
+    payload_sizes: [256, 1024, 4096]
+    rates: [100, 500, 2000]
+    runs: 5
+    category: pqc
+    kem:
+      paramset: kyber512
+      
+  - algorithm: dilithium2
+    description: "Dilithium-2 digital signature"
+    adapter: dilithium
+    operation: sign
+    payload_sizes: [256, 1024, 4096]
+    rates: [100, 500, 2000]
+    runs: 5
+    category: pqc
+    sig:
+      paramset: dilithium2
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Hybrid Post-Quantum + Classical
+  # ─────────────────────────────────────────────────────────────────────────
+  
+  - algorithm: hybrid_kyber_dilithium
+    description: "Hybrid: Kyber-512 KEM → AES-GCM → Dilithium-2 sign"
+    adapter: hybrid_kyber_dilithium
+    operation: kem_aead_sign
+    payload_sizes: [256, 1024, 4096]
+    rates: [100, 500, 2000]
+    runs: 5
+    category: hybrid
+    kem:
+      paramset: kyber512
+    sig:
+      paramset: dilithium2
+
+# Comparison groups for analysis
+comparisons:
+  # PQC vs Classical signatures
+  - name: "pqc_vs_classical_sign"
+    baseline: ecdsa_p256
+    treatment: dilithium2
+    metric: latency_us
+    
+  # PQC vs Classical encryption/KEM
+  - name: "pqc_vs_classical_encrypt"
+    baseline: rsa2048
+    treatment: kyber512
+    metric: latency_us
+    
+  # Hybrid vs pure PQC
+  - name: "hybrid_vs_pqc"
+    baseline: kyber512
+    treatment: hybrid_kyber_dilithium
+    metric: latency_us
+
+# Output configuration
+output:
+  generated_scenarios_dir: generated-scenarios
+  final_results_dir: final-results
+  figures_subdir: figures
+  stats_subdir: stats
+  tables_subdir: tables
+
