@@ -151,3 +151,23 @@ probes:
     timeoutSeconds: 3
     failureThreshold: 3
 
+# Results storage configuration
+results:
+  # Storage backend: "local" or "gcs"
+  storageBackend: "local"
+  # GCS bucket name (when storageBackend is "gcs")
+  gcsBucket: ""
+
+# GCP-specific configuration
+gcp:
+  # Enable GCP mode
+  enabled: false
+  # GCS bucket name for results
+  bucketName: ""
+  # GCP project ID
+  projectId: ""
+  # GCP region
+  region: ""
+  # Use Workload Identity for authentication (no key files)
+  useWorkloadIdentity: true
+

@@ -14,9 +14,11 @@ mod api;
 mod controller;
 mod coordinator;
 mod k8s_client;
+mod scheduler;
 mod storage;
 
 use controller::ExperimentController;
+use scheduler::ExperimentScheduler;
 
 /// Quantum-Resilient Experiment Orchestrator
 #[derive(Parser, Debug)]
@@ -80,8 +82,12 @@ async fn main() -> anyhow::Result<()> {
 
     let controller = Arc::new(controller);
 
+    // Create the experiment scheduler
+    let scheduler = Arc::new(ExperimentScheduler::new());
+    info!("Experiment scheduler initialized");
+
     // Build the API router
-    let app = api::create_router(controller.clone());
+    let app = api::create_router(controller.clone(), scheduler.clone());
 
     // Parse listen address
     let addr: SocketAddr = args.listen_addr.parse()?;

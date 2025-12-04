@@ -50,6 +50,9 @@ thiserror = "1.0"
 anyhow = "1.0"
 parking_lot = "0.12"
 
+# Cron scheduling
+cron = "0.12"
+
 # Metrics
 prometheus = "0.13"
 

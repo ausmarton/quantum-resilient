@@ -602,6 +602,188 @@ cargo build -p orchestrator --features storage-s3
 cargo build -p orchestrator --features storage-gcs
 ```
 
+## Running in GCP (GKE)
+
+The framework includes complete Terraform infrastructure-as-code for deploying to Google Cloud Platform.
+
+### Prerequisites
+
+- GCP account with billing enabled
+- `gcloud` CLI installed and configured
+- Terraform 1.5+
+- kubectl
+
+### Quick Start
+
+1. **Authenticate with GCP:**
+
+```bash
+gcloud auth application-default login
+gcloud config set project YOUR_PROJECT_ID
+```
+
+2. **Deploy infrastructure with Terraform:**
+
+```bash
+cd iac/terraform/gcp
+
+# Initialize Terraform
+terraform init
+
+# Review the plan
+terraform plan \
+  -var="project_id=YOUR_PROJECT_ID" \
+  -var="bucket_name=qr-results-YOUR_PROJECT_ID" \
+  -var="region=us-central1"
+
+# Apply the configuration
+terraform apply \
+  -var="project_id=YOUR_PROJECT_ID" \
+  -var="bucket_name=qr-results-YOUR_PROJECT_ID" \
+  -var="region=us-central1"
+```
+
+3. **Configure kubectl:**
+
+```bash
+# Get credentials for the cluster (command shown in terraform output)
+gcloud container clusters get-credentials quantum-resilient-cluster \
+  --region us-central1 \
+  --project YOUR_PROJECT_ID
+```
+
+4. **Verify deployment:**
+
+```bash
+# Check cluster nodes
+kubectl get nodes
+
+# Check pods
+kubectl get pods -n quantum-resilient
+
+# Check services
+kubectl get svc -n quantum-resilient
+```
+
+### Accessing Services
+
+**Port-forward to orchestrator:**
+
+```bash
+kubectl port-forward -n quantum-resilient svc/qr-orchestrator 7070:7070
+```
+
+**Port-forward to Grafana:**
+
+```bash
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
+# Default credentials: admin / admin (or value from grafana_admin_password variable)
+```
+
+### Running a Distributed Experiment on GKE
+
+1. **Create an experiment:**
+
+```bash
+cat > scenario.json << 'EOF'
+{
+  "scenarioConfig": "id: gke_kyber_test\nworkload:\n  msgs_per_sec: 100\n  msg_size_bytes: 256\n  duration_sec: 60\nalgorithm:\n  adapter: kyber\n  operation: kem_aead_encrypt\nexecution:\n  mode: fixed_pool\n  workers: 4\n  queue_capacity: 2000\nmetrics:\n  prometheus_endpoint: \"0.0.0.0:9898\"\n  jsonl_out: \"./results/results.jsonl\"",
+  "replicas": 12,
+  "startDelayMs": 5000,
+  "experimentId": "exp_gke_001"
+}
+EOF
+
+curl -X POST http://localhost:7070/experiment \
+  -H "Content-Type: application/json" \
+  -d @scenario.json
+```
+
+2. **Start the experiment:**
+
+```bash
+curl -X POST http://localhost:7070/experiment/exp_gke_001/start
+```
+
+3. **Monitor progress:**
+
+```bash
+watch -n 2 'curl -s http://localhost:7070/experiment/exp_gke_001/status'
+```
+
+4. **Collect and export results:**
+
+```bash
+curl -X POST http://localhost:7070/experiment/exp_gke_001/collect
+```
+
+5. **Verify results in GCS:**
+
+```bash
+gsutil ls gs://qr-results-YOUR_PROJECT_ID/exp_gke_001/
+gsutil cat gs://qr-results-YOUR_PROJECT_ID/exp_gke_001/results.jsonl | head
+```
+
+### Experiment Scheduling
+
+Schedule recurring experiments using cron expressions:
+
+```bash
+# Create a nightly benchmark schedule
+curl -X POST http://localhost:7070/schedule \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "nightly_kyber_benchmark",
+    "cron": "0 3 * * *",
+    "scenarioConfig": "id: nightly_kyber\nworkload:\n  msgs_per_sec: 200\n  duration_sec: 300\nalgorithm:\n  adapter: kyber\n  operation: kem_aead_encrypt",
+    "replicas": 50
+  }'
+
+# List schedules
+curl http://localhost:7070/schedules
+
+# Check schedule status
+curl http://localhost:7070/schedule/nightly_kyber_benchmark
+```
+
+### Grafana Dashboards
+
+The deployment includes pre-configured Grafana dashboards:
+
+| Dashboard | Description |
+|-----------|-------------|
+| QR - Cluster Throughput | Overall and per-worker ops/sec |
+| QR - Crypto Latency | Latency histograms by adapter (Kyber, RSA, ECDSA) |
+| QR - Queue & Backpressure | Queue length, utilization, and delay distributions |
+| QR - Worker Health | CPU, memory, restarts per worker |
+| QR - Experiment Overview | Experiment timeline and aggregated metrics |
+
+Access at `http://localhost:3000` after port-forwarding Grafana.
+
+### Terraform Variables Reference
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `project_id` | GCP project ID | (required) |
+| `region` | GCP region | `us-central1` |
+| `bucket_name` | GCS bucket name | (required) |
+| `gke_name` | GKE cluster name | `quantum-resilient-cluster` |
+| `gke_node_machine_type` | Node machine type | `n2-standard-4` |
+| `gke_node_min_count` | Min nodes per zone | `1` |
+| `gke_node_max_count` | Max nodes per zone | `7` |
+| `enable_prometheus` | Deploy Prometheus stack | `true` |
+| `enable_bigquery` | Enable BigQuery export | `false` |
+
+### Cleanup
+
+```bash
+# Destroy all resources
+cd iac/terraform/gcp
+terraform destroy \
+  -var="project_id=YOUR_PROJECT_ID" \
+  -var="bucket_name=qr-results-YOUR_PROJECT_ID"
+```
+
 ## Development
 
 ### Available Make Targets

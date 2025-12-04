@@ -1,11 +1,12 @@
 //! Orchestrator REST API
 //!
-//! Provides HTTP endpoints for experiment management.
+//! Provides HTTP endpoints for experiment management and scheduling.
 
 use crate::controller::{
     AggregationSummary, CollectResult, ControllerError, CreateExperimentRequest, Experiment,
     ExperimentController, ExperimentStatus,
 };
+use crate::scheduler::{CreateScheduleRequest, ExperimentScheduler, ScheduledExperiment, SchedulerError};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -18,10 +19,16 @@ use std::sync::Arc;
 use tracing::info;
 
 /// Shared state for API handlers
-type AppState = Arc<ExperimentController>;
+#[derive(Clone)]
+pub struct AppState {
+    pub controller: Arc<ExperimentController>,
+    pub scheduler: Arc<ExperimentScheduler>,
+}
 
 /// Create the API router
-pub fn create_router(controller: Arc<ExperimentController>) -> Router {
+pub fn create_router(controller: Arc<ExperimentController>, scheduler: Arc<ExperimentScheduler>) -> Router {
+    let state = AppState { controller, scheduler };
+    
     Router::new()
         // Health endpoints
         .route("/healthz", get(healthz))
@@ -39,9 +46,16 @@ pub fn create_router(controller: Arc<ExperimentController>) -> Router {
         .route("/experiment/:id/register", post(register_worker))
         .route("/experiment/:id/ready", post(mark_worker_ready))
         .route("/experiment/:id/completed", post(mark_worker_completed))
+        // Scheduling endpoints
+        .route("/schedule", post(create_schedule))
+        .route("/schedules", get(list_schedules))
+        .route("/schedule/:name", get(get_schedule))
+        .route("/schedule/:name", axum::routing::delete(delete_schedule))
+        .route("/schedule/:name/enable", post(enable_schedule))
+        .route("/schedule/:name/disable", post(disable_schedule))
         // Metrics
         .route("/metrics", get(metrics))
-        .with_state(controller)
+        .with_state(state)
 }
 
 /// Health check endpoint
@@ -50,29 +64,30 @@ async fn healthz() -> impl IntoResponse {
 }
 
 /// Readiness check endpoint
-async fn readyz(State(controller): State<AppState>) -> impl IntoResponse {
+async fn readyz(State(state): State<AppState>) -> impl IntoResponse {
     // Could check K8s connectivity here
     Json(serde_json::json!({
         "ready": true,
-        "experiments_count": controller.list_experiments().len()
+        "experiments_count": state.controller.list_experiments().len(),
+        "schedules_count": state.scheduler.list_schedules().len()
     }))
 }
 
 /// Create a new experiment
 async fn create_experiment(
-    State(controller): State<AppState>,
+    State(state): State<AppState>,
     Json(request): Json<CreateExperimentRequest>,
 ) -> Result<(StatusCode, Json<ExperimentResponse>), ApiError> {
     info!("API: Create experiment request: {}", request.experiment_id);
     
-    let experiment = controller.create_experiment(request).await?;
+    let experiment = state.controller.create_experiment(request).await?;
     
     Ok((StatusCode::CREATED, Json(ExperimentResponse::from(experiment))))
 }
 
 /// List all experiments
-async fn list_experiments(State(controller): State<AppState>) -> impl IntoResponse {
-    let experiments: Vec<ExperimentResponse> = controller
+async fn list_experiments(State(state): State<AppState>) -> impl IntoResponse {
+    let experiments: Vec<ExperimentResponse> = state.controller
         .list_experiments()
         .into_iter()
         .map(ExperimentResponse::from)
@@ -83,58 +98,58 @@ async fn list_experiments(State(controller): State<AppState>) -> impl IntoRespon
 
 /// Get a specific experiment
 async fn get_experiment(
-    State(controller): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<ExperimentStatus>, ApiError> {
-    let status = controller.get_status(&id)?;
+    let status = state.controller.get_status(&id)?;
     Ok(Json(status))
 }
 
 /// Delete an experiment
 async fn delete_experiment(
-    State(controller): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    controller.delete_experiment(&id).await?;
+    state.controller.delete_experiment(&id).await?;
     Ok(Json(serde_json::json!({ "deleted": true, "id": id })))
 }
 
 /// Get experiment status
 async fn get_experiment_status(
-    State(controller): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<ExperimentStatus>, ApiError> {
-    let status = controller.get_status(&id)?;
+    let status = state.controller.get_status(&id)?;
     Ok(Json(status))
 }
 
 /// Start an experiment
 async fn start_experiment(
-    State(controller): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     info!("API: Start experiment: {}", id);
-    controller.start_experiment(&id).await?;
+    state.controller.start_experiment(&id).await?;
     Ok(Json(serde_json::json!({ "started": true, "id": id })))
 }
 
 /// Stop an experiment
 async fn stop_experiment(
-    State(controller): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     info!("API: Stop experiment: {}", id);
-    controller.stop_experiment(&id).await?;
+    state.controller.stop_experiment(&id).await?;
     Ok(Json(serde_json::json!({ "stopped": true, "id": id })))
 }
 
 /// Collect and aggregate results
 async fn collect_results(
-    State(controller): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<CollectResult>, ApiError> {
     info!("API: Collect results for experiment: {}", id);
-    let result = controller.collect_results(&id).await?;
+    let result = state.controller.collect_results(&id).await?;
     Ok(Json(result))
 }
 
@@ -157,7 +172,7 @@ struct RegisterResponse {
 
 /// Register a worker with an experiment
 async fn register_worker(
-    State(controller): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<String>,
     Json(request): Json<RegisterRequest>,
 ) -> Result<Json<RegisterResponse>, ApiError> {
@@ -166,8 +181,8 @@ async fn register_worker(
         id, request.pod_name
     );
     
-    let (worker_id, global_start) = controller.register_worker(&id, &request.pod_name, &request.pod_ip)?;
-    let orchestrator_time = controller.current_timestamp_ns();
+    let (worker_id, global_start) = state.controller.register_worker(&id, &request.pod_name, &request.pod_ip)?;
+    let orchestrator_time = state.controller.current_timestamp_ns();
     
     Ok(Json(RegisterResponse {
         worker_id,
@@ -186,12 +201,12 @@ struct ReadyRequest {
 
 /// Mark a worker as ready
 async fn mark_worker_ready(
-    State(controller): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<String>,
     Json(request): Json<ReadyRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     // Get experiment coordinator
-    let experiments = controller.list_experiments();
+    let experiments = state.controller.list_experiments();
     let experiment = experiments
         .iter()
         .find(|e| e.id == id)
@@ -211,11 +226,11 @@ struct CompletedRequest {
 
 /// Mark a worker as completed
 async fn mark_worker_completed(
-    State(controller): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<String>,
     Json(request): Json<CompletedRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    let experiments = controller.list_experiments();
+    let experiments = state.controller.list_experiments();
     let experiment = experiments
         .iter()
         .find(|e| e.id == id)
@@ -266,20 +281,36 @@ impl From<Experiment> for ExperimentResponse {
 }
 
 /// API error handling
-struct ApiError(ControllerError);
+enum ApiError {
+    Controller(ControllerError),
+    Scheduler(SchedulerError),
+}
 
 impl From<ControllerError> for ApiError {
     fn from(err: ControllerError) -> Self {
-        ApiError(err)
+        ApiError::Controller(err)
+    }
+}
+
+impl From<SchedulerError> for ApiError {
+    fn from(err: SchedulerError) -> Self {
+        ApiError::Scheduler(err)
     }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> axum::response::Response {
-        let (status, message) = match &self.0 {
-            ControllerError::ExperimentNotFound(_) => (StatusCode::NOT_FOUND, self.0.to_string()),
-            ControllerError::InvalidState { .. } => (StatusCode::CONFLICT, self.0.to_string()),
-            _ => (StatusCode::INTERNAL_SERVER_ERROR, self.0.to_string()),
+        let (status, message) = match &self {
+            ApiError::Controller(e) => match e {
+                ControllerError::ExperimentNotFound(_) => (StatusCode::NOT_FOUND, e.to_string()),
+                ControllerError::InvalidState { .. } => (StatusCode::CONFLICT, e.to_string()),
+                _ => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+            },
+            ApiError::Scheduler(e) => match e {
+                SchedulerError::ScheduleNotFound(_) => (StatusCode::NOT_FOUND, e.to_string()),
+                SchedulerError::ScheduleAlreadyExists(_) => (StatusCode::CONFLICT, e.to_string()),
+                SchedulerError::InvalidCronExpression(_) => (StatusCode::BAD_REQUEST, e.to_string()),
+            },
         };
 
         let body = serde_json::json!({
@@ -288,5 +319,62 @@ impl IntoResponse for ApiError {
 
         (status, Json(body)).into_response()
     }
+}
+
+// =============================================================================
+// Scheduler Endpoints
+// =============================================================================
+
+/// Create a new schedule
+async fn create_schedule(
+    State(state): State<AppState>,
+    Json(request): Json<CreateScheduleRequest>,
+) -> Result<(StatusCode, Json<ScheduledExperiment>), ApiError> {
+    info!("API: Create schedule: {}", request.name);
+    let schedule = state.scheduler.add_schedule(request)?;
+    Ok((StatusCode::CREATED, Json(schedule)))
+}
+
+/// List all schedules
+async fn list_schedules(State(state): State<AppState>) -> impl IntoResponse {
+    let schedules = state.scheduler.list_schedules();
+    Json(schedules)
+}
+
+/// Get a specific schedule
+async fn get_schedule(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<Json<ScheduledExperiment>, ApiError> {
+    let schedule = state.scheduler.get_schedule(&name)
+        .ok_or_else(|| SchedulerError::ScheduleNotFound(name))?;
+    Ok(Json(schedule))
+}
+
+/// Delete a schedule
+async fn delete_schedule(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    state.scheduler.remove_schedule(&name)?;
+    Ok(Json(serde_json::json!({ "deleted": true, "name": name })))
+}
+
+/// Enable a schedule
+async fn enable_schedule(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    state.scheduler.set_enabled(&name, true)?;
+    Ok(Json(serde_json::json!({ "enabled": true, "name": name })))
+}
+
+/// Disable a schedule
+async fn disable_schedule(
+    State(state): State<AppState>,
+    Path(name): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    state.scheduler.set_enabled(&name, false)?;
+    Ok(Json(serde_json::json!({ "enabled": false, "name": name })))
 }
 

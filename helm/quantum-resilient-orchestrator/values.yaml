@@ -112,3 +112,16 @@ rbac:
   # Create RBAC resources
   create: true
 
+# GCP-specific configuration
+gcp:
+  # Enable GCP mode
+  enabled: false
+  # GCS bucket name for results
+  bucketName: ""
+  # GCP project ID
+  projectId: ""
+  # GCP region
+  region: ""
+  # Use Workload Identity for authentication
+  useWorkloadIdentity: true
+
