@@ -1,0 +1,351 @@
+# =============================================================================
+# worker-job.yaml - GKE Job for PQC benchmark execution
+#
+# Runs the benchmark, collects cloud metadata, and uploads results to GCS.
+# Uses Workload Identity for GCS access.
+# =============================================================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pqc-bench-worker
+  namespace: default
+  labels:
+    app: pqc-bench
+    component: worker
+    environment: gcp
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 7200  # Keep for 2 hours for debugging
+
+  template:
+    metadata:
+      labels:
+        app: pqc-bench
+        component: worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9898"
+        prometheus.io/path: "/metrics"
+    spec:
+      restartPolicy: Never
+      serviceAccountName: pqc-bench-sa
+
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+
+      # Init container: Gather cloud metadata and create provenance
+      initContainers:
+        - name: gather-metadata
+          image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              
+              echo "=== Gathering GCP/GKE metadata ==="
+              
+              # Get metadata from GCE metadata server
+              ZONE=$(curl -s -H "Metadata-Flavor: Google" \
+                http://metadata.google.internal/computeMetadata/v1/instance/zone | cut -d'/' -f4)
+              MACHINE_TYPE=$(curl -s -H "Metadata-Flavor: Google" \
+                http://metadata.google.internal/computeMetadata/v1/instance/machine-type | cut -d'/' -f4)
+              INSTANCE_ID=$(curl -s -H "Metadata-Flavor: Google" \
+                http://metadata.google.internal/computeMetadata/v1/instance/id)
+              PROJECT_ID=$(curl -s -H "Metadata-Flavor: Google" \
+                http://metadata.google.internal/computeMetadata/v1/project/project-id)
+              CLUSTER_NAME=$(curl -s -H "Metadata-Flavor: Google" \
+                http://metadata.google.internal/computeMetadata/v1/instance/attributes/cluster-name 2>/dev/null || echo "unknown")
+              
+              # Get CPU info
+              CPU_MODEL=$(cat /proc/cpuinfo | grep "model name" | head -1 | cut -d':' -f2 | xargs)
+              CPU_COUNT=$(nproc)
+              
+              # Get memory info
+              MEMORY_TOTAL=$(cat /proc/meminfo | grep MemTotal | awk '{print $2}')
+              
+              # Get kernel info
+              KERNEL_VERSION=$(uname -r)
+              ARCH=$(uname -m)
+              
+              # Get container runtime (from /proc/1/cgroup)
+              CONTAINER_RUNTIME="containerd"
+              
+              # Create cloud metadata JSON
+              cat > /results/cloud_metadata.json << EOF
+              {
+                "type": "gcp_gke",
+                "project_id": "$PROJECT_ID",
+                "zone": "$ZONE",
+                "region": "$(echo $ZONE | sed 's/-[a-z]$//')",
+                "machine_type": "$MACHINE_TYPE",
+                "instance_id": "$INSTANCE_ID",
+                "cluster_name": "$CLUSTER_NAME",
+                "node_name": "${NODE_NAME}",
+                "pod_name": "${POD_NAME}",
+                "pod_namespace": "${POD_NAMESPACE}",
+                "cpu_model": "$CPU_MODEL",
+                "cpu_count": $CPU_COUNT,
+                "memory_total_kb": $MEMORY_TOTAL,
+                "kernel_version": "$KERNEL_VERSION",
+                "arch": "$ARCH",
+                "container_runtime": "$CONTAINER_RUNTIME",
+                "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              }
+              EOF
+              
+              echo "Cloud metadata:"
+              cat /results/cloud_metadata.json
+              
+              # Create results subdirectories
+              mkdir -p /results/raw /results/merged /results/stats /results/figures
+              
+              echo "=== Metadata collection complete ==="
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: results
+              mountPath: /results
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+      # Main container: Run benchmark
+      containers:
+        - name: pqc-bench
+          image: PLACEHOLDER_IMAGE  # Will be replaced by deploy_gcp.sh
+          imagePullPolicy: Always
+          args:
+            - "--scenario"
+            - "/config/scenario.yaml"
+          env:
+            - name: RUST_LOG
+              value: "info"
+            - name: QR_MODE
+              value: "gcp"
+            - name: GCS_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: pqc-gcp-config
+                  key: bucket_name
+            - name: EXP_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: pqc-gcp-config
+                  key: experiment_id
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: scenario-config
+              mountPath: /config
+              readOnly: true
+            - name: results
+              mountPath: /results
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "4"
+              memory: "4Gi"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+
+        # Sidecar container: Upload results to GCS after benchmark completes
+        - name: upload-results
+          image: gcr.io/google.com/cloudsdktool/cloud-sdk:alpine
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              
+              echo "=== Waiting for benchmark to complete ==="
+              
+              # Wait for run.jsonl to appear and stabilize
+              while [ ! -f /results/raw/run.jsonl ]; do
+                echo "Waiting for results..."
+                sleep 5
+              done
+              
+              # Wait for file to stop growing (benchmark complete)
+              prev_size=0
+              stable_count=0
+              while [ $stable_count -lt 3 ]; do
+                sleep 10
+                curr_size=$(stat -f%z /results/raw/run.jsonl 2>/dev/null || stat -c%s /results/raw/run.jsonl 2>/dev/null || echo 0)
+                if [ "$curr_size" = "$prev_size" ] && [ "$curr_size" != "0" ]; then
+                  stable_count=$((stable_count + 1))
+                  echo "File stable check $stable_count/3 (size: $curr_size)"
+                else
+                  stable_count=0
+                  prev_size=$curr_size
+                fi
+              done
+              
+              echo "=== Benchmark complete, uploading results ==="
+              
+              BUCKET="${GCS_BUCKET}"
+              EXP="${EXP_ID}"
+              
+              # Create provenance.json
+              GIT_COMMIT="${GIT_COMMIT:-unknown}"
+              SCENARIO_HASH=$(sha256sum /config/scenario.yaml | cut -d' ' -f1)
+              TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
+              DATASET_VERSION="${TIMESTAMP}-${GIT_COMMIT:0:8}-${SCENARIO_HASH:0:8}"
+              
+              cat > /results/provenance.json << EOF
+              {
+                "git_commit": "$GIT_COMMIT",
+                "rustc_version": "1.78.0",
+                "container_image": "${CONTAINER_IMAGE}",
+                "gke_cluster_name": "$(cat /results/cloud_metadata.json | grep cluster_name | cut -d'"' -f4)",
+                "gke_nodepool_size": 1,
+                "instance_machine_type": "$(cat /results/cloud_metadata.json | grep machine_type | cut -d'"' -f4)",
+                "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+                "scenario_file_hash": "$SCENARIO_HASH",
+                "dataset_version": "$DATASET_VERSION"
+              }
+              EOF
+              
+              # Create manifest.json (merge cloud metadata + provenance)
+              cat > /results/manifest.json << EOF
+              {
+                "run_id": "$EXP",
+                "environment": "gcp_gke",
+                "provenance": $(cat /results/provenance.json),
+                "cloud_metadata": $(cat /results/cloud_metadata.json)
+              }
+              EOF
+              
+              # Copy raw results as merged (single file)
+              cp /results/raw/run.jsonl /results/merged/merged.jsonl
+              
+              # Upload to GCS
+              echo "Uploading to gs://${BUCKET}/experiments/${EXP}/"
+              
+              gsutil -m cp /results/merged/merged.jsonl "gs://${BUCKET}/experiments/${EXP}/merged.jsonl"
+              gsutil -m cp /results/manifest.json "gs://${BUCKET}/experiments/${EXP}/manifest.json"
+              gsutil -m cp /results/provenance.json "gs://${BUCKET}/experiments/${EXP}/provenance.json"
+              gsutil -m cp /results/cloud_metadata.json "gs://${BUCKET}/experiments/${EXP}/cloud_metadata.json"
+              
+              # Upload raw data
+              gsutil -m cp -r /results/raw/* "gs://${BUCKET}/experiments/${EXP}/raw/"
+              
+              # Upload stats if generated
+              if [ -f /results/stats/summary.json ]; then
+                gsutil -m cp /results/stats/summary.json "gs://${BUCKET}/experiments/${EXP}/summary.json"
+              fi
+              
+              echo "=== Upload complete ==="
+              gsutil ls -l "gs://${BUCKET}/experiments/${EXP}/"
+              
+              # Signal completion
+              touch /results/.upload_complete
+              
+              echo "=== GCS upload finished ==="
+          env:
+            - name: GCS_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: pqc-gcp-config
+                  key: bucket_name
+            - name: EXP_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: pqc-gcp-config
+                  key: experiment_id
+            - name: GIT_COMMIT
+              valueFrom:
+                configMapKeyRef:
+                  name: pqc-gcp-config
+                  key: git_commit
+                  optional: true
+            - name: CONTAINER_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: pqc-gcp-config
+                  key: container_image
+                  optional: true
+          volumeMounts:
+            - name: scenario-config
+              mountPath: /config
+              readOnly: true
+            - name: results
+              mountPath: /results
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+      # Volumes
+      volumes:
+        - name: scenario-config
+          configMap:
+            name: pqc-scenario
+        - name: results
+          emptyDir:
+            sizeLimit: 2Gi
+
+      # Node selection
+      nodeSelector:
+        cloud.google.com/gke-nodepool: pqc-bench-pool
+
+      # Tolerations
+      tolerations:
+        - key: "cloud.google.com/gke-spot"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+

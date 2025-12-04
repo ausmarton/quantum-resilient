@@ -1,0 +1,31 @@
+# =============================================================================
+# scenario-configmap.yaml - ConfigMap for GCP benchmark scenarios
+#
+# This is a template. The actual ConfigMap is created by deploy_gcp.sh.
+# =============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pqc-scenario
+  namespace: default
+  labels:
+    app: pqc-bench
+    component: config
+    environment: gcp
+data:
+  # Placeholder - replaced by deploy_gcp.sh
+  scenario.yaml: |
+    id: hybrid_kyber_dilithium
+    description: "GCP benchmark: Kyber512 KEM -> AES-GCM -> Dilithium2 sign"
+    rng_seed: 1234
+    workload:
+      msgs_per_sec: 500
+      msg_size_bytes: 1024
+      duration_sec: 60
+    algorithm:
+      adapter: kyber
+      operation: kem_aead_encrypt
+    metrics:
+      jsonl_out: "/results/raw/run.jsonl"
+

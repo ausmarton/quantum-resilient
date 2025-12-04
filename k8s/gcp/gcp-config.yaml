@@ -1,0 +1,34 @@
+# =============================================================================
+# gcp-config.yaml - GCP-specific configuration ConfigMap
+#
+# This is a template. Values are replaced by deploy_gcp.sh.
+# =============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pqc-gcp-config
+  namespace: default
+  labels:
+    app: pqc-bench
+    component: config
+    environment: gcp
+data:
+  # GCS bucket for results
+  bucket_name: "PLACEHOLDER_BUCKET"
+  
+  # Experiment identifier
+  experiment_id: "PLACEHOLDER_EXP_ID"
+  
+  # Git commit (for provenance)
+  git_commit: "PLACEHOLDER_GIT_COMMIT"
+  
+  # Container image
+  container_image: "PLACEHOLDER_IMAGE"
+  
+  # Region
+  region: "PLACEHOLDER_REGION"
+  
+  # Project ID
+  project_id: "PLACEHOLDER_PROJECT"
+

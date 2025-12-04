@@ -64,6 +64,20 @@ quantum-resilient/
 ├── podman-compose.yml      # Local container testing
 ├── run_local.sh            # Local native experiment runner
 ├── run_minikube.sh         # Minikube K8s experiment runner
+├── deploy_gcp.sh           # GKE deployment script
+├── fetch_and_analyse_from_gcs.sh  # GCS results fetcher
+├── terraform/
+│   └── gke/                # Terraform module for GKE
+│       ├── main.tf         # GKE cluster + node pool
+│       ├── variables.tf    # Input variables
+│       ├── outputs.tf      # Outputs
+│       └── bucket.tf       # GCS bucket
+├── k8s/
+│   ├── base/               # Base K8s manifests
+│   └── gcp/                # GCP-specific K8s manifests
+│       ├── worker-job.yaml
+│       ├── gcp-config.yaml
+│       └── service-account.yaml
 ├── k8s/                    # Kubernetes manifests
 │   └── base/
 │       ├── deployment.yaml
@@ -882,28 +896,90 @@ cargo build -p orchestrator --features storage-gcs
 
 ## Running in GCP (GKE)
 
-The framework includes complete Terraform infrastructure-as-code for deploying to Google Cloud Platform.
+The framework includes complete Terraform infrastructure-as-code and automation scripts for deploying to Google Cloud Platform GKE.
 
 ### Prerequisites
 
 - GCP account with billing enabled
-- `gcloud` CLI installed and configured
-- Terraform 1.5+
+- `gcloud` CLI installed and authenticated
+- Terraform >= 1.6
+- Podman >= 4.0
 - kubectl
 
-### Quick Start
+### Single Command Deployment
 
-1. **Authenticate with GCP:**
+Use `deploy_gcp.sh` for end-to-end deployment:
 
 ```bash
+# Authenticate with GCP first
+gcloud auth login
 gcloud auth application-default login
-gcloud config set project YOUR_PROJECT_ID
+
+# Deploy and run experiment
+./deploy_gcp.sh \
+  --scenario scenarios/hybrid_kyber_dilithium.yaml \
+  --exp-id gcp_exp1 \
+  --project YOUR_PROJECT_ID \
+  --region us-central1 \
+  --bucket pqc-bench-results
 ```
 
-2. **Deploy infrastructure with Terraform:**
+This single command:
+1. Deploys GKE cluster via Terraform
+2. Creates GCS bucket for results
+3. Builds and pushes container image to Artifact Registry
+4. Runs benchmark Job in GKE
+5. Uploads results to GCS
+
+### Fetch and Analyze Results
 
 ```bash
-cd iac/terraform/gcp
+./fetch_and_analyse_from_gcs.sh \
+  --exp-id gcp_exp1 \
+  --bucket pqc-bench-results \
+  --out results/gcp_exp1
+```
+
+### Cross-Environment Comparison
+
+Compare native, Minikube, and GCP results:
+
+```bash
+python analysis/compare_all_environments.py \
+  --native results/native_exp/stats/summary.json \
+  --minikube results/minikube_exp/stats/summary.json \
+  --gcp results/gcp_exp1/stats/summary.json
+```
+
+**Example Output:**
+
+```
+Environment Metrics Summary
+═══════════════════════════════════════════════════════════════════════════════
+Metric                         Native        Minikube             GCP
+───────────────────────────────────────────────────────────────────────────────
+p50 Latency (μs)               245.00          258.00          312.00
+p95 Latency (μs)               480.00          550.00          790.00
+p99 Latency (μs)               623.00          698.00          980.00
+Mean Throughput (ops/s)        485.00          462.00          385.00
+
+DISSERTATION PARAGRAPH (Results Chapter)
+═══════════════════════════════════════════════════════════════════════════════
+
+Across native, Minikube, and GCP execution environments, p95 latency increased
+from 0.48 ms (native) → 0.55 ms (Minikube) → 0.79 ms (GCP). This represents a
+14.6% increase from native to Minikube containerized execution, and a 64.6%
+increase from native to GCP cloud execution.
+
+Variability is highest on GCP due to shared tenancy and VM scheduling...
+```
+
+### Manual Terraform Deployment
+
+For more control, deploy infrastructure manually:
+
+```bash
+cd terraform/gke
 
 # Initialize Terraform
 terraform init
@@ -911,33 +987,33 @@ terraform init
 # Review the plan
 terraform plan \
   -var="project_id=YOUR_PROJECT_ID" \
-  -var="bucket_name=qr-results-YOUR_PROJECT_ID" \
+  -var="bucket_name=pqc-bench-results" \
   -var="region=us-central1"
 
 # Apply the configuration
 terraform apply \
   -var="project_id=YOUR_PROJECT_ID" \
-  -var="bucket_name=qr-results-YOUR_PROJECT_ID" \
+  -var="bucket_name=pqc-bench-results" \
   -var="region=us-central1"
 ```
 
-3. **Configure kubectl:**
+### Configure kubectl (Manual)
 
 ```bash
-# Get credentials for the cluster (command shown in terraform output)
-gcloud container clusters get-credentials quantum-resilient-cluster \
+# Get credentials for the cluster
+gcloud container clusters get-credentials pqc-bench-gke \
   --region us-central1 \
   --project YOUR_PROJECT_ID
 ```
 
-4. **Verify deployment:**
+### Verify Deployment
 
 ```bash
 # Check cluster nodes
 kubectl get nodes
 
 # Check pods
-kubectl get pods -n quantum-resilient
+kubectl get pods
 
 # Check services
 kubectl get svc -n quantum-resilient
