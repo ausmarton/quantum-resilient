@@ -1,0 +1,35 @@
+id: kyber512_p4096_r500_run5_d14a3756
+description: Kyber-512 KEM + AES-GCM encryption - 4096B @ 500 msg/s (run 5)
+rng_seed: 5857555112068263865
+workload:
+  msgs_per_sec: 500
+  msg_size_bytes: 4096
+  duration_sec: 30
+  pattern: constant
+algorithm:
+  adapter: kyber
+  operation: kem_aead_encrypt
+  kem:
+    paramset: kyber512
+execution:
+  mode: fixed_pool
+  workers: 4
+  queue_capacity: 4000
+metrics:
+  jsonl_out: ./results/raw/run.jsonl
+metadata:
+  scenario_id: kyber512_p4096_r500_run5_d14a3756
+  algorithm: kyber512
+  adapter: kyber
+  operation: kem_aead_encrypt
+  category: pqc
+  payload_size_bytes: 4096
+  msgs_per_sec: 500
+  duration_sec: 30
+  run_index: 5
+  total_runs: 5
+  seed: 5857555112068263865
+  seed_hash: d14a3756
+  generated_at: '2025-12-04T22:49:46.593477+00:00'
+  generator_version: 2.0.0
+  kem_paramset: kyber512

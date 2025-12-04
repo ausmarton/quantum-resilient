@@ -1,0 +1,32 @@
+id: ecdsa_p256_p4096_r500_run3_10b1a6da
+description: ECDSA P-256 signature baseline - 4096B @ 500 msg/s (run 3)
+rng_seed: 1202926032025020019
+workload:
+  msgs_per_sec: 500
+  msg_size_bytes: 4096
+  duration_sec: 30
+  pattern: constant
+algorithm:
+  adapter: ecdsa_p256
+  operation: sign
+execution:
+  mode: fixed_pool
+  workers: 4
+  queue_capacity: 4000
+metrics:
+  jsonl_out: ./results/raw/run.jsonl
+metadata:
+  scenario_id: ecdsa_p256_p4096_r500_run3_10b1a6da
+  algorithm: ecdsa_p256
+  adapter: ecdsa_p256
+  operation: sign
+  category: classical
+  payload_size_bytes: 4096
+  msgs_per_sec: 500
+  duration_sec: 30
+  run_index: 3
+  total_runs: 5
+  seed: 1202926032025020019
+  seed_hash: 10b1a6da
+  generated_at: '2025-12-04T22:49:46.593477+00:00'
+  generator_version: 2.0.0

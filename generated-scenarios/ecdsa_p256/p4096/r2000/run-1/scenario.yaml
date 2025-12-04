@@ -1,0 +1,32 @@
+id: ecdsa_p256_p4096_r2000_run1_5f7ada66
+description: ECDSA P-256 signature baseline - 4096B @ 2000 msg/s (run 1)
+rng_seed: 6880051515368452926
+workload:
+  msgs_per_sec: 2000
+  msg_size_bytes: 4096
+  duration_sec: 30
+  pattern: constant
+algorithm:
+  adapter: ecdsa_p256
+  operation: sign
+execution:
+  mode: fixed_pool
+  workers: 4
+  queue_capacity: 4000
+metrics:
+  jsonl_out: ./results/raw/run.jsonl
+metadata:
+  scenario_id: ecdsa_p256_p4096_r2000_run1_5f7ada66
+  algorithm: ecdsa_p256
+  adapter: ecdsa_p256
+  operation: sign
+  category: classical
+  payload_size_bytes: 4096
+  msgs_per_sec: 2000
+  duration_sec: 30
+  run_index: 1
+  total_runs: 5
+  seed: 6880051515368452926
+  seed_hash: 5f7ada66
+  generated_at: '2025-12-04T22:49:46.593477+00:00'
+  generator_version: 2.0.0

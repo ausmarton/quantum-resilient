@@ -1,0 +1,35 @@
+id: dilithium2_p4096_r500_run5_b7195e75
+description: Dilithium-2 digital signature - 4096B @ 500 msg/s (run 5)
+rng_seed: 3970308405507652095
+workload:
+  msgs_per_sec: 500
+  msg_size_bytes: 4096
+  duration_sec: 30
+  pattern: constant
+algorithm:
+  adapter: dilithium
+  operation: sign
+  sig:
+    paramset: dilithium2
+execution:
+  mode: fixed_pool
+  workers: 4
+  queue_capacity: 4000
+metrics:
+  jsonl_out: ./results/raw/run.jsonl
+metadata:
+  scenario_id: dilithium2_p4096_r500_run5_b7195e75
+  algorithm: dilithium2
+  adapter: dilithium
+  operation: sign
+  category: pqc
+  payload_size_bytes: 4096
+  msgs_per_sec: 500
+  duration_sec: 30
+  run_index: 5
+  total_runs: 5
+  seed: 3970308405507652095
+  seed_hash: b7195e75
+  generated_at: '2025-12-04T22:49:46.593477+00:00'
+  generator_version: 2.0.0
+  sig_paramset: dilithium2

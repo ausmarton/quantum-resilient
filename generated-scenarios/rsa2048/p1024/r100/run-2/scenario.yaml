@@ -1,0 +1,32 @@
+id: rsa2048_p1024_r100_run2_18f5d24a
+description: RSA-2048 signature baseline - 1024B @ 100 msg/s (run 2)
+rng_seed: 1798574844769834524
+workload:
+  msgs_per_sec: 100
+  msg_size_bytes: 1024
+  duration_sec: 30
+  pattern: constant
+algorithm:
+  adapter: rsa2048
+  operation: sign
+execution:
+  mode: fixed_pool
+  workers: 4
+  queue_capacity: 4000
+metrics:
+  jsonl_out: ./results/raw/run.jsonl
+metadata:
+  scenario_id: rsa2048_p1024_r100_run2_18f5d24a
+  algorithm: rsa2048
+  adapter: rsa2048
+  operation: sign
+  category: classical
+  payload_size_bytes: 1024
+  msgs_per_sec: 100
+  duration_sec: 30
+  run_index: 2
+  total_runs: 5
+  seed: 1798574844769834524
+  seed_hash: 18f5d24a
+  generated_at: '2025-12-04T22:49:46.593477+00:00'
+  generator_version: 2.0.0

@@ -1,0 +1,35 @@
+id: dilithium2_p256_r100_run1_24ea80b8
+description: Dilithium-2 digital signature - 256B @ 100 msg/s (run 1)
+rng_seed: 2660080061770808179
+workload:
+  msgs_per_sec: 100
+  msg_size_bytes: 256
+  duration_sec: 30
+  pattern: constant
+algorithm:
+  adapter: dilithium
+  operation: sign
+  sig:
+    paramset: dilithium2
+execution:
+  mode: fixed_pool
+  workers: 4
+  queue_capacity: 4000
+metrics:
+  jsonl_out: ./results/raw/run.jsonl
+metadata:
+  scenario_id: dilithium2_p256_r100_run1_24ea80b8
+  algorithm: dilithium2
+  adapter: dilithium
+  operation: sign
+  category: pqc
+  payload_size_bytes: 256
+  msgs_per_sec: 100
+  duration_sec: 30
+  run_index: 1
+  total_runs: 5
+  seed: 2660080061770808179
+  seed_hash: 24ea80b8
+  generated_at: '2025-12-04T22:49:46.593477+00:00'
+  generator_version: 2.0.0
+  sig_paramset: dilithium2

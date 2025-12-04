@@ -1,0 +1,35 @@
+id: kyber512_p1024_r2000_run3_f9ae6bfa
+description: Kyber-512 KEM + AES-GCM encryption - 1024B @ 2000 msg/s (run 3)
+rng_seed: 8768064249948857853
+workload:
+  msgs_per_sec: 2000
+  msg_size_bytes: 1024
+  duration_sec: 30
+  pattern: constant
+algorithm:
+  adapter: kyber
+  operation: kem_aead_encrypt
+  kem:
+    paramset: kyber512
+execution:
+  mode: fixed_pool
+  workers: 4
+  queue_capacity: 4000
+metrics:
+  jsonl_out: ./results/raw/run.jsonl
+metadata:
+  scenario_id: kyber512_p1024_r2000_run3_f9ae6bfa
+  algorithm: kyber512
+  adapter: kyber
+  operation: kem_aead_encrypt
+  category: pqc
+  payload_size_bytes: 1024
+  msgs_per_sec: 2000
+  duration_sec: 30
+  run_index: 3
+  total_runs: 5
+  seed: 8768064249948857853
+  seed_hash: f9ae6bfa
+  generated_at: '2025-12-04T22:49:46.593477+00:00'
+  generator_version: 2.0.0
+  kem_paramset: kyber512
