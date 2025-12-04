@@ -34,8 +34,11 @@ JOB_TIMEOUT="600s"
 SCENARIO=""
 OUT_DIR=""
 EXP_ID=""
+RUNS=1
+SEED=""
 SKIP_BUILD=false
 SKIP_ANALYSIS=false
+SKIP_AGGREGATION=false
 KEEP_JOB=false
 
 # Colors
@@ -71,25 +74,38 @@ log_step() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 }
 
+log_run() {
+    echo -e "${CYAN}[RUN $1/$2]${NC} $3"
+}
+
 usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
 
 Run PQC benchmark experiment in Minikube Kubernetes cluster.
+Supports multiple repeated runs with aggregated statistics.
 
 OPTIONS:
     --scenario PATH     Path to scenario YAML file (required)
     --out DIR           Output directory for results (required)
     --exp-id ID         Experiment identifier (required)
+    --runs N            Number of repeated runs (default: 1)
+    --seed NUM          Base RNG seed (each run gets seed+run_index)
     --skip-build        Skip container image build
     --skip-analysis     Skip Python analysis after run
+    --skip-aggregation  Skip aggregation across runs
     --keep-job          Don't delete Job after completion
     --timeout SEC       Job timeout in seconds (default: 600)
     -h, --help          Show this help message
 
-EXAMPLE:
+EXAMPLES:
+    # Single run
     $0 --scenario scenarios/hybrid_kyber_dilithium.yaml \\
        --out results/k8s_exp1 --exp-id k8s_exp1
+
+    # Five repeated runs
+    $0 --scenario scenarios/hybrid_kyber_dilithium.yaml \\
+       --out results/k8s_exp1 --exp-id k8s_exp1 --runs 5
 
 PREREQUISITES:
     1. Start Minikube with Podman driver:
@@ -124,12 +140,24 @@ while [[ $# -gt 0 ]]; do
             EXP_ID="$2"
             shift 2
             ;;
+        --runs)
+            RUNS="$2"
+            shift 2
+            ;;
+        --seed)
+            SEED="$2"
+            shift 2
+            ;;
         --skip-build)
             SKIP_BUILD=true
             shift
             ;;
         --skip-analysis)
             SKIP_ANALYSIS=true
+            shift
+            ;;
+        --skip-aggregation)
+            SKIP_AGGREGATION=true
             shift
             ;;
         --keep-job)
@@ -190,6 +218,8 @@ echo -e "${NC}"
 log_info "Experiment ID: $EXP_ID"
 log_info "Scenario: $SCENARIO"
 log_info "Output: $OUT_DIR"
+log_info "Runs: $RUNS"
+[[ -n "$SEED" ]] && log_info "Base RNG seed: $SEED"
 log_info "Started: $START_ISO"
 
 # =============================================================================
@@ -284,9 +314,40 @@ if ! minikube image ls 2>/dev/null | grep -q "$IMAGE_NAME"; then
 fi
 
 # =============================================================================
+# Multi-Run Execution Loop
+# =============================================================================
+
+COMPLETED_RUNS=0
+FAILED_RUNS=0
+TOTAL_RUN_START=$(date +%s)
+
+for ((RUN_INDEX = 1; RUN_INDEX <= RUNS; RUN_INDEX++)); do
+    if [[ $RUNS -gt 1 ]]; then
+        log_run $RUN_INDEX $RUNS "Starting..."
+        RUN_OUT_DIR="$OUT_DIR/run-$RUN_INDEX"
+        RUN_EXP_ID="${EXP_ID}_run${RUN_INDEX}"
+    else
+        RUN_OUT_DIR="$OUT_DIR"
+        RUN_EXP_ID="$EXP_ID"
+    fi
+
+    # Compute seed for this run
+    if [[ -n "$SEED" ]]; then
+        RUN_SEED=$((SEED + RUN_INDEX - 1))
+    else
+        RUN_SEED=""
+    fi
+
+    # Create output directories for this run
+    mkdir -p "$RUN_OUT_DIR/raw"
+    mkdir -p "$RUN_OUT_DIR/merged"
+    mkdir -p "$RUN_OUT_DIR/stats"
+    mkdir -p "$RUN_OUT_DIR/figures"
+
+# =============================================================================
 # Step 5: Deploy Kubernetes resources
 # =============================================================================
-log_step "Step 5/9: Deploying Kubernetes resources"
+log_step "Step 5/9: Deploying Kubernetes resources (Run $RUN_INDEX/$RUNS)"
 
 # Clean up any existing job
 cleanup
@@ -317,6 +378,15 @@ else
         sed -i '/metrics:/a\  jsonl_out: "/results/raw/run.jsonl"' "$TEMP_SCENARIO"
     else
         echo -e "\nmetrics:\n  jsonl_out: \"/results/raw/run.jsonl\"" >> "$TEMP_SCENARIO"
+    fi
+fi
+
+# Set seed for this run if specified
+if [[ -n "$RUN_SEED" ]]; then
+    if grep -q "rng_seed:" "$TEMP_SCENARIO"; then
+        sed -i "s/rng_seed:.*/rng_seed: $RUN_SEED/" "$TEMP_SCENARIO"
+    else
+        sed -i "/^id:/a rng_seed: $RUN_SEED" "$TEMP_SCENARIO"
     fi
 fi
 
@@ -388,33 +458,34 @@ POD_NAME=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath=
 log_info "Copying results from pod: $POD_NAME"
 
 # Copy results
-kubectl cp "$NAMESPACE/$POD_NAME:/results/." "$OUT_DIR/raw/" 2>/dev/null || {
+kubectl cp "$NAMESPACE/$POD_NAME:/results/." "$RUN_OUT_DIR/raw/" 2>/dev/null || {
     # Try alternative method if cp fails
     log_warn "kubectl cp failed, trying alternative method..."
-    kubectl exec "$POD_NAME" -n "$NAMESPACE" -- cat /results/raw/run.jsonl > "$OUT_DIR/raw/run.jsonl" 2>/dev/null || true
-    kubectl exec "$POD_NAME" -n "$NAMESPACE" -- cat /results/container_metadata.json > "$OUT_DIR/container_metadata.json" 2>/dev/null || true
+    kubectl exec "$POD_NAME" -n "$NAMESPACE" -- cat /results/raw/run.jsonl > "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || true
+    kubectl exec "$POD_NAME" -n "$NAMESPACE" -- cat /results/container_metadata.json > "$RUN_OUT_DIR/container_metadata.json" 2>/dev/null || true
 }
 
 # Move files to correct locations if needed
-if [[ -f "$OUT_DIR/raw/raw/run.jsonl" ]]; then
-    mv "$OUT_DIR/raw/raw/"* "$OUT_DIR/raw/" 2>/dev/null || true
-    rmdir "$OUT_DIR/raw/raw" 2>/dev/null || true
+if [[ -f "$RUN_OUT_DIR/raw/raw/run.jsonl" ]]; then
+    mv "$RUN_OUT_DIR/raw/raw/"* "$RUN_OUT_DIR/raw/" 2>/dev/null || true
+    rmdir "$RUN_OUT_DIR/raw/raw" 2>/dev/null || true
 fi
 
 # Copy container metadata to root
-if [[ -f "$OUT_DIR/raw/container_metadata.json" ]]; then
-    cp "$OUT_DIR/raw/container_metadata.json" "$OUT_DIR/"
+if [[ -f "$RUN_OUT_DIR/raw/container_metadata.json" ]]; then
+    cp "$RUN_OUT_DIR/raw/container_metadata.json" "$RUN_OUT_DIR/"
 fi
 
 # Verify results
-if [[ ! -f "$OUT_DIR/raw/run.jsonl" ]] && [[ $(find "$OUT_DIR/raw" -name "*.jsonl" 2>/dev/null | wc -l) -eq 0 ]]; then
+if [[ ! -f "$RUN_OUT_DIR/raw/run.jsonl" ]] && [[ $(find "$RUN_OUT_DIR/raw" -name "*.jsonl" 2>/dev/null | wc -l) -eq 0 ]]; then
     log_error "No JSONL files found in results!"
-    log_info "Contents of $OUT_DIR/raw:"
-    ls -la "$OUT_DIR/raw/" || true
-    exit 1
+    log_info "Contents of $RUN_OUT_DIR/raw:"
+    ls -la "$RUN_OUT_DIR/raw/" || true
+    FAILED_RUNS=$((FAILED_RUNS + 1))
+    continue
 fi
 
-JSONL_COUNT=$(find "$OUT_DIR/raw" -name "*.jsonl" | wc -l)
+JSONL_COUNT=$(find "$RUN_OUT_DIR/raw" -name "*.jsonl" | wc -l)
 log_success "Retrieved $JSONL_COUNT JSONL file(s)"
 
 # =============================================================================
@@ -434,19 +505,20 @@ K8S_VERSION=$(kubectl version --short 2>/dev/null | grep Server | awk '{print $3
 GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
 
 # Get event count
-if [[ -f "$OUT_DIR/raw/run.jsonl" ]]; then
-    EVENT_COUNT=$(wc -l < "$OUT_DIR/raw/run.jsonl")
+if [[ -f "$RUN_OUT_DIR/raw/run.jsonl" ]]; then
+    EVENT_COUNT=$(wc -l < "$RUN_OUT_DIR/raw/run.jsonl")
 else
-    EVENT_COUNT=$(cat "$OUT_DIR/raw/"*.jsonl 2>/dev/null | wc -l || echo 0)
+    EVENT_COUNT=$(cat "$RUN_OUT_DIR/raw/"*.jsonl 2>/dev/null | wc -l || echo 0)
 fi
 
-# Extract scenario ID and seed from scenario file
+# Extract scenario ID from scenario file
 SCENARIO_ID=$(grep -E "^id:" "$SCENARIO" | awk '{print $2}' | tr -d '"' || echo "$EXP_ID")
-RNG_SEED=$(grep -E "^rng_seed:" "$SCENARIO" | awk '{print $2}' || echo "null")
+MANIFEST_SEED=${RUN_SEED:-null}
 
-cat > "$OUT_DIR/manifest.json" <<EOF
+cat > "$RUN_OUT_DIR/manifest.json" <<EOF
 {
-    "run_id": "$EXP_ID",
+    "run_id": "$RUN_EXP_ID",
+    "run_index": $RUN_INDEX,
     "scenario_id": "$SCENARIO_ID",
     "scenario_path": "$SCENARIO",
     "environment": "kubernetes",
@@ -456,7 +528,7 @@ cat > "$OUT_DIR/manifest.json" <<EOF
     "end_time_utc": "$END_ISO",
     "duration_sec": $ELAPSED,
     "events_count": $EVENT_COUNT,
-    "rng_seed": $RNG_SEED,
+    "rng_seed": $MANIFEST_SEED,
     "kubernetes": {
         "node_name": "$NODE_NAME",
         "k8s_version": "$K8S_VERSION",
@@ -475,7 +547,7 @@ cat > "$OUT_DIR/manifest.json" <<EOF
 }
 EOF
 
-log_success "Manifest written: $OUT_DIR/manifest.json"
+log_success "Manifest written: $RUN_OUT_DIR/manifest.json"
 
 # =============================================================================
 # Step 9: Run analysis pipeline
@@ -487,48 +559,56 @@ if [[ "$SKIP_ANALYSIS" == "true" ]]; then
 else
     log_info "Running analysis pipeline..."
     
-    if [[ -f "$SCRIPT_DIR/analysis/run_full_pipeline.sh" ]]; then
-        bash "$SCRIPT_DIR/analysis/run_full_pipeline.sh" "$EXP_ID" "$OUT_DIR/raw" 2>&1 | while read -r line; do
+    # Run merge
+    python3 "$SCRIPT_DIR/analysis/scripts/merge_jsonl.py" \
+        --input "$RUN_OUT_DIR/raw" \
+        --output "$RUN_OUT_DIR/merged" 2>/dev/null || true
+    
+    # Run stats
+    INPUT_FILE="$RUN_OUT_DIR/merged/merged.parquet"
+    [[ ! -f "$INPUT_FILE" ]] && INPUT_FILE="$RUN_OUT_DIR/merged/merged.jsonl"
+    [[ ! -f "$INPUT_FILE" ]] && INPUT_FILE="$RUN_OUT_DIR/raw/run.jsonl"
+    
+    python3 "$SCRIPT_DIR/analysis/scripts/compute_statistics.py" \
+        --input "$INPUT_FILE" \
+        --output "$RUN_OUT_DIR/stats" \
+        --experiment-id "$RUN_EXP_ID" 2>/dev/null || true
+    
+    log_success "Analysis complete for run $RUN_INDEX"
+fi
+
+COMPLETED_RUNS=$((COMPLETED_RUNS + 1))
+
+# End of run loop
+done
+
+TOTAL_RUN_END=$(date +%s)
+TOTAL_ELAPSED=$((TOTAL_RUN_END - TOTAL_RUN_START))
+
+# =============================================================================
+# Aggregation (for multiple runs)
+# =============================================================================
+if [[ $RUNS -gt 1 ]] && [[ "$SKIP_AGGREGATION" != "true" ]] && [[ $COMPLETED_RUNS -gt 0 ]]; then
+    log_step "Aggregating results across $COMPLETED_RUNS runs"
+    
+    if [[ -f "$SCRIPT_DIR/analysis/aggregate_runs.py" ]]; then
+        python3 "$SCRIPT_DIR/analysis/aggregate_runs.py" \
+            --input "$OUT_DIR" \
+            --runs "$COMPLETED_RUNS" \
+            --output "$OUT_DIR" 2>&1 | while read -r line; do
             echo "  $line"
-        done || log_warn "Analysis pipeline completed with warnings"
+        done || log_warn "Aggregation completed with warnings"
+        
+        log_success "Aggregation complete"
     else
-        log_warn "Analysis pipeline script not found, running individual scripts..."
-        
-        # Run merge
-        python3 "$SCRIPT_DIR/analysis/scripts/merge_jsonl.py" \
-            --input "$OUT_DIR/raw" \
-            --output "$OUT_DIR/merged" 2>/dev/null || true
-        
-        # Run stats
-        INPUT_FILE="$OUT_DIR/merged/merged.parquet"
-        [[ ! -f "$INPUT_FILE" ]] && INPUT_FILE="$OUT_DIR/merged/merged.jsonl"
-        
-        python3 "$SCRIPT_DIR/analysis/scripts/compute_statistics.py" \
-            --input "$INPUT_FILE" \
-            --output "$OUT_DIR/stats" \
-            --experiment-id "$EXP_ID" 2>/dev/null || \
-        python3 "$SCRIPT_DIR/analysis/scripts/compute_stats.py" \
-            --input "$INPUT_FILE" \
-            --output "$OUT_DIR/stats" \
-            --experiment-id "$EXP_ID" 2>/dev/null || true
-        
-        # Run plots
-        python3 "$SCRIPT_DIR/analysis/scripts/plot_ecdf.py" \
-            --input "$INPUT_FILE" \
-            --output "$OUT_DIR/figures" \
-            --experiment-id "$EXP_ID" 2>/dev/null || \
-        python3 "$SCRIPT_DIR/analysis/scripts/plot_latency.py" \
-            --input "$INPUT_FILE" \
-            --output "$OUT_DIR/figures" \
-            --experiment-id "$EXP_ID" 2>/dev/null || true
-        
-        python3 "$SCRIPT_DIR/analysis/scripts/plot_throughput.py" \
-            --input "$INPUT_FILE" \
-            --output "$OUT_DIR/figures" \
-            --experiment-id "$EXP_ID" 2>/dev/null || true
+        log_warn "aggregate_runs.py not found, skipping aggregation"
     fi
     
-    log_success "Analysis complete"
+    # Create combined figures directory
+    mkdir -p "$OUT_DIR/figures"
+    if [[ -d "$OUT_DIR/run-1/figures" ]]; then
+        cp -r "$OUT_DIR/run-1/figures/"* "$OUT_DIR/figures/" 2>/dev/null || true
+    fi
 fi
 
 # =============================================================================
@@ -550,19 +630,39 @@ echo "╚═══════════════════════�
 echo -e "${NC}"
 
 log_info "Experiment ID: $EXP_ID"
-log_info "Duration: ${ELAPSED}s"
-log_info "Events: $EVENT_COUNT"
+log_info "Total Duration: ${TOTAL_ELAPSED}s"
+log_info "Runs: $COMPLETED_RUNS completed, $FAILED_RUNS failed"
 echo ""
 
-log_info "Output files:"
-echo "  Raw JSONL:     $OUT_DIR/raw/"
-[[ -f "$OUT_DIR/merged/merged.jsonl" ]] && echo "  Merged JSONL:  $OUT_DIR/merged/merged.jsonl"
-[[ -f "$OUT_DIR/merged/merged.parquet" ]] && echo "  Parquet:       $OUT_DIR/merged/merged.parquet"
-[[ -f "$OUT_DIR/stats/summary.json" ]] && echo "  Stats:         $OUT_DIR/stats/summary.json"
-[[ -f "$OUT_DIR/figures/latency_cdf.png" ]] && echo "  Latency CDF:   $OUT_DIR/figures/latency_cdf.png"
-[[ -f "$OUT_DIR/figures/throughput.png" ]] && echo "  Throughput:    $OUT_DIR/figures/throughput.png"
-echo "  Manifest:      $OUT_DIR/manifest.json"
+if [[ $RUNS -eq 1 ]]; then
+    log_info "Output files:"
+    echo "  Raw JSONL:     $OUT_DIR/raw/"
+    [[ -f "$OUT_DIR/merged/merged.jsonl" ]] && echo "  Merged JSONL:  $OUT_DIR/merged/merged.jsonl"
+    [[ -f "$OUT_DIR/stats/summary.json" ]] && echo "  Stats:         $OUT_DIR/stats/summary.json"
+    echo "  Manifest:      $OUT_DIR/manifest.json"
+else
+    log_info "Output files:"
+    for ((i = 1; i <= COMPLETED_RUNS; i++)); do
+        echo "  Run $i:         $OUT_DIR/run-$i/"
+    done
+    [[ -f "$OUT_DIR/aggregated_stats.json" ]] && echo "  Aggregated:    $OUT_DIR/aggregated_stats.json"
+    [[ -f "$OUT_DIR/stability_report.json" ]] && echo "  Stability:     $OUT_DIR/stability_report.json"
+fi
 echo ""
+
+if [[ -f "$OUT_DIR/aggregated_stats.json" ]]; then
+    log_info "Aggregated Statistics:"
+    python3 -c "
+import json
+with open('$OUT_DIR/aggregated_stats.json') as f:
+    data = json.load(f)
+lat = data.get('latency', {})
+if 'p95' in lat:
+    p95 = lat['p95']
+    print(f\"  p95 latency: {p95['mean']:.0f} ± {p95['std']:.0f} μs (CV: {p95['cv']:.1%})\")
+    print(f\"  95% CI: [{p95['ci_95_low']:.0f}, {p95['ci_95_high']:.0f}] μs\")
+" 2>/dev/null || true
+fi
 
 log_info "To compare with native run:"
 echo "  python analysis/compare_native_vs_minikube.py \\"

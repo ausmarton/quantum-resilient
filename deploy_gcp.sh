@@ -39,8 +39,11 @@ REGION="us-central1"
 BUCKET=""
 MACHINE_TYPE="n2-standard-2"
 NODE_COUNT=1
+RUNS=1
+SEED=""
 SKIP_TERRAFORM=false
 SKIP_BUILD=false
+SKIP_AGGREGATION=false
 DESTROY_AFTER=false
 
 # Colors
@@ -76,11 +79,16 @@ log_step() {
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 }
 
+log_run() {
+    echo -e "${CYAN}[RUN $1/$2]${NC} $3"
+}
+
 usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
 
 Deploy and run PQC benchmark on GKE.
+Supports multiple repeated runs with aggregated statistics.
 
 OPTIONS:
     --scenario PATH       Path to scenario YAML file (required)
@@ -88,15 +96,19 @@ OPTIONS:
     --project ID          GCP project ID (required)
     --region REGION       GCP region (default: us-central1)
     --bucket NAME         GCS bucket name (required)
+    --runs N              Number of repeated runs (default: 1)
+    --seed NUM            Base RNG seed (each run gets seed+run_index)
     --machine-type TYPE   GKE node machine type (default: n2-standard-2)
     --node-count N        Number of nodes (default: 1)
     --skip-terraform      Skip Terraform apply (use existing cluster)
     --skip-build          Skip container image build
+    --skip-aggregation    Skip aggregation across runs
     --destroy-after       Destroy infrastructure after experiment
     --timeout SEC         Job timeout in seconds (default: 900)
     -h, --help            Show this help message
 
-EXAMPLE:
+EXAMPLES:
+    # Single run
     $0 --scenario scenarios/hybrid_kyber_dilithium.yaml \\
        --exp-id exp3 \\
        --project my-project \\
@@ -136,6 +148,14 @@ while [[ $# -gt 0 ]]; do
             BUCKET="$2"
             shift 2
             ;;
+        --runs)
+            RUNS="$2"
+            shift 2
+            ;;
+        --seed)
+            SEED="$2"
+            shift 2
+            ;;
         --machine-type)
             MACHINE_TYPE="$2"
             shift 2
@@ -150,6 +170,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-build)
             SKIP_BUILD=true
+            shift
+            ;;
+        --skip-aggregation)
+            SKIP_AGGREGATION=true
             shift
             ;;
         --destroy-after)
@@ -222,6 +246,8 @@ log_info "Project: $PROJECT"
 log_info "Region: $REGION"
 log_info "Bucket: $BUCKET"
 log_info "Scenario: $SCENARIO"
+log_info "Runs: $RUNS"
+[[ -n "$SEED" ]] && log_info "Base RNG seed: $SEED"
 log_info "Git Commit: ${GIT_COMMIT:0:8}"
 log_info "Started: $START_ISO"
 

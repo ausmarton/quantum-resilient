@@ -1142,6 +1142,93 @@ terraform destroy \
   -var="bucket_name=qr-results-YOUR_PROJECT_ID"
 ```
 
+## Multi-Run Experiments with Statistical Aggregation
+
+All orchestrator scripts support multiple repeated runs for statistical rigor:
+
+### Running Multiple Runs
+
+```bash
+# Native: 5 repeated runs
+./run_local.sh \
+  --scenario scenarios/hybrid_kyber_dilithium.yaml \
+  --out results/native/exp1 \
+  --runs 5 \
+  --seed 1234
+
+# Minikube: 5 repeated runs
+./run_minikube.sh \
+  --scenario scenarios/hybrid_kyber_dilithium.yaml \
+  --out results/minikube/exp1 \
+  --exp-id exp1 \
+  --runs 5 \
+  --seed 1234
+
+# GCP: 5 repeated runs
+./deploy_gcp.sh \
+  --scenario scenarios/hybrid_kyber_dilithium.yaml \
+  --exp-id gcp_exp1 \
+  --project my-project \
+  --bucket pqc-results \
+  --runs 5 \
+  --seed 1234
+```
+
+### Output Structure (Multiple Runs)
+
+```
+results/native/exp1/
+├── run-1/
+│   ├── raw/run.jsonl
+│   ├── merged/
+│   └── stats/summary.json
+├── run-2/
+├── run-3/
+├── run-4/
+├── run-5/
+├── aggregated_stats.json    # Aggregated across runs
+└── stability_report.json    # Stability analysis
+```
+
+### Aggregated Statistics
+
+The `aggregated_stats.json` contains:
+
+```json
+{
+  "n_runs": 5,
+  "latency": {
+    "p95": {
+      "mean": 523.4,
+      "std": 12.3,
+      "ci_95_low": 508.2,
+      "ci_95_high": 538.6,
+      "cv": 0.0235
+    }
+  }
+}
+```
+
+### Stability Report
+
+The `stability_report.json` flags metrics with high variability:
+
+- **CV < 5%**: Excellent stability
+- **CV 5-10%**: Good stability
+- **CV 10-15%**: Acceptable (warning issued)
+- **CV > 15%**: Unstable (results may not be reliable)
+
+### Manual Aggregation
+
+Aggregate existing runs manually:
+
+```bash
+python analysis/aggregate_runs.py \
+  --input results/native/exp1 \
+  --runs 5 \
+  --output results/native/exp1
+```
+
 ## Running the Analysis Suite
 
 The framework includes a comprehensive Python-based analysis suite for processing benchmark results and generating publication-quality figures.
