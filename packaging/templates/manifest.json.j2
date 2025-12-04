@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0.0",
+  "experiment_id": "{{ experiment_id }}",
+  "experiment_timestamp_utc": "{{ experiment_timestamp_utc }}",
+  "bundle_created_utc": "{{ bundle_created_utc }}",
+  "git_commit": "{{ git_commit }}",
+  "orchestrator_commit": "{{ orchestrator_commit }}",
+  "scenario": {{ scenario | tojson }},
+  "runner_config": {
+    "replicas": {{ runner_config.replicas | default(0) }},
+    "node_pool": "{{ runner_config.node_pool | default('default') }}",
+    "machine_type": "{{ runner_config.machine_type | default('n2-standard-4') }}",
+    "autoscaling": {{ runner_config.autoscaling | default(false) | lower }}
+  },
+  "dataset_version": "{{ dataset_version }}",
+  "dataset_checksum": "{{ dataset_checksum }}",
+  "provenance_file": "{{ provenance_file }}",
+  "stats_summary": {
+    "total_events": {{ stats.total_events | default(0) }},
+    "duration_sec": {{ "%.2f" | format(stats.duration_sec | default(0)) }},
+    "latency_mean_us": {{ "%.2f" | format(stats.latency_mean_us | default(0)) }},
+    "latency_p99_us": {{ "%.2f" | format(stats.latency_p99_us | default(0)) }},
+    "throughput_mean": {{ "%.2f" | format(stats.throughput_mean | default(0)) }}
+  },
+  "files": [
+    {% for file in files %}
+    {
+      "path": "{{ file.path }}",
+      "sha256": "{{ file.sha256 }}",
+      "size_bytes": {{ file.size_bytes }},
+      "category": "{{ file.category | default('data') }}"
+    }{{ "," if not loop.last else "" }}
+    {% endfor %}
+  ],
+  "figures": [
+    {% for fig in figures %}
+    {
+      "name": "{{ fig.name }}",
+      "path": "{{ fig.path }}",
+      "caption": "{{ fig.caption }}",
+      "formats": {{ fig.formats | default(['png']) | tojson }}
+    }{{ "," if not loop.last else "" }}
+    {% endfor %}
+  ],
+  "tables": [
+    {% for table in tables %}
+    {
+      "name": "{{ table.name }}",
+      "path_tex": "{{ table.path_tex }}",
+      "path_md": "{{ table.path_md }}",
+      "description": "{{ table.description | default('') }}"
+    }{{ "," if not loop.last else "" }}
+    {% endfor %}
+  ],
+  "reports": {
+    "latex": "{{ reports.latex | default('') }}",
+    "markdown": "{{ reports.markdown | default('') }}"
+  },
+  "reproduction": {
+    "command": "python research/scripts/pipeline_runner.py --exp-id {{ experiment_id }} --uri {{ storage_uri | default('') }} --generate-all",
+    "requirements": "analysis/requirements.txt",
+    "python_version": ">=3.10"
+  }
+}
+

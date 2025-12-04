@@ -113,6 +113,15 @@ quantum-resilient/
 │   │   └── pipeline_runner.py
 │   ├── output/               # Generated artifacts
 │   └── README.md
+├── packaging/            # Experiment packaging & distribution
+│   ├── cli.py                # Typer CLI interface
+│   ├── manifest.py           # Generate manifest.json
+│   ├── archiver.py           # Create ZIP/TAR.GZ bundles
+│   ├── exporter.py           # Publication-ready exports
+│   ├── release_notes.py      # Generate release notes
+│   ├── publish.py            # Publish to GCS/S3/GitHub
+│   ├── templates/            # Jinja2 templates
+│   └── output/               # Generated bundles
 ├── Makefile
 ├── Dockerfile.podman
 └── README.md
@@ -1053,24 +1062,108 @@ Insert tables and figures into LaTeX documents:
 
 ### Publishing Workflow
 
-1. **Run pipeline:**
+#### Full Pipeline with Packaging
+
+```bash
+# Run complete pipeline including packaging
+python research/scripts/pipeline_runner.py \
+  --exp-id exp_001 \
+  --uri gs://qr-results/exp_001 \
+  --generate-all \
+  --package
+```
+
+#### Packaging CLI
+
+The packaging tools provide a user-friendly CLI:
+
+```bash
+# Create bundle (manifest + archives)
+python -m packaging bundle exp_001
+
+# Create export folder for publication
+python -m packaging export exp_001 --lite
+
+# Generate manifest only
+python -m packaging manifest exp_001
+
+# Generate release notes
+python -m packaging notes exp_001
+
+# Publish to GCS
+python -m packaging publish exp_001 \
+  --target gcs \
+  --uri gs://public-artifacts/quantum-resilient/
+
+# Publish to GitHub Releases
+python -m packaging publish exp_001 \
+  --target github \
+  --uri owner/repo
+
+# Run all packaging steps
+python -m packaging all exp_001
+```
+
+#### Bundle Contents
+
+The generated bundle includes:
+
+```
+exp_001-research-bundle/
+├── data/
+│   ├── merged.parquet
+│   └── summary.json
+├── figures/
+│   ├── png/
+│   └── pdf/
+├── tables/
+│   ├── *.tex
+│   └── *.md
+├── report/
+│   ├── report.tex
+│   └── report.md
+└── metadata/
+    ├── manifest.json
+    ├── provenance.json
+    └── dataset_version.json
+```
+
+#### Publishing to Cloud Storage
+
+```bash
+# Publish to GCS (with verification)
+python -m packaging publish exp_001 \
+  --target gcs \
+  --uri gs://public-artifacts/quantum-resilient/ \
+  --public
+
+# Verify upload
+gsutil ls gs://public-artifacts/quantum-resilient/exp_001/
+```
+
+#### Complete Publishing Workflow
+
+1. **Run full analysis pipeline:**
    ```bash
-   python research/scripts/pipeline_runner.py --exp-id exp_001 --uri gs://... --generate-all
+   python research/scripts/pipeline_runner.py \
+     --exp-id exp_001 --uri gs://... --generate-all
    ```
 
-2. **Verify provenance:**
+2. **Generate package:**
    ```bash
-   cat research/output/exp_001/provenance.json | jq '.checksums'
+   python -m packaging bundle exp_001
    ```
 
-3. **Check dataset version:**
+3. **Upload to GCS:**
    ```bash
-   cat research/output/exp_001/dataset_version.json
+   python -m packaging publish exp_001 \
+     --target gcs \
+     --uri gs://public-artifacts/quantum-resilient/
    ```
 
 4. **Tag release:**
    ```bash
-   git add research/output/exp_001/
+   git add research/output/exp_001/ packaging/output/exp_001/
    git commit -m "Published experiment exp_001"
    git tag -a exp_001_published -m "Published experiment exp_001"
    git push --tags

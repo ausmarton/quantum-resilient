@@ -49,6 +49,8 @@ class PipelineRunner:
         
         self.analysis_scripts = analysis_scripts_dir or (root / "analysis" / "scripts")
         self.research_scripts = research_scripts_dir or (root / "research" / "scripts")
+        self.packaging_dir = root / "packaging"
+        self.packaging_output = root / "packaging" / "output" / experiment_id
         
         self.steps_completed = []
         self.errors = []
@@ -247,7 +249,44 @@ class PipelineRunner:
         
         return success
     
-    def run_all(self, version: str = "1.0.0") -> bool:
+    def step_package_bundle(self) -> bool:
+        """Step 10: Create packaging bundle."""
+        return self.run_step(
+            "Package Bundle",
+            [
+                sys.executable,
+                "-m", "packaging",
+                "all",
+                self.experiment_id,
+                "--data-dir", str(self.data_dir),
+                "--research-dir", str(self.output_dir),
+                "--figures-dir", str(self.figures_dir),
+                "--out", str(self.packaging_output),
+            ] + (["--uri", self.storage_uri] if self.storage_uri else [])
+        )
+    
+    def step_publish(self, target: str, uri: str) -> bool:
+        """Step 11: Publish bundle to storage."""
+        bundle_path = self.packaging_output / f"{self.experiment_id}-research-bundle.zip"
+        
+        if not bundle_path.exists():
+            print(f"Warning: Bundle not found: {bundle_path}")
+            return False
+        
+        return self.run_step(
+            f"Publish to {target}",
+            [
+                sys.executable,
+                "-m", "packaging",
+                "publish",
+                self.experiment_id,
+                "--bundle", str(bundle_path),
+                "--target", target,
+                "--uri", uri,
+            ]
+        )
+    
+    def run_all(self, version: str = "1.0.0", package: bool = False, publish_target: Optional[str] = None, publish_uri: Optional[str] = None) -> bool:
         """Run complete pipeline."""
         print(f"\n{'#'*60}")
         print(f"# Research Pipeline: {self.experiment_id}")
@@ -273,6 +312,16 @@ class PipelineRunner:
         for name, step_func in steps:
             if not step_func():
                 print(f"\nWarning: Step '{name}' failed, continuing...")
+        
+        # Optional: Package bundle
+        if package:
+            if not self.step_package_bundle():
+                print("\nWarning: Packaging failed")
+        
+        # Optional: Publish
+        if publish_target and publish_uri:
+            if not self.step_publish(publish_target, publish_uri):
+                print("\nWarning: Publishing failed")
         
         # Print summary
         self.print_summary()
@@ -324,9 +373,23 @@ def main():
         "--step",
         choices=[
             "fetch", "merge", "stats", "plots", "provenance",
-            "version", "tables", "figures", "reports"
+            "version", "tables", "figures", "reports", "package"
         ],
         help="Run single step only"
+    )
+    parser.add_argument(
+        "--package",
+        action="store_true",
+        help="Also create packaging bundle after pipeline"
+    )
+    parser.add_argument(
+        "--publish-target",
+        choices=["gcs", "s3", "github"],
+        help="Publish to storage after packaging"
+    )
+    parser.add_argument(
+        "--publish-uri",
+        help="URI for publishing (e.g., gs://bucket/path)"
     )
     
     args = parser.parse_args()
@@ -342,7 +405,12 @@ def main():
     )
     
     if args.generate_all:
-        success = runner.run_all(version=args.version)
+        success = runner.run_all(
+            version=args.version,
+            package=args.package,
+            publish_target=args.publish_target,
+            publish_uri=args.publish_uri,
+        )
         sys.exit(0 if success else 1)
     elif args.step:
         step_methods = {
@@ -355,6 +423,7 @@ def main():
             "tables": runner.step_generate_tables,
             "figures": runner.step_generate_figures_bundle,
             "reports": runner.step_generate_reports,
+            "package": runner.step_package_bundle,
         }
         success = step_methods[args.step]()
         sys.exit(0 if success else 1)
@@ -362,6 +431,8 @@ def main():
         parser.print_help()
         print("\nUse --generate-all to run complete pipeline")
         print("Use --step <name> to run a single step")
+        print("Use --package to also create bundle")
+        print("Use --publish-target and --publish-uri to publish")
 
 
 if __name__ == "__main__":
