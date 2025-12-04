@@ -14,5 +14,6 @@ name = "pqc-bench"
 path = "src/main.rs"
 
 [dependencies]
-# No external dependencies yet
-
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+clap = { version = "4.5", features = ["derive"] }
