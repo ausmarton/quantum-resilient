@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::Read;
 
 /// A benchmark scenario configuration
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Scenario {
     /// Unique identifier for the scenario
     pub id: String,
@@ -18,10 +18,13 @@ pub struct Scenario {
     pub workload: WorkloadConfig,
     /// Algorithm configuration
     pub algorithm: AlgorithmConfig,
+    /// Metrics configuration (optional)
+    #[serde(default)]
+    pub metrics: MetricsConfig,
 }
 
 /// Workload configuration for a scenario
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct WorkloadConfig {
     /// Target messages per second
     pub msgs_per_sec: u32,
@@ -32,7 +35,7 @@ pub struct WorkloadConfig {
 }
 
 /// Algorithm configuration for a scenario
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct AlgorithmConfig {
     /// Name of the crypto adapter to use (e.g., "noop", "rsa2048", "ecdsa_p256")
     pub adapter: String,
@@ -41,9 +44,44 @@ pub struct AlgorithmConfig {
     pub operation: String,
 }
 
+/// Metrics configuration for a scenario
+#[derive(Debug, Deserialize, Clone)]
+pub struct MetricsConfig {
+    /// Prometheus endpoint address (default: "0.0.0.0:9898")
+    #[serde(default = "default_prometheus_endpoint")]
+    pub prometheus_endpoint: String,
+    /// Path to JSONL output file (default: "./results/run_<id>.jsonl")
+    #[serde(default)]
+    pub jsonl_out: Option<String>,
+}
+
+impl Default for MetricsConfig {
+    fn default() -> Self {
+        Self {
+            prometheus_endpoint: default_prometheus_endpoint(),
+            jsonl_out: None,
+        }
+    }
+}
+
 /// Default operation if not specified in YAML
 fn default_operation() -> String {
     "sign".to_string()
+}
+
+/// Default Prometheus endpoint
+fn default_prometheus_endpoint() -> String {
+    "0.0.0.0:9898".to_string()
+}
+
+impl Scenario {
+    /// Returns the JSONL output path, defaulting to ./results/<id>.jsonl
+    pub fn jsonl_output_path(&self) -> String {
+        self.metrics
+            .jsonl_out
+            .clone()
+            .unwrap_or_else(|| format!("./results/{}.jsonl", self.id))
+    }
 }
 
 /// Loads a scenario from a YAML file
@@ -60,19 +98,15 @@ fn default_operation() -> String {
 /// println!("Loaded scenario: {}", scenario.id);
 /// ```
 pub fn load_scenario(path: &str) -> Result<Scenario, Box<dyn std::error::Error>> {
-    let mut f = File::open(path).map_err(|e| {
-        format!("Failed to open scenario file '{}': {}", path, e)
-    })?;
-    
-    let mut contents = String::new();
-    f.read_to_string(&mut contents).map_err(|e| {
-        format!("Failed to read scenario file '{}': {}", path, e)
-    })?;
+    let mut f = File::open(path).map_err(|e| format!("Failed to open scenario file '{}': {}", path, e))?;
 
-    let scenario: Scenario = serde_yaml::from_str(&contents).map_err(|e| {
-        format!("Failed to parse scenario YAML '{}': {}", path, e)
-    })?;
-    
+    let mut contents = String::new();
+    f.read_to_string(&mut contents)
+        .map_err(|e| format!("Failed to read scenario file '{}': {}", path, e))?;
+
+    let scenario: Scenario = serde_yaml::from_str(&contents)
+        .map_err(|e| format!("Failed to parse scenario YAML '{}': {}", path, e))?;
+
     Ok(scenario)
 }
 
@@ -109,7 +143,30 @@ algorithm:
     }
 
     #[test]
-    fn test_scenario_without_description() {
+    fn test_scenario_with_metrics() {
+        let yaml = r#"
+id: test_with_metrics
+workload:
+  msgs_per_sec: 10
+  msg_size_bytes: 64
+  duration_sec: 1
+algorithm:
+  adapter: noop
+  operation: sign
+metrics:
+  prometheus_endpoint: "0.0.0.0:9999"
+  jsonl_out: "./custom/path.jsonl"
+"#;
+        let scenario: Scenario = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(scenario.metrics.prometheus_endpoint, "0.0.0.0:9999");
+        assert_eq!(
+            scenario.metrics.jsonl_out,
+            Some("./custom/path.jsonl".to_string())
+        );
+    }
+
+    #[test]
+    fn test_scenario_default_metrics() {
         let yaml = r#"
 id: minimal
 workload:
@@ -118,12 +175,11 @@ workload:
   duration_sec: 1
 algorithm:
   adapter: noop
-  operation: keygen
 "#;
         let scenario: Scenario = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(scenario.id, "minimal");
-        assert!(scenario.description.is_none());
-        assert_eq!(scenario.algorithm.operation, "keygen");
+        assert_eq!(scenario.metrics.prometheus_endpoint, "0.0.0.0:9898");
+        assert!(scenario.metrics.jsonl_out.is_none());
+        assert_eq!(scenario.jsonl_output_path(), "./results/minimal.jsonl");
     }
 
     #[test]

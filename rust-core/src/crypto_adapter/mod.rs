@@ -60,7 +60,9 @@ impl std::error::Error for CryptoError {}
 ///
 /// The trait supports both Key Encapsulation Mechanisms (KEM) for key exchange
 /// and digital signatures.
-pub trait CryptoAdapter {
+///
+/// Implementations must be thread-safe (Send + Sync) to support async pipelines.
+pub trait CryptoAdapter: Send + Sync {
     /// Returns the name of the cryptographic algorithm
     fn name(&self) -> &'static str;
 

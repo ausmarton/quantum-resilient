@@ -14,7 +14,7 @@ pub use crypto_adapter::{
     get_adapter, supported_adapters, CryptoAdapter, CryptoError, EcdsaP256Adapter, KeypairMeta,
     NoOpCryptoAdapter, Rsa2048Adapter,
 };
-pub use pipeline::Pipeline;
+pub use pipeline::{Pipeline, PipelineConfig, PipelineStats};
 pub use scenario::{load_scenario, supported_operations, Scenario};
-pub use telemetry::Telemetry;
+pub use telemetry::{init_tracing, JsonlWriter, Metrics, SysInfoSampler, Telemetry};
 pub use workload::Workload;

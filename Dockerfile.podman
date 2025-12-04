@@ -34,17 +34,21 @@ RUN apt-get update && apt-get install -y \
 # Create non-root user for security
 RUN useradd -m -u 1000 -s /bin/bash appuser
 
-# Create app directory
+# Create app and results directories
 WORKDIR /app
+RUN mkdir -p /app/results && chown -R appuser:appuser /app
 
 # Copy the built binary from builder stage
 COPY --from=builder /app/target/release/pqc-bench /app/pqc-bench
 
 # Set ownership
-RUN chown -R appuser:appuser /app
+RUN chown appuser:appuser /app/pqc-bench
 
 # Switch to non-root user
 USER appuser
+
+# Expose Prometheus metrics port
+EXPOSE 9898
 
 # Set the entrypoint
 ENTRYPOINT ["/app/pqc-bench"]

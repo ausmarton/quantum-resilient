@@ -4,8 +4,12 @@ description: "Basic scenario using NoOp crypto adapter"
 workload:
   msgs_per_sec: 10
   msg_size_bytes: 128
-  duration_sec: 1
+  duration_sec: 2
 
 algorithm:
   adapter: noop
   operation: sign
+
+metrics:
+  prometheus_endpoint: "0.0.0.0:9898"
+  jsonl_out: "./results/smoke_noop.jsonl"

@@ -14,8 +14,12 @@ name = "pqc-bench"
 path = "src/main.rs"
 
 [dependencies]
+# Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
+serde_json = "1.0"
+
+# CLI
 clap = { version = "4.5", features = ["derive"] }
 
 # Cryptography dependencies
@@ -23,8 +27,29 @@ rsa = "0.9"
 pkcs8 = "0.10"
 rand = "0.8"
 sha2 = "0.10"
-
 p256 = { version = "0.13", features = ["ecdsa"] }
 ecdsa = { version = "0.16", features = ["signing", "verifying"] }
-
 base64 = "0.22"
+
+# Async runtime
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "time", "sync", "net"] }
+futures = "0.3"
+
+# Metrics and telemetry
+prometheus = "0.13"
+hyper = { version = "1.4", features = ["full"] }
+hyper-util = { version = "0.1", features = ["tokio", "server-auto"] }
+http-body-util = "0.1"
+
+# Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+
+# System info
+sysinfo = "0.31"
+
+# Thread-safe primitives
+parking_lot = "0.12"
+
+# Time utilities
+chrono = "0.4"

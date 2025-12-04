@@ -5,8 +5,11 @@
 
 use clap::Parser;
 use rust_core::{
-    get_adapter, load_scenario, supported_adapters, supported_operations, Pipeline,
+    get_adapter, init_tracing, load_scenario, supported_adapters, supported_operations,
+    JsonlWriter, Metrics, Pipeline, SysInfoSampler,
 };
+use rust_core::telemetry::start_metrics_server;
+use tracing::info;
 
 /// PQC Benchmark Framework - Compare PQC vs classical cryptography performance
 #[derive(Parser, Debug)]
@@ -18,7 +21,8 @@ struct Args {
     scenario: String,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     println!("Starting PQC Benchmark Framework...");
 
     // Parse command line arguments
@@ -35,7 +39,10 @@ fn main() {
 
     println!("Loaded scenario: {}", scenario.id);
 
-    // Instantiate the appropriate crypto adapter from registry
+    // Initialize tracing
+    init_tracing("pqc-bench");
+
+    // Validate adapter
     let adapter = match get_adapter(&scenario.algorithm.adapter) {
         Ok(a) => a,
         Err(_) => {
@@ -63,24 +70,79 @@ fn main() {
 
     println!("Running operation: {}", operation);
 
-    // Generate dummy payload based on workload config
-    let payload = vec![0u8; scenario.workload.msg_size_bytes];
-
-    // Calculate total number of operations
-    let total_ops = scenario.workload.duration_sec as u32 * scenario.workload.msgs_per_sec;
-
-    // Run timed operations
-    for i in 1..=total_ops {
-        match Pipeline::run_timed_operation(adapter.as_ref(), operation, &payload) {
-            Ok(duration_us) => {
-                println!("Event {}: {} μs", i, duration_us);
-            }
-            Err(e) => {
-                eprintln!("Error during operation {}: {}", i, e);
-                std::process::exit(1);
+    // Create results directory
+    let jsonl_path = scenario.jsonl_output_path();
+    if let Some(parent) = std::path::Path::new(&jsonl_path).parent() {
+        if !parent.as_os_str().is_empty() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                eprintln!("Warning: Failed to create results directory: {}", e);
             }
         }
     }
 
+    // Initialize metrics
+    let metrics = match Metrics::new() {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("Error: Failed to initialize metrics: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Start metrics server
+    let prometheus_endpoint = &scenario.metrics.prometheus_endpoint;
+    println!(
+        "Starting Prometheus metrics server on {}",
+        prometheus_endpoint
+    );
+    let _metrics_handle = start_metrics_server(prometheus_endpoint, metrics.clone()).await;
+
+    // Initialize JSONL writer
+    let jsonl_writer = match JsonlWriter::new(&jsonl_path) {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("Error: Failed to create JSONL writer: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Initialize system sampler
+    let sampler = SysInfoSampler::new();
+
+    // Create and run pipeline
+    let pipeline = Pipeline::new();
+
+    info!(
+        "Starting pipeline: {} events at {} msg/s for {} seconds",
+        scenario.workload.duration_sec as u64 * scenario.workload.msgs_per_sec as u64,
+        scenario.workload.msgs_per_sec,
+        scenario.workload.duration_sec
+    );
+
+    let stats = match pipeline
+        .run_async(&scenario, adapter.clone(), metrics.clone(), jsonl_writer.clone(), sampler)
+        .await
+    {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Pipeline execution failed: {:?}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Print summary
+    println!();
+    println!("========================================");
+    println!("Run complete: {} events processed", stats.events_processed);
+    println!("Duration: {:.2}s", stats.duration.as_secs_f64());
+    println!("Average latency: {:.2} μs", stats.avg_latency_us);
+    println!("Throughput: {:.2} ops/sec", stats.events_processed as f64 / stats.duration.as_secs_f64());
+    println!("JSONL output: {}", jsonl_writer.path());
+    println!(
+        "Metrics available at: http://{}/metrics",
+        prometheus_endpoint
+    );
+    println!("========================================");
+    println!();
     println!("Done.");
 }
