@@ -1,0 +1,35 @@
+# Hybrid Kyber + Dilithium Benchmark Scenario
+#
+# This scenario benchmarks a complete post-quantum secure message processing flow:
+# 1. Kyber512 KEM encapsulation to derive a shared secret
+# 2. HKDF-SHA256 key derivation from the shared secret
+# 3. AES-256-GCM authenticated encryption of the payload
+# 4. Dilithium2 signature over the ciphertext
+#
+# Suitable for measuring PQC overhead in real-time streaming applications.
+
+id: hybrid_kyber_dilithium
+description: "Producer -> Kyber512 KEM to derive AES-256-GCM key -> AES-GCM encrypt -> Dilithium2 sign"
+
+# Deterministic RNG seed for reproducibility
+rng_seed: 1234
+
+workload:
+  msgs_per_sec: 500
+  msg_size_bytes: 1024
+  duration_sec: 30
+  pattern: constant
+
+algorithm:
+  adapter: kyber
+  operation: kem_aead_encrypt
+
+execution:
+  mode: fixed_pool
+  workers: 4
+  queue_capacity: 2000
+
+metrics:
+  prometheus_endpoint: "0.0.0.0:9898"
+  jsonl_out: "./results/hybrid_kyber_dilithium.jsonl"
+

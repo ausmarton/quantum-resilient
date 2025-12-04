@@ -44,12 +44,18 @@ pub struct ProcessedEvent {
 pub struct ExecutionContext {
     /// Cached keypair for KEM operations
     pub keypair: Option<Arc<KeypairWithSecret>>,
+    /// Cached keypair for signature operations (e.g., Dilithium)
+    pub sig_keypair: Option<Arc<KeypairWithSecret>>,
     /// Algorithm name
     pub algorithm: String,
     /// Operation name
     pub operation: String,
     /// Run ID
     pub run_id: String,
+    /// Scenario ID
+    pub scenario_id: String,
+    /// RNG seed for reproducibility
+    pub rng_seed: u64,
 }
 
 /// Shared state for the execution engine
@@ -645,6 +651,7 @@ async fn process_event(
         // Write JSONL row with queue delay
         let row = EventRowWithQueueDelay {
             run_id: context.run_id.clone(),
+            scenario_id: context.scenario_id.clone(),
             event_id: event.event_id,
             timestamp_utc_iso: Utc::now().to_rfc3339(),
             timestamp_monotonic_ns: event.timestamp_ns,
@@ -655,9 +662,10 @@ async fn process_event(
             worker_id,
             payload_size_bytes: event.payload.len(),
             ciphertext_size_bytes: ciphertext_size,
-            signature_size_bytes: if context.operation == "sign" { output_size } else { None },
+            signature_size_bytes: if context.operation == "sign" || context.operation == "kem_aead_sign" { output_size } else { None },
             cpu_user_seconds: cpu_user,
             memory_rss_bytes: memory_rss,
+            rng_seed: context.rng_seed,
             error: error_msg,
         };
 
@@ -684,6 +692,7 @@ async fn process_event(
 #[derive(Debug, serde::Serialize)]
 struct EventRowWithQueueDelay {
     pub run_id: String,
+    pub scenario_id: String,
     pub event_id: u64,
     pub timestamp_utc_iso: String,
     pub timestamp_monotonic_ns: u128,
@@ -699,6 +708,7 @@ struct EventRowWithQueueDelay {
     pub signature_size_bytes: Option<usize>,
     pub cpu_user_seconds: f64,
     pub memory_rss_bytes: u64,
+    pub rng_seed: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }

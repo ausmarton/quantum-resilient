@@ -24,6 +24,10 @@ pub struct Scenario {
     /// Execution model configuration (optional)
     #[serde(default)]
     pub execution: ExecutionConfig,
+    /// RNG seed for deterministic reproducibility (optional)
+    /// If not specified, uses current unix nanoseconds
+    #[serde(default)]
+    pub rng_seed: Option<u64>,
 }
 
 /// Workload configuration for a scenario
@@ -260,8 +264,18 @@ impl Scenario {
     pub fn is_kem_hybrid_operation(&self) -> bool {
         matches!(
             self.algorithm.operation.as_str(),
-            "kem_aead_encrypt" | "kem_aead_decrypt"
+            "kem_aead_encrypt" | "kem_aead_decrypt" | "kem_aead_sign"
         )
+    }
+
+    /// Returns the effective RNG seed (provided or generated from current time)
+    pub fn effective_rng_seed(&self) -> u64 {
+        self.rng_seed.unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos() as u64
+        })
     }
 }
 
@@ -302,6 +316,7 @@ pub fn supported_operations() -> &'static [&'static str] {
         "keygen",
         "kem_aead_encrypt",
         "kem_aead_decrypt",
+        "kem_aead_sign", // Hybrid: Kyber KEM + AES-GCM + Dilithium sign
     ]
 }
 

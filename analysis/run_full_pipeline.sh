@@ -3,10 +3,11 @@
 # Quantum-Resilient Analysis Pipeline
 #
 # Usage:
-#   ./run_full_pipeline.sh <experiment-id> <uri>
+#   ./run_full_pipeline.sh <experiment-id> <uri-or-path>
 #
-# Example:
+# Examples:
 #   ./run_full_pipeline.sh exp_2025_01_01_001 gs://qr-results/exp_2025_01_01_001
+#   ./run_full_pipeline.sh exp_local ./results/exp_local/raw
 #   ./run_full_pipeline.sh exp_local file:///path/to/results
 #
 
@@ -26,11 +27,11 @@ cd "$SCRIPT_DIR"
 # Check arguments
 if [[ $# -lt 2 ]]; then
     echo -e "${RED}Error: Missing arguments${NC}"
-    echo "Usage: $0 <experiment-id> <uri>"
+    echo "Usage: $0 <experiment-id> <uri-or-path>"
     echo ""
     echo "Examples:"
     echo "  $0 exp_2025_01_01_001 gs://qr-results/exp_2025_01_01_001"
-    echo "  $0 exp_local file:///path/to/results"
+    echo "  $0 exp_local ./results/exp_local/raw"
     echo "  $0 exp_s3 s3://bucket/prefix"
     exit 1
 fi
@@ -38,9 +39,31 @@ fi
 EXPERIMENT_ID="$1"
 URI="$2"
 
-# Directories
-DATA_DIR="$SCRIPT_DIR/data/$EXPERIMENT_ID"
-FIGURES_DIR="$SCRIPT_DIR/figures/$EXPERIMENT_ID"
+# Determine if URI is a local path
+IS_LOCAL=false
+if [[ -d "$URI" ]]; then
+    IS_LOCAL=true
+    RAW_DIR="$URI"
+elif [[ "$URI" == file://* ]]; then
+    IS_LOCAL=true
+    RAW_DIR="${URI#file://}"
+fi
+
+# Directories - for local runs, output next to raw data
+if [[ "$IS_LOCAL" == "true" ]]; then
+    # If raw dir ends with /raw, use parent
+    if [[ "$RAW_DIR" == */raw ]]; then
+        BASE_DIR="$(dirname "$RAW_DIR")"
+    else
+        BASE_DIR="$RAW_DIR"
+    fi
+    DATA_DIR="$BASE_DIR"
+    FIGURES_DIR="$BASE_DIR/figures"
+else
+    DATA_DIR="$SCRIPT_DIR/data/$EXPERIMENT_ID"
+    FIGURES_DIR="$SCRIPT_DIR/figures/$EXPERIMENT_ID"
+fi
+
 SCRIPTS_DIR="$SCRIPT_DIR/scripts"
 
 echo -e "${BLUE}============================================${NC}"
@@ -49,87 +72,136 @@ echo -e "${BLUE}============================================${NC}"
 echo ""
 echo -e "Experiment: ${GREEN}$EXPERIMENT_ID${NC}"
 echo -e "URI:        ${GREEN}$URI${NC}"
+echo -e "Local:      ${GREEN}$IS_LOCAL${NC}"
 echo ""
 
-# Step 1: Fetch results
-echo -e "${YELLOW}[1/6] Fetching results...${NC}"
-python "$SCRIPTS_DIR/fetch_results.py" \
-    --experiment-id "$EXPERIMENT_ID" \
-    --uri "$URI" \
-    --out "$DATA_DIR" \
-    --parallel 8
+# Step 1: Fetch results (skip for local)
+if [[ "$IS_LOCAL" == "true" ]]; then
+    echo -e "${YELLOW}[1/6] Using local data...${NC}"
+    # Ensure raw directory exists
+    if [[ "$RAW_DIR" == */raw ]]; then
+        RAW_PATH="$RAW_DIR"
+    elif [[ -d "$RAW_DIR/raw" ]]; then
+        RAW_PATH="$RAW_DIR/raw"
+    else
+        RAW_PATH="$RAW_DIR"
+    fi
+    
+    if [[ ! -d "$RAW_PATH" ]]; then
+        echo -e "${RED}Error: Raw data directory not found: $RAW_PATH${NC}"
+        exit 1
+    fi
+else
+    echo -e "${YELLOW}[1/6] Fetching results...${NC}"
+    mkdir -p "$DATA_DIR"
+    python "$SCRIPTS_DIR/fetch_results.py" \
+        --experiment-id "$EXPERIMENT_ID" \
+        --uri "$URI" \
+        --out "$DATA_DIR" \
+        --parallel 8
+    RAW_PATH="$DATA_DIR/raw"
+fi
 
-if [[ ! -d "$DATA_DIR/raw" ]]; then
-    echo -e "${RED}Error: No data fetched${NC}"
+if [[ ! -d "$RAW_PATH" ]]; then
+    echo -e "${RED}Error: No data at $RAW_PATH${NC}"
     exit 1
 fi
 
-RAW_COUNT=$(find "$DATA_DIR/raw" -name "*.jsonl" | wc -l)
-echo -e "${GREEN}  Fetched $RAW_COUNT JSONL files${NC}"
+RAW_COUNT=$(find "$RAW_PATH" -name "*.jsonl" 2>/dev/null | wc -l || echo 0)
+echo -e "${GREEN}  Found $RAW_COUNT JSONL files in $RAW_PATH${NC}"
 echo ""
 
 # Step 2: Merge JSONL files
 echo -e "${YELLOW}[2/6] Merging JSONL files...${NC}"
+MERGED_DIR="$DATA_DIR/merged"
 python "$SCRIPTS_DIR/merge_jsonl.py" \
-    --input "$DATA_DIR/raw" \
-    --output "$DATA_DIR/merged"
+    --input "$RAW_PATH" \
+    --output "$MERGED_DIR"
 
-if [[ ! -f "$DATA_DIR/merged/merged.jsonl" ]]; then
+if [[ ! -f "$MERGED_DIR/merged.jsonl" ]] && [[ ! -f "$MERGED_DIR/merged.parquet" ]]; then
     echo -e "${RED}Error: Merge failed${NC}"
     exit 1
 fi
 
-MERGED_LINES=$(wc -l < "$DATA_DIR/merged/merged.jsonl")
-echo -e "${GREEN}  Merged $MERGED_LINES events${NC}"
+if [[ -f "$MERGED_DIR/merged.jsonl" ]]; then
+    MERGED_LINES=$(wc -l < "$MERGED_DIR/merged.jsonl")
+    echo -e "${GREEN}  Merged $MERGED_LINES events${NC}"
+fi
 echo ""
 
 # Step 3: Compute statistics
 echo -e "${YELLOW}[3/6] Computing statistics...${NC}"
-python "$SCRIPTS_DIR/compute_statistics.py" \
-    --input "$DATA_DIR/merged/merged.jsonl" \
-    --output "$DATA_DIR/stats" \
-    --experiment-id "$EXPERIMENT_ID"
+STATS_DIR="$DATA_DIR/stats"
 
-if [[ ! -f "$DATA_DIR/stats/summary.json" ]]; then
-    echo -e "${RED}Error: Statistics computation failed${NC}"
-    exit 1
+# Use parquet if available, otherwise jsonl
+if [[ -f "$MERGED_DIR/merged.parquet" ]]; then
+    INPUT_FILE="$MERGED_DIR/merged.parquet"
+else
+    INPUT_FILE="$MERGED_DIR/merged.jsonl"
 fi
 
-echo -e "${GREEN}  Generated summary and histograms${NC}"
+python "$SCRIPTS_DIR/compute_statistics.py" \
+    --input "$INPUT_FILE" \
+    --output "$STATS_DIR" \
+    --experiment-id "$EXPERIMENT_ID" 2>/dev/null || \
+python "$SCRIPTS_DIR/compute_stats.py" \
+    --input "$INPUT_FILE" \
+    --output "$STATS_DIR" \
+    --experiment-id "$EXPERIMENT_ID" 2>/dev/null || \
+echo -e "${YELLOW}  Warning: Statistics computation script not found or failed${NC}"
+
+if [[ -f "$STATS_DIR/summary.json" ]]; then
+    echo -e "${GREEN}  Generated summary${NC}"
+else
+    echo -e "${YELLOW}  Warning: summary.json not generated${NC}"
+fi
 echo ""
 
 # Step 4: Generate plots
 echo -e "${YELLOW}[4/6] Generating plots...${NC}"
 mkdir -p "$FIGURES_DIR"
 
-python "$SCRIPTS_DIR/plot_latency.py" \
-    --input "$DATA_DIR/merged/merged.jsonl" \
+# Try ECDF plot first
+python "$SCRIPTS_DIR/plot_ecdf.py" \
+    --input "$INPUT_FILE" \
     --output "$FIGURES_DIR" \
-    --experiment-id "$EXPERIMENT_ID"
+    --experiment-id "$EXPERIMENT_ID" 2>/dev/null || \
+python "$SCRIPTS_DIR/plot_latency.py" \
+    --input "$INPUT_FILE" \
+    --output "$FIGURES_DIR" \
+    --experiment-id "$EXPERIMENT_ID" 2>/dev/null || \
+echo -e "${YELLOW}  Warning: Latency plot script not found${NC}"
 
 python "$SCRIPTS_DIR/plot_throughput.py" \
-    --input "$DATA_DIR/merged/merged.jsonl" \
+    --input "$INPUT_FILE" \
     --output "$FIGURES_DIR" \
-    --experiment-id "$EXPERIMENT_ID"
+    --experiment-id "$EXPERIMENT_ID" 2>/dev/null || \
+echo -e "${YELLOW}  Warning: Throughput plot script not found${NC}"
 
+# Optional plots
 python "$SCRIPTS_DIR/plot_queue_delay.py" \
-    --input "$DATA_DIR/merged/merged.jsonl" \
+    --input "$INPUT_FILE" \
     --output "$FIGURES_DIR" \
-    --experiment-id "$EXPERIMENT_ID"
+    --experiment-id "$EXPERIMENT_ID" 2>/dev/null || true
 
-PLOT_COUNT=$(find "$FIGURES_DIR" -name "*.png" | wc -l)
+PLOT_COUNT=$(find "$FIGURES_DIR" -name "*.png" 2>/dev/null | wc -l || echo 0)
 echo -e "${GREEN}  Generated $PLOT_COUNT plots${NC}"
 echo ""
 
-# Step 5: Export dataset
+# Step 5: Export dataset (optional)
 echo -e "${YELLOW}[5/6] Exporting dataset...${NC}"
-python "$SCRIPTS_DIR/export_dataset.py" \
-    --input "$DATA_DIR/merged" \
-    --output "$DATA_DIR/exports" \
-    --experiment-id "$EXPERIMENT_ID" \
-    --formats parquet csv summary
-
-echo -e "${GREEN}  Exported to Parquet and CSV${NC}"
+EXPORTS_DIR="$DATA_DIR/exports"
+if [[ -f "$SCRIPTS_DIR/export_dataset.py" ]]; then
+    python "$SCRIPTS_DIR/export_dataset.py" \
+        --input "$MERGED_DIR" \
+        --output "$EXPORTS_DIR" \
+        --experiment-id "$EXPERIMENT_ID" \
+        --formats parquet csv summary 2>/dev/null || \
+    echo -e "${YELLOW}  Warning: Export failed${NC}"
+    echo -e "${GREEN}  Exported datasets${NC}"
+else
+    echo -e "${YELLOW}  Skipping (export_dataset.py not found)${NC}"
+fi
 echo ""
 
 # Step 6: Generate summary
@@ -143,32 +215,32 @@ echo "Data directory:    $DATA_DIR"
 echo "Figures directory: $FIGURES_DIR"
 echo ""
 echo "Generated files:"
-echo "  - $DATA_DIR/merged/merged.jsonl"
-echo "  - $DATA_DIR/merged/merged.parquet"
-echo "  - $DATA_DIR/stats/summary.json"
-echo "  - $DATA_DIR/stats/latency_hist.png"
-echo "  - $DATA_DIR/stats/queue_hist.png"
-echo "  - $DATA_DIR/stats/throughput_curve.png"
-echo "  - $DATA_DIR/exports/${EXPERIMENT_ID}.parquet"
-echo "  - $DATA_DIR/exports/${EXPERIMENT_ID}.csv"
+[[ -f "$MERGED_DIR/merged.jsonl" ]] && echo "  - $MERGED_DIR/merged.jsonl"
+[[ -f "$MERGED_DIR/merged.parquet" ]] && echo "  - $MERGED_DIR/merged.parquet"
+[[ -f "$STATS_DIR/summary.json" ]] && echo "  - $STATS_DIR/summary.json"
+[[ -f "$FIGURES_DIR/latency_cdf.png" ]] && echo "  - $FIGURES_DIR/latency_cdf.png"
+[[ -f "$FIGURES_DIR/throughput.png" ]] && echo "  - $FIGURES_DIR/throughput.png"
 echo ""
 
 # Print summary stats
-if [[ -f "$DATA_DIR/stats/summary.json" ]]; then
+if [[ -f "$STATS_DIR/summary.json" ]]; then
     echo "Quick Statistics:"
     python3 -c "
 import json
-with open('$DATA_DIR/stats/summary.json') as f:
-    s = json.load(f)
-if 'latency' in s:
-    lat = s['latency']
-    print(f\"  Latency (μs): mean={lat['mean']:.1f}, p50={lat['p50']:.0f}, p99={lat['p99']:.0f}\")
-if 'throughput' in s:
-    tput = s['throughput']
-    if 'mean_msgs_per_sec' in tput:
-        print(f\"  Throughput: {tput['mean_msgs_per_sec']:.0f} msg/s\")
-print(f\"  Total events: {s.get('total_events', 'N/A')}\")
-"
+try:
+    with open('$STATS_DIR/summary.json') as f:
+        s = json.load(f)
+    if 'latency' in s:
+        lat = s['latency']
+        print(f\"  Latency (μs): mean={lat.get('mean', 0):.1f}, p50={lat.get('p50', 0):.0f}, p99={lat.get('p99', 0):.0f}\")
+    if 'throughput' in s:
+        tput = s['throughput']
+        if 'mean_msgs_per_sec' in tput:
+            print(f\"  Throughput: {tput['mean_msgs_per_sec']:.0f} msg/s\")
+    print(f\"  Total events: {s.get('total_events', 'N/A')}\")
+except Exception as e:
+    print(f'  Could not read summary: {e}')
+" 2>/dev/null || echo "  (Could not read summary)"
 fi
 
 echo ""

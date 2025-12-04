@@ -2866,6 +2866,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pqcrypto-dilithium"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "685de0fa68c6786559d5fcdaa414f0cd68ef3f5d162f61823bd7424cd276726f"
+dependencies = [
+ "cc",
+ "glob",
+ "libc",
+ "pqcrypto-internals",
+ "pqcrypto-traits",
+]
+
+[[package]]
 name = "pqcrypto-internals"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3207,10 +3220,12 @@ dependencies = [
  "p256 0.13.2",
  "parking_lot",
  "pkcs8 0.10.2",
+ "pqcrypto-dilithium",
  "pqcrypto-kyber",
  "pqcrypto-traits",
  "prometheus",
  "rand 0.8.5",
+ "rand_chacha 0.3.1",
  "reqwest",
  "rsa",
  "serde",

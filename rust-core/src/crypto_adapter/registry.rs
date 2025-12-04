@@ -3,8 +3,9 @@
 //! Provides a factory function to instantiate crypto adapters by name.
 
 use super::{
-    ecdsa_adapter::EcdsaP256Adapter, kyber_adapter::KyberAdapter, noop_adapter::NoOpCryptoAdapter,
-    rsa_adapter::Rsa2048Adapter, CryptoAdapter, CryptoError,
+    dilithium_adapter::DilithiumAdapter, ecdsa_adapter::EcdsaP256Adapter,
+    kyber_adapter::KyberAdapter, noop_adapter::NoOpCryptoAdapter, rsa_adapter::Rsa2048Adapter,
+    CryptoAdapter, CryptoError,
 };
 use std::sync::Arc;
 
@@ -21,6 +22,7 @@ use std::sync::Arc;
 /// - `"rsa2048"` - RSA-2048 adapter
 /// - `"ecdsa_p256"` - ECDSA P-256 adapter
 /// - `"kyber"` - Kyber-512 PQC KEM adapter
+/// - `"dilithium"` - Dilithium-2 PQC signature adapter
 ///
 /// # Errors
 /// Returns `CryptoError::InvalidKey` if the adapter name is not recognized
@@ -30,13 +32,14 @@ pub fn get_adapter(name: &str) -> Result<Arc<dyn CryptoAdapter>, CryptoError> {
         "rsa2048" => Ok(Arc::new(Rsa2048Adapter::new()?)),
         "ecdsa_p256" => Ok(Arc::new(EcdsaP256Adapter::new()?)),
         "kyber" => Ok(Arc::new(KyberAdapter::new("kyber512")?)),
+        "dilithium" => Ok(Arc::new(DilithiumAdapter::new("dilithium2")?)),
         _ => Err(CryptoError::InvalidKey),
     }
 }
 
 /// Returns a list of all supported adapter names
 pub fn supported_adapters() -> &'static [&'static str] {
-    &["noop", "rsa2048", "ecdsa_p256", "kyber"]
+    &["noop", "rsa2048", "ecdsa_p256", "kyber", "dilithium"]
 }
 
 /// Returns whether the adapter supports KEM operations
@@ -46,7 +49,7 @@ pub fn adapter_supports_kem(name: &str) -> bool {
 
 /// Returns whether the adapter supports signature operations
 pub fn adapter_supports_signatures(name: &str) -> bool {
-    matches!(name, "ecdsa_p256" | "rsa2048" | "noop")
+    matches!(name, "ecdsa_p256" | "rsa2048" | "noop" | "dilithium")
 }
 
 #[cfg(test)]

@@ -27,6 +27,7 @@ quantum-resilient/
 │       │   ├── rsa_adapter.rs  # RSA-2048 adapter
 │       │   ├── ecdsa_adapter.rs # ECDSA P-256 adapter
 │       │   ├── kyber_adapter.rs # Kyber PQC KEM adapter
+│       │   ├── dilithium_adapter.rs # Dilithium PQC signature adapter
 │       │   ├── kem_hybrid.rs   # KEM→AEAD hybrid helpers
 │       │   └── registry.rs     # Adapter factory
 │       ├── pipeline/           # Async streaming pipeline
@@ -57,7 +58,9 @@ quantum-resilient/
 │   ├── kyber_hybrid_encrypt.yaml
 │   ├── kyber_hybrid_decrypt.yaml
 │   ├── fixed_pool_burst.yaml
-│   └── elastic_ramp.yaml
+│   ├── elastic_ramp.yaml
+│   └── hybrid_kyber_dilithium.yaml  # Full PQC hybrid benchmark
+├── run_local.sh            # Local experiment runner script
 ├── k8s/                    # Kubernetes manifests
 │   └── base/
 │       ├── deployment.yaml
@@ -170,6 +173,96 @@ make run ARGS="--scenario scenarios/kyber_hybrid_encrypt.yaml"
 ```bash
 make test
 ```
+
+## Local Microbenchmark Experiments
+
+Run a complete local experiment with a single command. This produces JSONL telemetry, statistics, and publication-quality plots.
+
+### Single Command Execution
+
+```bash
+# Run a 30-second hybrid Kyber+Dilithium benchmark
+./run_local.sh \
+  --scenario scenarios/hybrid_kyber_dilithium.yaml \
+  --out ./results/exp1 \
+  --duration 30 \
+  --seed 1234
+```
+
+### What It Does
+
+1. **Builds** the Rust binary (`cargo build --release`)
+2. **Runs** the benchmark with the specified scenario
+3. **Merges** raw JSONL files
+4. **Computes** statistics (p50, p90, p95, p99, mean, std)
+5. **Generates** plots (latency CDF, throughput time series)
+6. **Creates** a manifest with run metadata
+
+### Output Structure
+
+```
+results/exp1/
+├── raw/run.jsonl           # Raw telemetry (per-event JSONL)
+├── merged/
+│   ├── merged.jsonl        # Sorted merged events
+│   └── merged.parquet      # Efficient Parquet format
+├── stats/summary.json      # Statistical summary
+├── figures/
+│   ├── latency_cdf.png     # Latency ECDF (300 dpi)
+│   └── throughput.png      # Throughput time series
+└── manifest.json           # Run metadata
+```
+
+### JSONL Event Format
+
+Each event contains:
+
+```json
+{
+  "run_id": "exp1",
+  "scenario_id": "hybrid_kyber_dilithium",
+  "event_id": 1,
+  "timestamp_utc_iso": "2025-12-04T12:34:56.123456Z",
+  "timestamp_monotonic_ns": 123456789012345,
+  "operation": "kem_aead_encrypt",
+  "algorithm": "kyber",
+  "latency_us": 512,
+  "payload_size_bytes": 1024,
+  "ciphertext_size_bytes": 1200,
+  "cpu_user_seconds": 0.000123,
+  "memory_rss_bytes": 3456784,
+  "rng_seed": 1234,
+  "error": null
+}
+```
+
+### Verification
+
+```bash
+# Check raw output
+ls ./results/exp1/raw/*.jsonl
+
+# Validate JSONL fields
+head -1 ./results/exp1/merged/merged.jsonl | python3 -m json.tool
+
+# Check statistics
+cat ./results/exp1/stats/summary.json
+
+# Verify plots exist
+ls ./results/exp1/figures/*.png
+
+# Run adapter unit tests
+cargo test -p rust-core --test pqc_adapter_smoke
+```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Build fails | Ensure Rust 1.70+ is installed |
+| No output | Check scenario YAML path is correct |
+| Missing plots | Install Python dependencies: `pip install -r analysis/requirements.txt` |
+| Permission denied | Run `chmod +x run_local.sh` |
 
 ## Running PQC Experiments (Kyber)
 

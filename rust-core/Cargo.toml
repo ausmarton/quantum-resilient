@@ -14,8 +14,9 @@ name = "pqc-bench"
 path = "src/main.rs"
 
 [features]
-default = ["pqcrypto_fallback"]
+default = ["pqcrypto_fallback", "pqcrypto_dilithium"]
 pqcrypto_fallback = ["pqcrypto-kyber"]
+pqcrypto_dilithium = ["dep:pqcrypto-dilithium"]
 
 [dependencies]
 # Serialization
@@ -35,9 +36,13 @@ p256 = { version = "0.13", features = ["ecdsa"] }
 ecdsa = { version = "0.16", features = ["signing", "verifying"] }
 base64 = "0.22"
 
-# PQC fallback (pure Rust Kyber implementation)
+# PQC fallback (pure Rust implementations)
 pqcrypto-kyber = { version = "0.8", optional = true }
+pqcrypto-dilithium = { version = "0.5", optional = true }
 pqcrypto-traits = "0.3"
+
+# Deterministic RNG for reproducibility
+rand_chacha = "0.3"
 
 # AEAD + KDF for hybrid encryption
 aes-gcm = "0.10"

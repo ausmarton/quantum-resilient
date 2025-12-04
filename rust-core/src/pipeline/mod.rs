@@ -150,9 +150,12 @@ impl Pipeline {
         // Create execution context
         let exec_context = ExecutionContext {
             keypair: context.keypair.clone(),
+            sig_keypair: None, // Will be set for hybrid operations
             algorithm: adapter.name().to_string(),
             operation: scenario.algorithm.operation.clone(),
             run_id: scenario.id.clone(),
+            scenario_id: scenario.id.clone(),
+            rng_seed: scenario.effective_rng_seed(),
         };
 
         // Create workload model
@@ -436,6 +439,7 @@ mod tests {
             },
             metrics: crate::scenario::MetricsConfig::default(),
             execution: crate::scenario::ExecutionConfig::default(),
+            rng_seed: Some(12345),
         };
 
         let pipeline = Pipeline::new();
@@ -479,6 +483,7 @@ mod tests {
                 max_workers: 4,
                 queue_capacity: 100,
             },
+            rng_seed: Some(12345),
         };
 
         let pipeline = Pipeline::new();
@@ -518,6 +523,7 @@ mod tests {
             },
             metrics: crate::scenario::MetricsConfig::default(),
             execution: crate::scenario::ExecutionConfig::default(),
+            rng_seed: Some(12345),
         };
 
         let pipeline = Pipeline::new();

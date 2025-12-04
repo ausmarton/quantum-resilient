@@ -76,10 +76,11 @@ impl JsonlWriter {
     }
 }
 
-/// Event row for JSONL output
+/// Event row for JSONL output with all mandatory fields
 #[derive(Debug, Serialize)]
 pub struct EventRow {
     pub run_id: String,
+    pub scenario_id: String,
     pub event_id: u64,
     pub timestamp_utc_iso: String,
     pub timestamp_monotonic_ns: u128,
@@ -93,6 +94,32 @@ pub struct EventRow {
     pub signature_size_bytes: Option<usize>,
     pub cpu_user_seconds: f64,
     pub memory_rss_bytes: u64,
+    pub rng_seed: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Extended event row with queue delay for JSONL output (used by execution engine)
+#[derive(Debug, Serialize)]
+pub struct EventRowFull {
+    pub run_id: String,
+    pub scenario_id: String,
+    pub event_id: u64,
+    pub timestamp_utc_iso: String,
+    pub timestamp_monotonic_ns: u128,
+    pub operation: String,
+    pub algorithm: String,
+    pub latency_us: u128,
+    pub queue_delay_us: u128,
+    pub worker_id: usize,
+    pub payload_size_bytes: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ciphertext_size_bytes: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature_size_bytes: Option<usize>,
+    pub cpu_user_seconds: f64,
+    pub memory_rss_bytes: u64,
+    pub rng_seed: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
