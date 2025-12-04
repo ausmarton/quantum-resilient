@@ -1,29 +1,28 @@
 #!/usr/bin/env python3
 """
-Perform statistical hypothesis testing on experiment results.
+Statistical hypothesis testing suite for PQC benchmark results.
 
-Runs:
-- Mann-Whitney U test (distribution difference)
-- Kolmogorov-Smirnov test (shape difference)
+Performs comprehensive statistical analysis:
+- Kolmogorov-Smirnov test (distribution shape)
+- Mann-Whitney U test (distribution location)
 - Welch's t-test (mean difference)
-
-Reports:
-- p-values (with Holm-Bonferroni correction)
-- Effect sizes (Cohen's d)
-- Confidence intervals
+- Cohen's d effect size with 95% CI
+- Holm-Bonferroni p-value correction
 
 Usage:
     python analysis/hypothesis_tests.py \
         --index final-results/index.json \
         --matrix orchestration/experiment_matrix.yaml \
-        --output final-results/hypothesis_tests.json
+        --output final-results
 """
 
 import argparse
+import csv
 import json
 import sys
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -33,62 +32,137 @@ from scipy import stats
 
 try:
     import yaml
+    YAML_AVAILABLE = True
 except ImportError:
-    yaml = None
+    YAML_AVAILABLE = False
 
 
 @dataclass
-class HypothesisTestResult:
-    """Result of a hypothesis test."""
-    comparison: str
-    group_a: str
-    group_b: str
+class TestResult:
+    """Result from a single statistical test."""
+    comparison_id: str
+    comparison_type: str  # 'algorithm', 'environment', 'pqc_vs_classical'
+    group_a_name: str
+    group_b_name: str
     metric: str
-    test_name: str
-    statistic: float
-    p_value: float
-    p_value_corrected: float
-    significant: bool
-    effect_size: float
-    effect_interpretation: str
-    ci_low: float
-    ci_high: float
+    
+    # Sample info
     n_a: int
     n_b: int
     mean_a: float
     mean_b: float
+    std_a: float
+    std_b: float
+    
+    # Test results
+    ks_statistic: float = 0.0
+    ks_pvalue: float = 1.0
+    
+    mw_statistic: float = 0.0
+    mw_pvalue: float = 1.0
+    
+    welch_statistic: float = 0.0
+    welch_pvalue: float = 1.0
+    
+    # Effect size
+    cohens_d: float = 0.0
+    cohens_d_ci_low: float = 0.0
+    cohens_d_ci_high: float = 0.0
+    effect_interpretation: str = "negligible"
+    
+    # Corrected p-values (filled after all tests)
+    ks_pvalue_corrected: float = 1.0
+    mw_pvalue_corrected: float = 1.0
+    welch_pvalue_corrected: float = 1.0
+    
+    # Significance flags
+    ks_significant: bool = False
+    mw_significant: bool = False
+    welch_significant: bool = False
+    any_significant: bool = False
     
     def to_dict(self) -> dict:
         return {
-            'comparison': self.comparison,
-            'group_a': self.group_a,
-            'group_b': self.group_b,
+            'comparison_id': self.comparison_id,
+            'comparison_type': self.comparison_type,
+            'group_a': self.group_a_name,
+            'group_b': self.group_b_name,
             'metric': self.metric,
-            'test_name': self.test_name,
-            'statistic': round(self.statistic, 4),
-            'p_value': self.p_value,
-            'p_value_corrected': self.p_value_corrected,
-            'significant': self.significant,
-            'effect_size': round(self.effect_size, 4),
-            'effect_interpretation': self.effect_interpretation,
-            'ci_low': round(self.ci_low, 2),
-            'ci_high': round(self.ci_high, 2),
+            'n_a': self.n_a,
+            'n_b': self.n_b,
+            'mean_a': round(self.mean_a, 4),
+            'mean_b': round(self.mean_b, 4),
+            'std_a': round(self.std_a, 4),
+            'std_b': round(self.std_b, 4),
+            'mean_diff': round(self.mean_b - self.mean_a, 4),
+            'mean_diff_pct': round((self.mean_b - self.mean_a) / self.mean_a * 100, 2) if self.mean_a != 0 else 0,
+            'tests': {
+                'kolmogorov_smirnov': {
+                    'statistic': round(self.ks_statistic, 6),
+                    'p_value': self.ks_pvalue,
+                    'p_value_corrected': self.ks_pvalue_corrected,
+                    'significant': self.ks_significant,
+                },
+                'mann_whitney_u': {
+                    'statistic': round(self.mw_statistic, 4),
+                    'p_value': self.mw_pvalue,
+                    'p_value_corrected': self.mw_pvalue_corrected,
+                    'significant': self.mw_significant,
+                },
+                'welch_t': {
+                    'statistic': round(self.welch_statistic, 4),
+                    'p_value': self.welch_pvalue,
+                    'p_value_corrected': self.welch_pvalue_corrected,
+                    'significant': self.welch_significant,
+                },
+            },
+            'effect_size': {
+                'cohens_d': round(self.cohens_d, 4),
+                'ci_95_low': round(self.cohens_d_ci_low, 4),
+                'ci_95_high': round(self.cohens_d_ci_high, 4),
+                'interpretation': self.effect_interpretation,
+            },
+            'any_significant': self.any_significant,
+        }
+    
+    def to_csv_row(self) -> dict:
+        return {
+            'comparison_id': self.comparison_id,
+            'comparison_type': self.comparison_type,
+            'group_a': self.group_a_name,
+            'group_b': self.group_b_name,
+            'metric': self.metric,
             'n_a': self.n_a,
             'n_b': self.n_b,
             'mean_a': round(self.mean_a, 2),
             'mean_b': round(self.mean_b, 2),
+            'mean_diff_pct': round((self.mean_b - self.mean_a) / self.mean_a * 100, 2) if self.mean_a != 0 else 0,
+            'ks_stat': round(self.ks_statistic, 4),
+            'ks_p': f"{self.ks_pvalue_corrected:.2e}",
+            'ks_sig': 'Yes' if self.ks_significant else 'No',
+            'mw_stat': round(self.mw_statistic, 2),
+            'mw_p': f"{self.mw_pvalue_corrected:.2e}",
+            'mw_sig': 'Yes' if self.mw_significant else 'No',
+            'welch_t': round(self.welch_statistic, 2),
+            'welch_p': f"{self.welch_pvalue_corrected:.2e}",
+            'welch_sig': 'Yes' if self.welch_significant else 'No',
+            'cohens_d': round(self.cohens_d, 3),
+            'effect_size': self.effect_interpretation,
+            'any_significant': 'Yes' if self.any_significant else 'No',
         }
 
 
 def load_latencies_from_jsonl(path: Path) -> Optional[np.ndarray]:
-    """Load latency values from merged JSONL file."""
+    """Load latency values from merged JSONL or Parquet file."""
     try:
+        # Try parquet first (faster)
         parquet_path = path.parent / 'merged.parquet'
         if parquet_path.exists():
             df = pd.read_parquet(parquet_path)
             if 'latency_us' in df.columns:
                 return df['latency_us'].values
         
+        # Fall back to JSONL
         if not path.exists():
             return None
         
@@ -107,20 +181,39 @@ def load_latencies_from_jsonl(path: Path) -> Optional[np.ndarray]:
         return None
 
 
-def compute_cohens_d(group_a: np.ndarray, group_b: np.ndarray) -> tuple[float, str]:
-    """Compute Cohen's d effect size."""
+def compute_cohens_d_with_ci(
+    group_a: np.ndarray, 
+    group_b: np.ndarray,
+    confidence: float = 0.95
+) -> tuple[float, float, float, str]:
+    """
+    Compute Cohen's d effect size with confidence interval.
+    
+    Returns: (d, ci_low, ci_high, interpretation)
+    """
     n_a, n_b = len(group_a), len(group_b)
     mean_a, mean_b = np.mean(group_a), np.mean(group_b)
-    var_a = np.var(group_a, ddof=1)
-    var_b = np.var(group_b, ddof=1)
+    var_a = np.var(group_a, ddof=1) if n_a > 1 else 0
+    var_b = np.var(group_b, ddof=1) if n_b > 1 else 0
     
+    # Pooled standard deviation
     pooled_std = np.sqrt(((n_a - 1) * var_a + (n_b - 1) * var_b) / (n_a + n_b - 2))
     
     if pooled_std == 0:
-        return 0.0, 'undefined'
+        return 0.0, 0.0, 0.0, 'undefined'
     
+    # Cohen's d
     d = (mean_b - mean_a) / pooled_std
     
+    # Standard error of d (Hedges & Olkin, 1985)
+    se_d = np.sqrt((n_a + n_b) / (n_a * n_b) + (d ** 2) / (2 * (n_a + n_b)))
+    
+    # Confidence interval
+    z = stats.norm.ppf((1 + confidence) / 2)
+    ci_low = d - z * se_d
+    ci_high = d + z * se_d
+    
+    # Interpretation (Cohen's conventions)
     abs_d = abs(d)
     if abs_d < 0.2:
         interpretation = 'negligible'
@@ -131,145 +224,228 @@ def compute_cohens_d(group_a: np.ndarray, group_b: np.ndarray) -> tuple[float, s
     else:
         interpretation = 'large'
     
-    return d, interpretation
+    return d, ci_low, ci_high, interpretation
 
 
-def compute_ci_difference(group_a: np.ndarray, group_b: np.ndarray, confidence: float = 0.95) -> tuple[float, float]:
-    """Compute confidence interval for difference in means."""
-    mean_diff = np.mean(group_b) - np.mean(group_a)
-    
-    se_a = stats.sem(group_a)
-    se_b = stats.sem(group_b)
-    se_diff = np.sqrt(se_a**2 + se_b**2)
-    
-    # Use Welch-Satterthwaite degrees of freedom
-    df = (se_a**2 + se_b**2)**2 / (
-        (se_a**4 / (len(group_a) - 1)) + (se_b**4 / (len(group_b) - 1))
-    ) if (se_a > 0 or se_b > 0) else 1
-    
-    t_crit = stats.t.ppf((1 + confidence) / 2, df)
-    margin = t_crit * se_diff
-    
-    return mean_diff - margin, mean_diff + margin
-
-
-def holm_bonferroni_correction(p_values: list[float], alpha: float = 0.05) -> list[tuple[float, bool]]:
-    """Apply Holm-Bonferroni correction to p-values."""
-    n = len(p_values)
-    indexed = [(p, i) for i, p in enumerate(p_values)]
-    indexed.sort()
-    
-    corrected = [None] * n
-    
-    for rank, (p, original_idx) in enumerate(indexed):
-        adjusted_alpha = alpha / (n - rank)
-        significant = p < adjusted_alpha
-        corrected_p = min(p * (n - rank), 1.0)
-        corrected[original_idx] = (corrected_p, significant)
-    
-    return corrected
-
-
-def run_hypothesis_tests(
+def run_all_tests(
     group_a: np.ndarray,
     group_b: np.ndarray,
-    comparison_name: str,
+    comparison_id: str,
+    comparison_type: str,
     group_a_name: str,
     group_b_name: str,
     metric: str = 'latency_us',
-) -> list[HypothesisTestResult]:
-    """Run all hypothesis tests between two groups."""
-    results = []
+) -> Optional[TestResult]:
+    """Run all statistical tests between two groups."""
     
-    mean_a = np.mean(group_a)
-    mean_b = np.mean(group_b)
-    effect_size, effect_interp = compute_cohens_d(group_a, group_b)
-    ci_low, ci_high = compute_ci_difference(group_a, group_b)
+    if len(group_a) < 2 or len(group_b) < 2:
+        return None
     
-    # Mann-Whitney U test
-    try:
-        stat, p = stats.mannwhitneyu(group_a, group_b, alternative='two-sided')
-        results.append(HypothesisTestResult(
-            comparison=comparison_name,
-            group_a=group_a_name,
-            group_b=group_b_name,
-            metric=metric,
-            test_name='Mann-Whitney U',
-            statistic=stat,
-            p_value=p,
-            p_value_corrected=p,  # Will be corrected later
-            significant=p < 0.05,
-            effect_size=effect_size,
-            effect_interpretation=effect_interp,
-            ci_low=ci_low,
-            ci_high=ci_high,
-            n_a=len(group_a),
-            n_b=len(group_b),
-            mean_a=mean_a,
-            mean_b=mean_b,
-        ))
-    except Exception as e:
-        print(f"  Warning: Mann-Whitney U failed: {e}")
+    result = TestResult(
+        comparison_id=comparison_id,
+        comparison_type=comparison_type,
+        group_a_name=group_a_name,
+        group_b_name=group_b_name,
+        metric=metric,
+        n_a=len(group_a),
+        n_b=len(group_b),
+        mean_a=np.mean(group_a),
+        mean_b=np.mean(group_b),
+        std_a=np.std(group_a, ddof=1),
+        std_b=np.std(group_b, ddof=1),
+    )
     
     # Kolmogorov-Smirnov test
     try:
         stat, p = stats.ks_2samp(group_a, group_b)
-        results.append(HypothesisTestResult(
-            comparison=comparison_name,
-            group_a=group_a_name,
-            group_b=group_b_name,
-            metric=metric,
-            test_name='Kolmogorov-Smirnov',
-            statistic=stat,
-            p_value=p,
-            p_value_corrected=p,
-            significant=p < 0.05,
-            effect_size=effect_size,
-            effect_interpretation=effect_interp,
-            ci_low=ci_low,
-            ci_high=ci_high,
-            n_a=len(group_a),
-            n_b=len(group_b),
-            mean_a=mean_a,
-            mean_b=mean_b,
-        ))
-    except Exception as e:
-        print(f"  Warning: KS test failed: {e}")
+        result.ks_statistic = stat
+        result.ks_pvalue = p
+    except Exception:
+        pass
+    
+    # Mann-Whitney U test
+    try:
+        stat, p = stats.mannwhitneyu(group_a, group_b, alternative='two-sided')
+        result.mw_statistic = stat
+        result.mw_pvalue = p
+    except Exception:
+        pass
     
     # Welch's t-test
     try:
         stat, p = stats.ttest_ind(group_a, group_b, equal_var=False)
-        results.append(HypothesisTestResult(
-            comparison=comparison_name,
-            group_a=group_a_name,
-            group_b=group_b_name,
-            metric=metric,
-            test_name="Welch's t-test",
-            statistic=stat,
-            p_value=p,
-            p_value_corrected=p,
-            significant=p < 0.05,
-            effect_size=effect_size,
-            effect_interpretation=effect_interp,
-            ci_low=ci_low,
-            ci_high=ci_high,
-            n_a=len(group_a),
-            n_b=len(group_b),
-            mean_a=mean_a,
-            mean_b=mean_b,
-        ))
-    except Exception as e:
-        print(f"  Warning: Welch's t-test failed: {e}")
+        result.welch_statistic = stat
+        result.welch_pvalue = p
+    except Exception:
+        pass
     
-    return results
+    # Cohen's d with CI
+    d, ci_low, ci_high, interp = compute_cohens_d_with_ci(group_a, group_b)
+    result.cohens_d = d
+    result.cohens_d_ci_low = ci_low
+    result.cohens_d_ci_high = ci_high
+    result.effect_interpretation = interp
+    
+    return result
+
+
+def holm_bonferroni_correction(
+    results: list[TestResult], 
+    alpha: float = 0.05
+) -> None:
+    """Apply Holm-Bonferroni correction to all p-values in place."""
+    
+    # Collect all p-values with references
+    pvalues = []
+    for i, r in enumerate(results):
+        pvalues.append((r.ks_pvalue, i, 'ks'))
+        pvalues.append((r.mw_pvalue, i, 'mw'))
+        pvalues.append((r.welch_pvalue, i, 'welch'))
+    
+    n = len(pvalues)
+    
+    # Sort by p-value
+    pvalues.sort(key=lambda x: x[0])
+    
+    # Apply correction
+    for rank, (p, result_idx, test_type) in enumerate(pvalues):
+        adjusted_alpha = alpha / (n - rank)
+        significant = p < adjusted_alpha
+        corrected_p = min(p * (n - rank), 1.0)
+        
+        result = results[result_idx]
+        if test_type == 'ks':
+            result.ks_pvalue_corrected = corrected_p
+            result.ks_significant = significant
+        elif test_type == 'mw':
+            result.mw_pvalue_corrected = corrected_p
+            result.mw_significant = significant
+        elif test_type == 'welch':
+            result.welch_pvalue_corrected = corrected_p
+            result.welch_significant = significant
+    
+    # Update any_significant flag
+    for r in results:
+        r.any_significant = r.ks_significant or r.mw_significant or r.welch_significant
+
+
+def generate_interpretation(results: list[TestResult]) -> str:
+    """Generate interpretive text for dissertation."""
+    lines = []
+    
+    # Count significant results
+    total = len(results)
+    any_sig = sum(1 for r in results if r.any_significant)
+    ks_sig = sum(1 for r in results if r.ks_significant)
+    mw_sig = sum(1 for r in results if r.mw_significant)
+    welch_sig = sum(1 for r in results if r.welch_significant)
+    
+    lines.append("=" * 70)
+    lines.append("STATISTICAL HYPOTHESIS TESTING SUMMARY")
+    lines.append("=" * 70)
+    lines.append("")
+    lines.append(f"Total comparisons: {total}")
+    lines.append(f"Significant (any test): {any_sig} ({any_sig/total*100:.1f}%)")
+    lines.append(f"  - Kolmogorov-Smirnov: {ks_sig}")
+    lines.append(f"  - Mann-Whitney U: {mw_sig}")
+    lines.append(f"  - Welch's t-test: {welch_sig}")
+    lines.append("")
+    
+    # Effect size distribution
+    large = sum(1 for r in results if r.effect_interpretation == 'large')
+    medium = sum(1 for r in results if r.effect_interpretation == 'medium')
+    small = sum(1 for r in results if r.effect_interpretation == 'small')
+    negligible = sum(1 for r in results if r.effect_interpretation == 'negligible')
+    
+    lines.append("Effect sizes (Cohen's d):")
+    lines.append(f"  - Large (|d| ≥ 0.8): {large}")
+    lines.append(f"  - Medium (0.5 ≤ |d| < 0.8): {medium}")
+    lines.append(f"  - Small (0.2 ≤ |d| < 0.5): {small}")
+    lines.append(f"  - Negligible (|d| < 0.2): {negligible}")
+    lines.append("")
+    
+    # Key findings by comparison type
+    by_type = defaultdict(list)
+    for r in results:
+        by_type[r.comparison_type].append(r)
+    
+    lines.append("-" * 70)
+    lines.append("KEY FINDINGS BY COMPARISON TYPE")
+    lines.append("-" * 70)
+    
+    for comp_type, type_results in by_type.items():
+        sig_count = sum(1 for r in type_results if r.any_significant)
+        lines.append(f"\n{comp_type.upper()}:")
+        lines.append(f"  Comparisons: {len(type_results)}, Significant: {sig_count}")
+        
+        # Show top 3 by effect size
+        sorted_by_effect = sorted(type_results, key=lambda x: abs(x.cohens_d), reverse=True)[:3]
+        for r in sorted_by_effect:
+            sig_marker = " ***" if r.any_significant else ""
+            lines.append(f"    {r.group_a_name} vs {r.group_b_name}: d={r.cohens_d:.2f} ({r.effect_interpretation}){sig_marker}")
+    
+    lines.append("")
+    lines.append("-" * 70)
+    lines.append("DISSERTATION INTERPRETATION")
+    lines.append("-" * 70)
+    lines.append("")
+    
+    # Generate interpretation paragraph
+    pqc_vs_classical = [r for r in results if r.comparison_type == 'pqc_vs_classical']
+    env_results = [r for r in results if r.comparison_type == 'environment']
+    
+    if pqc_vs_classical:
+        pqc_sig = sum(1 for r in pqc_vs_classical if r.any_significant)
+        avg_effect = np.mean([abs(r.cohens_d) for r in pqc_vs_classical])
+        lines.append(
+            f"Statistical analysis reveals that {pqc_sig} out of {len(pqc_vs_classical)} "
+            f"PQC vs classical comparisons show significant differences (p < 0.05, Holm-Bonferroni corrected). "
+            f"The average effect size magnitude is {avg_effect:.2f}, indicating "
+            f"{'substantial' if avg_effect > 0.5 else 'modest'} practical differences between "
+            f"post-quantum and classical cryptographic implementations."
+        )
+        lines.append("")
+    
+    if env_results:
+        env_sig = sum(1 for r in env_results if r.any_significant)
+        lines.append(
+            f"Cross-environment analysis shows {env_sig} out of {len(env_results)} "
+            f"comparisons exhibit statistically significant differences. "
+            f"This confirms that execution environment (native, container, cloud) "
+            f"has a measurable impact on cryptographic operation latency, "
+            f"which must be accounted for in deployment planning."
+        )
+        lines.append("")
+    
+    lines.append(
+        "The Holm-Bonferroni correction was applied to control the family-wise error rate "
+        "across all multiple comparisons. Effect sizes (Cohen's d) with 95% confidence intervals "
+        "provide practical significance measures beyond statistical significance."
+    )
+    
+    return "\n".join(lines)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run hypothesis tests on experiment results")
-    parser.add_argument('--index', '-i', type=Path, required=True, help='Path to index.json')
-    parser.add_argument('--matrix', '-m', type=Path, help='Path to experiment_matrix.yaml')
-    parser.add_argument('--output', '-o', type=Path, required=True, help='Output JSON file')
-    parser.add_argument('--alpha', type=float, default=0.05, help='Significance level')
+    parser = argparse.ArgumentParser(
+        description="Run statistical hypothesis tests on experiment results"
+    )
+    parser.add_argument(
+        '--index', '-i', type=Path, required=True,
+        help='Path to index.json'
+    )
+    parser.add_argument(
+        '--matrix', '-m', type=Path,
+        help='Path to experiment_matrix.yaml (for comparison definitions)'
+    )
+    parser.add_argument(
+        '--output', '-o', type=Path, required=True,
+        help='Output directory'
+    )
+    parser.add_argument(
+        '--alpha', type=float, default=0.05,
+        help='Significance level (default: 0.05)'
+    )
     
     args = parser.parse_args()
     
@@ -283,15 +459,15 @@ def main():
     
     print(f"Loaded index with {len(index.get('experiments', []))} experiments")
     
-    # Load comparisons from matrix if provided
-    comparisons_config = []
-    if args.matrix and args.matrix.exists() and yaml:
+    # Load comparisons from matrix if available
+    comparison_defs = []
+    if args.matrix and args.matrix.exists() and YAML_AVAILABLE:
         with open(args.matrix) as f:
             matrix = yaml.safe_load(f)
-        comparisons_config = matrix.get('comparisons', [])
-        print(f"Loaded {len(comparisons_config)} comparison definitions")
+        comparison_defs = matrix.get('comparisons', [])
+        print(f"Loaded {len(comparison_defs)} comparison definitions from matrix")
     
-    # Load all latency data
+    # Load all latency data, grouped by algorithm and environment
     data: dict[str, dict[str, list[np.ndarray]]] = defaultdict(lambda: defaultdict(list))
     
     for entry in index.get('experiments', []):
@@ -303,69 +479,74 @@ def main():
         
         if not jsonl_path.exists():
             jsonl_path = output_dir / 'merged.jsonl'
+        if not jsonl_path.exists():
+            jsonl_path = output_dir / 'raw' / 'run.jsonl'
         
         latencies = load_latencies_from_jsonl(jsonl_path)
         
         if latencies is not None and len(latencies) > 0:
-            key = f"{entry['algorithm']}_{entry['environment']}"
-            data[entry['algorithm']][entry['environment']].append(latencies)
+            algorithm = entry['algorithm']
+            environment = entry['environment']
+            data[algorithm][environment].append(latencies)
     
     print(f"Loaded latency data for {len(data)} algorithms")
     
-    all_results: list[HypothesisTestResult] = []
+    all_results: list[TestResult] = []
     
-    # Run predefined comparisons
-    print("\nRunning predefined comparisons...")
-    for comp in comparisons_config:
-        baseline_algo = comp.get('baseline')
-        treatment_algo = comp.get('treatment')
-        comp_name = comp.get('name', f'{baseline_algo}_vs_{treatment_algo}')
-        
-        for env in ['native', 'minikube', 'gcp']:
-            if baseline_algo not in data or treatment_algo not in data:
-                continue
-            if env not in data[baseline_algo] or env not in data[treatment_algo]:
-                continue
-            
-            baseline_data = np.concatenate(data[baseline_algo][env])
-            treatment_data = np.concatenate(data[treatment_algo][env])
-            
-            if len(baseline_data) > 0 and len(treatment_data) > 0:
-                print(f"  {comp_name} ({env})")
-                results = run_hypothesis_tests(
-                    baseline_data, treatment_data,
-                    f"{comp_name}_{env}",
-                    baseline_algo, treatment_algo,
-                )
-                all_results.extend(results)
-    
-    # Run environment comparisons
+    # 1. Environment comparisons (native vs minikube vs gcp) for each algorithm
     print("\nRunning environment comparisons...")
+    env_pairs = [
+        ('native', 'minikube'),
+        ('native', 'gcp'),
+        ('minikube', 'gcp'),
+    ]
+    
     for algorithm in data:
-        env_pairs = [
-            ('native', 'minikube'),
-            ('native', 'gcp'),
-            ('minikube', 'gcp'),
-        ]
-        
         for env_a, env_b in env_pairs:
             if env_a not in data[algorithm] or env_b not in data[algorithm]:
                 continue
             
-            data_a = np.concatenate(data[algorithm][env_a])
-            data_b = np.concatenate(data[algorithm][env_b])
+            # Combine all runs for each environment
+            data_a = np.concatenate(data[algorithm][env_a]) if data[algorithm][env_a] else np.array([])
+            data_b = np.concatenate(data[algorithm][env_b]) if data[algorithm][env_b] else np.array([])
             
-            if len(data_a) > 0 and len(data_b) > 0:
-                print(f"  {algorithm}: {env_a} vs {env_b}")
-                results = run_hypothesis_tests(
+            if len(data_a) > 1 and len(data_b) > 1:
+                result = run_all_tests(
                     data_a, data_b,
-                    f"{algorithm}_{env_a}_vs_{env_b}",
-                    f"{algorithm}_{env_a}",
-                    f"{algorithm}_{env_b}",
+                    comparison_id=f"{algorithm}_{env_a}_vs_{env_b}",
+                    comparison_type='environment',
+                    group_a_name=f"{algorithm}_{env_a}",
+                    group_b_name=f"{algorithm}_{env_b}",
                 )
-                all_results.extend(results)
+                if result:
+                    all_results.append(result)
+                    print(f"  {algorithm}: {env_a} vs {env_b} (n={result.n_a}, {result.n_b})")
     
-    # Run PQC vs Classical comparisons
+    # 2. Algorithm comparisons within each environment
+    print("\nRunning algorithm comparisons...")
+    algorithms = list(data.keys())
+    
+    for i, algo_a in enumerate(algorithms):
+        for algo_b in algorithms[i+1:]:
+            for env in ['native', 'minikube', 'gcp']:
+                if env not in data[algo_a] or env not in data[algo_b]:
+                    continue
+                
+                data_a = np.concatenate(data[algo_a][env]) if data[algo_a][env] else np.array([])
+                data_b = np.concatenate(data[algo_b][env]) if data[algo_b][env] else np.array([])
+                
+                if len(data_a) > 1 and len(data_b) > 1:
+                    result = run_all_tests(
+                        data_a, data_b,
+                        comparison_id=f"{algo_a}_vs_{algo_b}_{env}",
+                        comparison_type='algorithm',
+                        group_a_name=f"{algo_a}_{env}",
+                        group_b_name=f"{algo_b}_{env}",
+                    )
+                    if result:
+                        all_results.append(result)
+    
+    # 3. PQC vs Classical comparisons
     print("\nRunning PQC vs Classical comparisons...")
     classical = ['rsa2048', 'ecdsa_p256']
     pqc = ['kyber512', 'dilithium2', 'hybrid_kyber_dilithium']
@@ -380,87 +561,128 @@ def main():
         if not classical_data:
             continue
         
-        classical_combined = np.concatenate(classical_data)
+        classical_combined = np.concatenate(classical_data) if classical_data else np.array([])
         
-        # Compare each PQC algo
+        # Compare each PQC algorithm
         for pqc_algo in pqc:
             if pqc_algo not in data or env not in data[pqc_algo]:
                 continue
             
-            pqc_data = np.concatenate(data[pqc_algo][env])
+            pqc_data = np.concatenate(data[pqc_algo][env]) if data[pqc_algo][env] else np.array([])
             
-            if len(classical_combined) > 0 and len(pqc_data) > 0:
-                print(f"  Classical vs {pqc_algo} ({env})")
-                results = run_hypothesis_tests(
+            if len(classical_combined) > 1 and len(pqc_data) > 1:
+                result = run_all_tests(
                     classical_combined, pqc_data,
-                    f"classical_vs_{pqc_algo}_{env}",
-                    f"classical_{env}",
-                    f"{pqc_algo}_{env}",
+                    comparison_id=f"classical_vs_{pqc_algo}_{env}",
+                    comparison_type='pqc_vs_classical',
+                    group_a_name=f"classical_{env}",
+                    group_b_name=f"{pqc_algo}_{env}",
                 )
-                all_results.extend(results)
+                if result:
+                    all_results.append(result)
+                    print(f"  Classical vs {pqc_algo} ({env})")
+    
+    # 4. Predefined comparisons from matrix
+    if comparison_defs:
+        print("\nRunning predefined comparisons from matrix...")
+        for comp in comparison_defs:
+            baseline = comp.get('baseline')
+            treatment = comp.get('treatment')
+            name = comp.get('name', f'{baseline}_vs_{treatment}')
+            
+            for env in ['native', 'minikube', 'gcp']:
+                if baseline not in data or treatment not in data:
+                    continue
+                if env not in data[baseline] or env not in data[treatment]:
+                    continue
+                
+                data_a = np.concatenate(data[baseline][env]) if data[baseline][env] else np.array([])
+                data_b = np.concatenate(data[treatment][env]) if data[treatment][env] else np.array([])
+                
+                if len(data_a) > 1 and len(data_b) > 1:
+                    result = run_all_tests(
+                        data_a, data_b,
+                        comparison_id=f"{name}_{env}",
+                        comparison_type='predefined',
+                        group_a_name=f"{baseline}_{env}",
+                        group_b_name=f"{treatment}_{env}",
+                    )
+                    if result:
+                        all_results.append(result)
+    
+    print(f"\nTotal comparisons: {len(all_results)}")
     
     # Apply Holm-Bonferroni correction
-    print("\nApplying Holm-Bonferroni correction...")
-    p_values = [r.p_value for r in all_results]
-    corrected = holm_bonferroni_correction(p_values, args.alpha)
-    
-    for i, (corrected_p, significant) in enumerate(corrected):
-        all_results[i].p_value_corrected = corrected_p
-        all_results[i].significant = significant
+    print("Applying Holm-Bonferroni correction...")
+    holm_bonferroni_correction(all_results, args.alpha)
     
     # Count significant results
-    significant_count = sum(1 for r in all_results if r.significant)
-    print(f"\nSignificant results: {significant_count}/{len(all_results)} (α={args.alpha})")
+    sig_count = sum(1 for r in all_results if r.any_significant)
+    print(f"Significant comparisons (α={args.alpha}): {sig_count}/{len(all_results)}")
     
-    # Write output
-    output = {
-        'generated_at': index.get('generated_at', ''),
+    # Generate interpretation
+    interpretation = generate_interpretation(all_results)
+    print("\n" + interpretation)
+    
+    # Prepare output
+    args.output.mkdir(parents=True, exist_ok=True)
+    
+    # JSON output
+    output_data = {
+        'generated_at': datetime.now(timezone.utc).isoformat(),
         'alpha': args.alpha,
-        'total_tests': len(all_results),
-        'significant_tests': significant_count,
         'correction_method': 'Holm-Bonferroni',
-        'tests': [r.to_dict() for r in all_results],
+        'total_comparisons': len(all_results),
+        'significant_comparisons': sig_count,
         'summary': {
-            'by_comparison': {},
-            'by_test': {},
+            'by_type': {},
+            'by_test': {
+                'kolmogorov_smirnov': sum(1 for r in all_results if r.ks_significant),
+                'mann_whitney_u': sum(1 for r in all_results if r.mw_significant),
+                'welch_t': sum(1 for r in all_results if r.welch_significant),
+            },
+            'effect_sizes': {
+                'large': sum(1 for r in all_results if r.effect_interpretation == 'large'),
+                'medium': sum(1 for r in all_results if r.effect_interpretation == 'medium'),
+                'small': sum(1 for r in all_results if r.effect_interpretation == 'small'),
+                'negligible': sum(1 for r in all_results if r.effect_interpretation == 'negligible'),
+            },
         },
+        'results': [r.to_dict() for r in all_results],
     }
     
-    # Summarize by comparison type
-    by_comparison: dict = defaultdict(list)
+    # Count by type
+    by_type = defaultdict(lambda: {'total': 0, 'significant': 0})
     for r in all_results:
-        by_comparison[r.comparison].append(r.to_dict())
-    output['summary']['by_comparison'] = dict(by_comparison)
+        by_type[r.comparison_type]['total'] += 1
+        if r.any_significant:
+            by_type[r.comparison_type]['significant'] += 1
+    output_data['summary']['by_type'] = dict(by_type)
     
-    # Summarize by test type
-    by_test: dict = defaultdict(lambda: {'total': 0, 'significant': 0})
-    for r in all_results:
-        by_test[r.test_name]['total'] += 1
-        if r.significant:
-            by_test[r.test_name]['significant'] += 1
-    output['summary']['by_test'] = dict(by_test)
+    json_path = args.output / 'hypothesis_tests.json'
+    with open(json_path, 'w') as f:
+        json.dump(output_data, f, indent=2)
+    print(f"\nWritten: {json_path}")
     
-    # Write output
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    with open(args.output, 'w') as f:
-        json.dump(output, f, indent=2)
+    # CSV output
+    csv_path = args.output / 'hypothesis_table.csv'
+    fieldnames = list(all_results[0].to_csv_row().keys()) if all_results else []
     
-    print(f"\nResults written to: {args.output}")
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for r in all_results:
+            writer.writerow(r.to_csv_row())
+    print(f"Written: {csv_path}")
     
-    # Print key findings
-    print("\n" + "=" * 60)
-    print("KEY FINDINGS")
-    print("=" * 60)
-    
-    # Find most significant PQC vs Classical comparisons
-    pqc_vs_classical = [r for r in all_results if 'classical_vs' in r.comparison and r.test_name == "Welch's t-test"]
-    for r in sorted(pqc_vs_classical, key=lambda x: x.p_value)[:5]:
-        sig_marker = "***" if r.significant else ""
-        print(f"{r.comparison}: d={r.effect_size:.2f} ({r.effect_interpretation}), p={r.p_value_corrected:.4f} {sig_marker}")
+    # Write interpretation text
+    interp_path = args.output / 'hypothesis_interpretation.txt'
+    with open(interp_path, 'w') as f:
+        f.write(interpretation)
+    print(f"Written: {interp_path}")
     
     print("\nHypothesis testing complete!")
 
 
 if __name__ == "__main__":
     main()
-

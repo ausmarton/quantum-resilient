@@ -524,33 +524,48 @@ if [[ "$SKIP_ANALYSIS" == "true" ]] || [[ "$DRY_RUN" == "true" ]]; then
     log_warn "Skipping hypothesis tests"
 else
     log_info "Running statistical hypothesis tests..."
+    log_info "  - Kolmogorov-Smirnov test (distribution shape)"
+    log_info "  - Mann-Whitney U test (distribution location)"
+    log_info "  - Welch's t-test (mean difference)"
+    log_info "  - Cohen's d with 95% CI (effect size)"
+    log_info "  - Holm-Bonferroni correction (multiple comparisons)"
     
     python3 "$SCRIPT_DIR/analysis/hypothesis_tests.py" \
         --index "$INDEX_FILE" \
         --matrix "$MATRIX" \
-        --output "$FINAL_RESULTS_DIR/hypothesis_tests.json" 2>&1 || log_warn "Hypothesis tests completed with warnings"
+        --output "$FINAL_RESULTS_DIR" 2>&1 || log_warn "Hypothesis tests completed with warnings"
+    
+    # Report results
+    if [[ -f "$FINAL_RESULTS_DIR/hypothesis_tests.json" ]]; then
+        TOTAL_TESTS=$(python3 -c "import json; print(json.load(open('$FINAL_RESULTS_DIR/hypothesis_tests.json'))['total_comparisons'])" 2>/dev/null || echo "?")
+        SIG_TESTS=$(python3 -c "import json; print(json.load(open('$FINAL_RESULTS_DIR/hypothesis_tests.json'))['significant_comparisons'])" 2>/dev/null || echo "?")
+        log_info "  Total comparisons: $TOTAL_TESTS"
+        log_info "  Significant (α=0.05, corrected): $SIG_TESTS"
+    fi
     
     log_success "Hypothesis tests complete"
 fi
 
 # =============================================================================
-# Phase 8: Build Final Report
+# Phase 8: Build Final Report (PDF)
 # =============================================================================
-log_phase "8. Build Final Report"
+log_phase "8. Build Final Report (PDF)"
 
 if [[ "$SKIP_ANALYSIS" == "true" ]] || [[ "$DRY_RUN" == "true" ]]; then
     log_warn "Skipping report generation"
 else
-    log_info "Building final report..."
+    log_info "Building dissertation-ready PDF report..."
     
     python3 "$SCRIPT_DIR/analysis/build_final_report.py" \
-        --index "$INDEX_FILE" \
-        --stats "$FINAL_RESULTS_DIR/aggregated_stats.json" \
-        --hypothesis "$FINAL_RESULTS_DIR/hypothesis_tests.json" \
-        --figures "$FINAL_RESULTS_DIR/figures" \
-        --output "$FINAL_RESULTS_DIR" 2>&1 || log_warn "Report generation completed with warnings"
+        --results-dir "$FINAL_RESULTS_DIR" \
+        --output "$FINAL_RESULTS_DIR/report.pdf" 2>&1 || log_warn "Report generation completed with warnings"
     
-    log_success "Report generated"
+    if [[ -f "$FINAL_RESULTS_DIR/report.pdf" ]]; then
+        REPORT_SIZE=$(du -h "$FINAL_RESULTS_DIR/report.pdf" | cut -f1)
+        log_success "PDF report generated: $FINAL_RESULTS_DIR/report.pdf ($REPORT_SIZE)"
+    else
+        log_warn "PDF generation may have failed (reportlab required)"
+    fi
 fi
 
 # =============================================================================
@@ -579,14 +594,16 @@ echo "  $FINAL_RESULTS_DIR/"
 echo ""
 
 log_info "Key outputs:"
-[[ -f "$FINAL_RESULTS_DIR/index.json" ]] && echo "  ├── index.json (master index)"
+[[ -f "$FINAL_RESULTS_DIR/index.json" ]] && echo "  ├── index.json (master experiment index)"
 [[ -f "$FINAL_RESULTS_DIR/aggregated_stats.json" ]] && echo "  ├── aggregated_stats.json"
 [[ -f "$FINAL_RESULTS_DIR/aggregated_stats.csv" ]] && echo "  ├── aggregated_stats.csv"
-[[ -f "$FINAL_RESULTS_DIR/hypothesis_tests.json" ]] && echo "  ├── hypothesis_tests.json"
+[[ -f "$FINAL_RESULTS_DIR/hypothesis_tests.json" ]] && echo "  ├── hypothesis_tests.json (statistical tests)"
+[[ -f "$FINAL_RESULTS_DIR/hypothesis_table.csv" ]] && echo "  ├── hypothesis_table.csv"
+[[ -f "$FINAL_RESULTS_DIR/hypothesis_interpretation.txt" ]] && echo "  ├── hypothesis_interpretation.txt"
 [[ -d "$FINAL_RESULTS_DIR/figures" ]] && echo "  ├── figures/"
 [[ -d "$FINAL_RESULTS_DIR/stats" ]] && echo "  ├── stats/"
 [[ -d "$FINAL_RESULTS_DIR/tables" ]] && echo "  ├── tables/"
-[[ -f "$FINAL_RESULTS_DIR/report.md" ]] && echo "  └── report.md"
+[[ -f "$FINAL_RESULTS_DIR/report.pdf" ]] && echo "  └── report.pdf (dissertation-ready)"
 echo ""
 
 if [[ $FAILED_SCENARIOS -gt 0 ]]; then

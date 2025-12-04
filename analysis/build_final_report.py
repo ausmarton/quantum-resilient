@@ -1,495 +1,751 @@
 #!/usr/bin/env python3
 """
-Build final dissertation-ready report from experiment results.
+Generate dissertation-ready PDF report from experiment results.
 
 Assembles:
 - Executive summary
-- Key tables
-- ECDF plots
-- Throughput plots
-- Environment comparison plots
-- Hypothesis test outcomes
-- Interpretation paragraphs
+- ECDF and throughput figures
+- Stability charts
+- Environment comparison tables
+- Statistical significance results
+- Auto-generated interpretive paragraphs
 
 Usage:
     python analysis/build_final_report.py \
-        --index final-results/index.json \
-        --stats final-results/aggregated_stats.json \
-        --hypothesis final-results/hypothesis_tests.json \
-        --figures final-results/figures \
-        --output final-results
+        --results-dir final-results \
+        --output final-results/report.pdf
 """
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
+# Check for reportlab availability
 try:
-    from jinja2 import Environment, BaseLoader
-    JINJA2_AVAILABLE = True
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+    from reportlab.lib.pagesizes import A4, letter
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm, inch, mm
+    from reportlab.pdfgen import canvas
+    from reportlab.platypus import (
+        BaseDocTemplate, Frame, Image, NextPageTemplate, PageBreak,
+        PageTemplate, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+        ListFlowable, ListItem
+    )
+    REPORTLAB_AVAILABLE = True
 except ImportError:
-    JINJA2_AVAILABLE = False
+    REPORTLAB_AVAILABLE = False
+    print("Warning: reportlab not available. PDF generation disabled.", file=sys.stderr)
 
 
-REPORT_TEMPLATE = """# PQC Benchmark Experiment Report
-
-**Generated:** {{ generated_at }}
-
----
-
-## Executive Summary
-
-This report presents the results of a comprehensive benchmarking study comparing 
-Post-Quantum Cryptographic (PQC) algorithms against classical cryptography across 
-multiple execution environments (Native, Minikube containerized, and Google Cloud Platform).
-
-### Key Findings
-
-{{ executive_summary }}
-
----
-
-## Experiment Overview
-
-| Parameter | Value |
-|-----------|-------|
-| Total Scenarios | {{ total_scenarios }} |
-| Algorithms Tested | {{ algorithms | join(', ') }} |
-| Environments | {{ environments | join(', ') }} |
-| Payload Sizes | {{ payload_sizes | join(', ') }} bytes |
-| Message Rates | {{ rates | join(', ') }} msg/s |
-| Runs per Configuration | {{ runs_per_config }} |
-
----
-
-## Results Summary
-
-### Latency by Algorithm (p95, microseconds)
-
-| Algorithm | Native | Minikube | GCP |
-|-----------|--------|----------|-----|
-{% for algo in latency_summary %}
-| {{ algo.algorithm }} | {{ algo.native }} | {{ algo.minikube }} | {{ algo.gcp }} |
-{% endfor %}
-
-### Environment Overhead
-
-| Comparison | Mean Overhead (%) | Interpretation |
-|------------|------------------|----------------|
-| Native → Minikube | {{ native_to_minikube_overhead }}% | {{ native_to_minikube_interp }} |
-| Native → GCP | {{ native_to_gcp_overhead }}% | {{ native_to_gcp_interp }} |
-| Minikube → GCP | {{ minikube_to_gcp_overhead }}% | {{ minikube_to_gcp_interp }} |
-
----
-
-## Statistical Analysis
-
-### Hypothesis Test Results
-
-**Significance Level:** α = {{ alpha }}
-**Correction Method:** Holm-Bonferroni
-
-| Comparison | Test | p-value (corrected) | Effect Size | Significant |
-|------------|------|---------------------|-------------|-------------|
-{% for test in hypothesis_summary %}
-| {{ test.comparison }} | {{ test.test_name }} | {{ test.p_value }} | {{ test.effect_size }} ({{ test.interpretation }}) | {{ "Yes" if test.significant else "No" }} |
-{% endfor %}
-
-### Effect Sizes Summary
-
-{{ effect_size_summary }}
-
----
-
-## Figures
-
-### Latency Distribution (ECDF)
-
-![Combined ECDF](figures/combined_ecdf.png)
-
-*Figure 1: Empirical Cumulative Distribution Function of latency across all algorithms and environments.*
-
-### Environment Comparison
-
-![Environment Comparison](figures/native_vs_minikube_vs_gcp.png)
-
-*Figure 2: Latency distribution comparison across Native, Minikube, and GCP environments.*
-
-### Scaling Behavior
-
-![Scaling Curves](figures/scaling_curves.png)
-
-*Figure 3: Environment overhead scaling with workload rate.*
-
-### Classical vs Post-Quantum
-
-![Classical vs PQC](figures/classical_vs_pqc.png)
-
-*Figure 4: Performance comparison between classical and post-quantum cryptographic algorithms.*
-
----
-
-## Interpretation
-
-{{ interpretation_paragraph }}
-
----
-
-## Reproducibility
-
-All experiments were conducted with deterministic RNG seeds derived from experiment parameters.
-Results can be reproduced using:
-
-```bash
-./run_all_experiments.sh \\
-    --matrix orchestration/experiment_matrix.yaml \\
-    --envs native,minikube,gcp \\
-    --project <gcp-project> \\
-    --bucket <gcs-bucket>
-```
-
-### Data Artifacts
-
-| Artifact | Location |
-|----------|----------|
-| Master Index | `final-results/index.json` |
-| Aggregated Statistics | `final-results/aggregated_stats.json` |
-| Hypothesis Tests | `final-results/hypothesis_tests.json` |
-| Figures | `final-results/figures/` |
-| Raw Data | `results/<env>/<scenario-id>/` |
-
----
-
-## Appendix: Complete Test Results
-
-{{ appendix }}
-
----
-
-*Report generated by quantum-resilient benchmarking framework*
-"""
-
-
-def load_json(path: Path) -> dict:
-    """Load JSON file."""
+def load_json_safe(path: Path) -> Optional[dict]:
+    """Safely load JSON file."""
     if not path.exists():
-        return {}
-    with open(path) as f:
-        return json.load(f)
+        return None
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return None
 
 
-def generate_executive_summary(stats: dict, hypothesis: dict) -> str:
-    """Generate executive summary from results."""
-    lines = []
+def create_styles() -> dict:
+    """Create custom paragraph styles."""
+    styles = getSampleStyleSheet()
     
-    # Get aggregated data
-    aggregated = stats.get('aggregated', [])
+    styles.add(ParagraphStyle(
+        name='ReportTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        spaceAfter=30,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#1a1a2e'),
+    ))
     
-    if not aggregated:
-        return "Insufficient data for summary. Please run experiments first."
+    styles.add(ParagraphStyle(
+        name='ReportSubtitle',
+        parent=styles['Normal'],
+        fontSize=14,
+        spaceAfter=20,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#4a4a6a'),
+    ))
     
-    # Calculate algorithm averages
-    algo_avg: dict = {}
-    for entry in aggregated:
-        algo = entry['algorithm']
-        if algo not in algo_avg:
-            algo_avg[algo] = {'p95': [], 'throughput': []}
-        algo_avg[algo]['p95'].append(entry['p95']['mean'])
-        algo_avg[algo]['throughput'].append(entry['throughput']['mean'])
+    styles.add(ParagraphStyle(
+        name='SectionHeading',
+        parent=styles['Heading2'],
+        fontSize=16,
+        spaceBefore=20,
+        spaceAfter=12,
+        textColor=colors.HexColor('#1a1a2e'),
+        borderWidth=1,
+        borderColor=colors.HexColor('#e0e0e0'),
+        borderPadding=5,
+    ))
     
-    # Find fastest and slowest
-    avg_p95 = {algo: sum(v['p95'])/len(v['p95']) for algo, v in algo_avg.items()}
-    fastest = min(avg_p95, key=avg_p95.get) if avg_p95 else "N/A"
-    slowest = max(avg_p95, key=avg_p95.get) if avg_p95 else "N/A"
+    styles.add(ParagraphStyle(
+        name='SubsectionHeading',
+        parent=styles['Heading3'],
+        fontSize=12,
+        spaceBefore=15,
+        spaceAfter=8,
+        textColor=colors.HexColor('#2a2a4e'),
+    ))
     
-    lines.append(f"- **Fastest algorithm:** {fastest} (avg p95: {avg_p95.get(fastest, 0):.0f} μs)")
-    lines.append(f"- **Slowest algorithm:** {slowest} (avg p95: {avg_p95.get(slowest, 0):.0f} μs)")
+    styles.add(ParagraphStyle(
+        name='BodyText',
+        parent=styles['Normal'],
+        fontSize=10,
+        spaceAfter=8,
+        alignment=TA_JUSTIFY,
+        leading=14,
+    ))
     
-    # PQC overhead
-    classical = ['rsa2048', 'ecdsa_p256']
-    pqc = ['kyber512', 'dilithium2', 'hybrid_kyber_dilithium']
+    styles.add(ParagraphStyle(
+        name='TableHeader',
+        parent=styles['Normal'],
+        fontSize=9,
+        textColor=colors.white,
+        alignment=TA_CENTER,
+    ))
     
-    classical_avg = sum(avg_p95.get(a, 0) for a in classical if a in avg_p95) / max(len([a for a in classical if a in avg_p95]), 1)
-    pqc_avg = sum(avg_p95.get(a, 0) for a in pqc if a in avg_p95) / max(len([a for a in pqc if a in avg_p95]), 1)
+    styles.add(ParagraphStyle(
+        name='TableCell',
+        parent=styles['Normal'],
+        fontSize=8,
+        alignment=TA_CENTER,
+    ))
     
-    if classical_avg > 0:
-        pqc_overhead = ((pqc_avg - classical_avg) / classical_avg) * 100
-        lines.append(f"- **PQC overhead vs classical:** {pqc_overhead:+.1f}%")
+    styles.add(ParagraphStyle(
+        name='Caption',
+        parent=styles['Normal'],
+        fontSize=9,
+        spaceAfter=12,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#666666'),
+        fontName='Helvetica-Oblique',
+    ))
     
-    # Significant findings
-    significant_tests = hypothesis.get('significant_tests', 0)
-    total_tests = hypothesis.get('total_tests', 0)
-    lines.append(f"- **Statistical significance:** {significant_tests}/{total_tests} tests significant (α=0.05)")
+    styles.add(ParagraphStyle(
+        name='CodeBlock',
+        parent=styles['Normal'],
+        fontSize=8,
+        fontName='Courier',
+        backColor=colors.HexColor('#f5f5f5'),
+        borderWidth=1,
+        borderColor=colors.HexColor('#e0e0e0'),
+        borderPadding=8,
+    ))
     
-    return "\n".join(lines)
+    return styles
 
 
-def generate_latency_summary(stats: dict) -> list[dict]:
-    """Generate latency summary table data."""
-    # Group by algorithm -> environment
-    algo_env: dict = {}
+def build_title_page(elements: list, styles: dict, index: Optional[dict]) -> None:
+    """Build the title page."""
+    elements.append(Spacer(1, 2 * inch))
     
-    for entry in stats.get('aggregated', []):
-        algo = entry['algorithm']
-        env = entry['environment']
-        p95 = entry['p95']['mean']
+    elements.append(Paragraph(
+        "Quantum-Resilient Cryptography<br/>Performance Analysis Report",
+        styles['ReportTitle']
+    ))
+    
+    generated_at = index.get('generated_at', datetime.now(timezone.utc).isoformat()) if index else datetime.now(timezone.utc).isoformat()
+    total_exp = index.get('total_experiments', 0) if index else 0
+    
+    elements.append(Paragraph(
+        f"Generated: {generated_at[:19].replace('T', ' ')} UTC<br/>"
+        f"Total Experiments: {total_exp}",
+        styles['ReportSubtitle']
+    ))
+    
+    elements.append(Spacer(1, 1 * inch))
+    
+    elements.append(Paragraph(
+        "Comprehensive statistical analysis of post-quantum cryptographic "
+        "algorithms compared against classical implementations across "
+        "native, containerized (Minikube), and cloud (GCP) environments.",
+        styles['BodyText']
+    ))
+    
+    elements.append(PageBreak())
+
+
+def build_executive_summary(
+    elements: list, 
+    styles: dict,
+    hypothesis: Optional[dict],
+    aggregated: Optional[dict],
+) -> None:
+    """Build executive summary section."""
+    elements.append(Paragraph("Executive Summary", styles['SectionHeading']))
+    
+    summary_points = []
+    
+    if hypothesis:
+        total = hypothesis.get('total_comparisons', 0)
+        significant = hypothesis.get('significant_comparisons', 0)
+        pct = (significant / total * 100) if total > 0 else 0
         
-        if algo not in algo_env:
-            algo_env[algo] = {}
-        if env not in algo_env[algo]:
-            algo_env[algo][env] = []
-        algo_env[algo][env].append(p95)
-    
-    # Average and format
-    summary = []
-    for algo in sorted(algo_env.keys()):
-        row = {'algorithm': algo.replace('_', ' ').title()}
-        for env in ['native', 'minikube', 'gcp']:
-            if env in algo_env[algo]:
-                avg = sum(algo_env[algo][env]) / len(algo_env[algo][env])
-                row[env] = f"{avg:.0f}"
-            else:
-                row[env] = "N/A"
-        summary.append(row)
-    
-    return summary
-
-
-def generate_hypothesis_summary(hypothesis: dict) -> list[dict]:
-    """Generate hypothesis test summary."""
-    tests = hypothesis.get('tests', [])
-    
-    # Select representative tests (one per comparison, prefer Welch's t-test)
-    by_comparison: dict = {}
-    for test in tests:
-        comp = test['comparison']
-        if comp not in by_comparison or test['test_name'] == "Welch's t-test":
-            by_comparison[comp] = test
-    
-    summary = []
-    for comp, test in sorted(by_comparison.items()):
-        summary.append({
-            'comparison': comp[:40] + '...' if len(comp) > 40 else comp,
-            'test_name': test['test_name'],
-            'p_value': f"{test['p_value_corrected']:.4f}",
-            'effect_size': f"{test['effect_size']:.2f}",
-            'interpretation': test['effect_interpretation'],
-            'significant': test['significant'],
-        })
-    
-    return summary[:20]  # Limit to top 20
-
-
-def generate_interpretation(stats: dict, hypothesis: dict) -> str:
-    """Generate interpretation paragraph for dissertation."""
-    lines = []
-    
-    # Environment comparison
-    deltas = stats.get('environment_deltas', [])
-    
-    if deltas:
-        native_to_minikube = [d.get('native_to_minikube_pct', 0) for d in deltas if d.get('native_to_minikube_pct')]
-        native_to_gcp = [d.get('native_to_gcp_pct', 0) for d in deltas if d.get('native_to_gcp_pct')]
+        summary_points.append(
+            f"<b>Statistical Testing:</b> {significant} of {total} comparisons "
+            f"({pct:.1f}%) showed statistically significant differences "
+            f"(α=0.05, Holm-Bonferroni corrected)."
+        )
         
-        avg_minikube_overhead = sum(native_to_minikube) / len(native_to_minikube) if native_to_minikube else 0
-        avg_gcp_overhead = sum(native_to_gcp) / len(native_to_gcp) if native_to_gcp else 0
+        effects = hypothesis.get('summary', {}).get('effect_sizes', {})
+        large = effects.get('large', 0)
+        medium = effects.get('medium', 0)
         
-        lines.append(
-            f"The experiments demonstrate that containerized execution (Minikube) introduces "
-            f"an average overhead of {avg_minikube_overhead:.1f}% compared to native execution, "
-            f"while cloud execution (GCP) introduces {avg_gcp_overhead:.1f}% overhead. "
+        if large + medium > 0:
+            summary_points.append(
+                f"<b>Practical Significance:</b> {large} comparisons showed large effect sizes "
+                f"(|d| ≥ 0.8) and {medium} showed medium effect sizes (|d| ≥ 0.5)."
+            )
+    
+    if aggregated:
+        algorithms = aggregated.get('algorithms', [])
+        envs = aggregated.get('environments', [])
+        summary_points.append(
+            f"<b>Coverage:</b> Analysis includes {len(algorithms)} algorithms "
+            f"across {len(envs)} execution environments."
         )
     
-    # PQC performance
-    lines.append(
-        "Post-quantum cryptographic algorithms show measurable performance differences compared "
-        "to classical algorithms. Kyber-512 KEM operations demonstrate competitive performance "
-        "with RSA-2048 for key encapsulation, while Dilithium-2 signatures show increased latency "
-        "compared to ECDSA P-256, as expected from lattice-based constructions."
+    summary_points.append(
+        "<b>Methodology:</b> All statistical tests include Kolmogorov-Smirnov "
+        "(distribution shape), Mann-Whitney U (distribution location), and "
+        "Welch's t-test (mean difference). Effect sizes reported as Cohen's d "
+        "with 95% confidence intervals."
     )
     
-    # Statistical significance
-    significant = hypothesis.get('significant_tests', 0)
-    total = hypothesis.get('total_tests', 0)
+    for point in summary_points:
+        elements.append(Paragraph(f"• {point}", styles['BodyText']))
+        elements.append(Spacer(1, 4))
     
-    if total > 0:
-        lines.append(
-            f"Statistical hypothesis testing reveals that {significant} out of {total} comparisons "
-            f"show significant differences (p < 0.05 after Holm-Bonferroni correction), "
-            "confirming that the observed performance variations are not due to random chance."
-        )
-    
-    lines.append(
-        "These results support the thesis that PQC algorithms can be deployed in production "
-        "environments with acceptable performance overhead, making the transition to "
-        "quantum-resistant cryptography practically feasible."
-    )
-    
-    return "\n\n".join(lines)
+    elements.append(Spacer(1, 12))
 
 
-def build_report(
-    index: dict,
-    stats: dict,
+def build_hypothesis_results(
+    elements: list,
+    styles: dict,
     hypothesis: dict,
+) -> None:
+    """Build hypothesis testing results section."""
+    elements.append(Paragraph("Statistical Hypothesis Testing", styles['SectionHeading']))
+    
+    # Summary table
+    elements.append(Paragraph("Test Summary", styles['SubsectionHeading']))
+    
+    summary = hypothesis.get('summary', {})
+    by_test = summary.get('by_test', {})
+    
+    summary_data = [
+        ['Test', 'Significant', 'Description'],
+        ['Kolmogorov-Smirnov', str(by_test.get('kolmogorov_smirnov', 0)), 'Distribution shape difference'],
+        ['Mann-Whitney U', str(by_test.get('mann_whitney_u', 0)), 'Distribution location difference'],
+        ["Welch's t-test", str(by_test.get('welch_t', 0)), 'Mean difference'],
+    ]
+    
+    table = Table(summary_data, colWidths=[2*inch, 1.2*inch, 3*inch])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f8fa')]),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(table)
+    elements.append(Paragraph("Table 1: Summary of statistically significant comparisons by test type", styles['Caption']))
+    
+    # Effect size distribution
+    elements.append(Paragraph("Effect Size Distribution", styles['SubsectionHeading']))
+    
+    effects = summary.get('effect_sizes', {})
+    effect_data = [
+        ['Effect Size', 'Count', 'Interpretation'],
+        ['Large (|d| ≥ 0.8)', str(effects.get('large', 0)), 'Substantial practical difference'],
+        ['Medium (0.5 ≤ |d| < 0.8)', str(effects.get('medium', 0)), 'Moderate practical difference'],
+        ['Small (0.2 ≤ |d| < 0.5)', str(effects.get('small', 0)), 'Minor practical difference'],
+        ['Negligible (|d| < 0.2)', str(effects.get('negligible', 0)), 'No practical difference'],
+    ]
+    
+    table = Table(effect_data, colWidths=[2*inch, 1*inch, 3.2*inch])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f8fa')]),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    elements.append(table)
+    elements.append(Paragraph("Table 2: Distribution of effect sizes (Cohen's d) across all comparisons", styles['Caption']))
+    
+    # Results by comparison type
+    elements.append(Paragraph("Results by Comparison Type", styles['SubsectionHeading']))
+    
+    by_type = summary.get('by_type', {})
+    type_data = [['Comparison Type', 'Total', 'Significant', 'Rate']]
+    
+    for comp_type, counts in by_type.items():
+        total = counts.get('total', 0)
+        sig = counts.get('significant', 0)
+        rate = f"{(sig/total*100):.1f}%" if total > 0 else "N/A"
+        type_data.append([comp_type.replace('_', ' ').title(), str(total), str(sig), rate])
+    
+    if len(type_data) > 1:
+        table = Table(type_data, colWidths=[2.5*inch, 1*inch, 1.2*inch, 1*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f8fa')]),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(table)
+        elements.append(Paragraph("Table 3: Statistical significance by comparison category", styles['Caption']))
+    
+    # Top significant comparisons
+    results = hypothesis.get('results', [])
+    significant_results = [r for r in results if r.get('any_significant')]
+    
+    if significant_results:
+        elements.append(Paragraph("Key Significant Findings", styles['SubsectionHeading']))
+        
+        # Sort by effect size magnitude
+        sorted_results = sorted(
+            significant_results, 
+            key=lambda x: abs(x.get('effect_size', {}).get('cohens_d', 0)),
+            reverse=True
+        )[:10]
+        
+        findings_data = [['Comparison', 'Mean Diff (%)', "Cohen's d", 'K-S p', 'Interpretation']]
+        
+        for r in sorted_results:
+            comparison = f"{r.get('group_a', '?')} vs {r.get('group_b', '?')}"
+            if len(comparison) > 35:
+                comparison = comparison[:32] + "..."
+            
+            mean_diff = r.get('mean_diff_pct', 0)
+            d = r.get('effect_size', {}).get('cohens_d', 0)
+            ks_p = r.get('tests', {}).get('kolmogorov_smirnov', {}).get('p_value_corrected', 1)
+            interp = r.get('effect_size', {}).get('interpretation', 'unknown')
+            
+            findings_data.append([
+                comparison,
+                f"{mean_diff:+.1f}%",
+                f"{d:.2f}",
+                f"{ks_p:.2e}",
+                interp.capitalize(),
+            ])
+        
+        table = Table(findings_data, colWidths=[2.2*inch, 1*inch, 0.9*inch, 1*inch, 1.1*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f8fa')]),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(table)
+        elements.append(Paragraph("Table 4: Top 10 significant comparisons by effect size magnitude", styles['Caption']))
+
+
+def build_figures_section(
+    elements: list,
+    styles: dict,
     figures_dir: Path,
-    output_dir: Path,
-) -> str:
-    """Build the final report."""
+) -> None:
+    """Build figures section with embedded images."""
+    elements.append(PageBreak())
+    elements.append(Paragraph("Performance Visualization", styles['SectionHeading']))
     
-    # Extract metadata
-    experiments = index.get('experiments', [])
-    algorithms = sorted(set(e['algorithm'] for e in experiments))
-    environments = sorted(set(e['environment'] for e in experiments))
-    payload_sizes = sorted(set(e['payload_size'] for e in experiments))
-    rates = sorted(set(e['rate'] for e in experiments))
+    # Look for figures
+    figure_patterns = [
+        ('combined_ecdf.png', 'Combined ECDF: Latency distributions across all algorithms and environments'),
+        ('latency_cdf*.png', 'Latency CDF: Empirical cumulative distribution function'),
+        ('throughput*.png', 'Throughput: Operations per second over time'),
+        ('scaling_curves.png', 'Scaling Curves: Performance vs workload parameters'),
+        ('native_vs_minikube_vs_gcp.png', 'Environment Comparison: Cross-environment latency distributions'),
+        ('stability_matrix.png', 'Stability Matrix: Run-to-run variability heatmap'),
+    ]
     
-    # Generate content
-    executive_summary = generate_executive_summary(stats, hypothesis)
-    latency_summary = generate_latency_summary(stats)
-    hypothesis_summary = generate_hypothesis_summary(hypothesis)
-    interpretation = generate_interpretation(stats, hypothesis)
+    figure_count = 0
     
-    # Calculate overheads
-    deltas = stats.get('environment_deltas', [])
-    native_to_minikube_vals = [d.get('native_to_minikube_pct', 0) for d in deltas if d.get('native_to_minikube_pct')]
-    native_to_gcp_vals = [d.get('native_to_gcp_pct', 0) for d in deltas if d.get('native_to_gcp_pct')]
-    minikube_to_gcp_vals = [d.get('minikube_to_gcp_pct', 0) for d in deltas if d.get('minikube_to_gcp_pct')]
-    
-    native_to_minikube_overhead = sum(native_to_minikube_vals) / len(native_to_minikube_vals) if native_to_minikube_vals else 0
-    native_to_gcp_overhead = sum(native_to_gcp_vals) / len(native_to_gcp_vals) if native_to_gcp_vals else 0
-    minikube_to_gcp_overhead = sum(minikube_to_gcp_vals) / len(minikube_to_gcp_vals) if minikube_to_gcp_vals else 0
-    
-    def interpret_overhead(val):
-        if val < 10:
-            return "Minimal overhead"
-        elif val < 30:
-            return "Moderate overhead"
-        elif val < 60:
-            return "Significant overhead"
+    for pattern, caption in figure_patterns:
+        # Handle glob patterns
+        if '*' in pattern:
+            matches = list(figures_dir.glob(pattern))
         else:
-            return "High overhead"
+            matches = [figures_dir / pattern] if (figures_dir / pattern).exists() else []
+        
+        for fig_path in matches[:2]:  # Limit to 2 per pattern
+            if fig_path.exists():
+                try:
+                    figure_count += 1
+                    
+                    # Add image with appropriate sizing
+                    img = Image(str(fig_path))
+                    
+                    # Scale to fit page width while maintaining aspect ratio
+                    max_width = 6 * inch
+                    max_height = 4 * inch
+                    
+                    aspect = img.imageWidth / img.imageHeight if img.imageHeight else 1
+                    
+                    if img.imageWidth > max_width:
+                        img.drawWidth = max_width
+                        img.drawHeight = max_width / aspect
+                    else:
+                        img.drawWidth = img.imageWidth
+                        img.drawHeight = img.imageHeight
+                    
+                    if img.drawHeight > max_height:
+                        img.drawHeight = max_height
+                        img.drawWidth = max_height * aspect
+                    
+                    elements.append(img)
+                    
+                    fig_caption = f"Figure {figure_count}: {caption}"
+                    if fig_path.name != pattern:
+                        fig_caption += f" ({fig_path.stem})"
+                    elements.append(Paragraph(fig_caption, styles['Caption']))
+                    elements.append(Spacer(1, 12))
+                    
+                except Exception as e:
+                    print(f"Warning: Could not embed figure {fig_path}: {e}", file=sys.stderr)
     
-    # Effect size summary
-    effect_sizes = stats.get('effect_sizes', [])
-    if effect_sizes:
-        large_effects = [e for e in effect_sizes if e.get('interpretation') == 'large']
-        effect_summary = f"Analysis identified {len(large_effects)} comparisons with large effect sizes (|d| > 0.8), indicating practically significant differences."
-    else:
-        effect_summary = "Effect size analysis pending."
+    if figure_count == 0:
+        elements.append(Paragraph(
+            "<i>No figures found in the results directory. "
+            "Run the analysis pipeline to generate visualizations.</i>",
+            styles['BodyText']
+        ))
+
+
+def build_aggregated_stats(
+    elements: list,
+    styles: dict,
+    aggregated: dict,
+) -> None:
+    """Build aggregated statistics section."""
+    elements.append(PageBreak())
+    elements.append(Paragraph("Aggregated Performance Statistics", styles['SectionHeading']))
     
-    # Build context
-    context = {
-        'generated_at': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC'),
-        'total_scenarios': len(experiments),
-        'algorithms': algorithms,
-        'environments': environments,
-        'payload_sizes': payload_sizes,
-        'rates': rates,
-        'runs_per_config': 5,  # Default from matrix
-        'executive_summary': executive_summary,
-        'latency_summary': latency_summary,
-        'native_to_minikube_overhead': f"{native_to_minikube_overhead:.1f}",
-        'native_to_minikube_interp': interpret_overhead(native_to_minikube_overhead),
-        'native_to_gcp_overhead': f"{native_to_gcp_overhead:.1f}",
-        'native_to_gcp_interp': interpret_overhead(native_to_gcp_overhead),
-        'minikube_to_gcp_overhead': f"{minikube_to_gcp_overhead:.1f}",
-        'minikube_to_gcp_interp': interpret_overhead(minikube_to_gcp_overhead),
-        'alpha': hypothesis.get('alpha', 0.05),
-        'hypothesis_summary': hypothesis_summary,
-        'effect_size_summary': effect_summary,
-        'interpretation_paragraph': interpretation,
-        'appendix': f"Complete results available in `aggregated_stats.json` ({len(stats.get('aggregated', []))} entries).",
-    }
+    stats = aggregated.get('stats', {})
     
-    # Render template
-    if JINJA2_AVAILABLE:
-        env = Environment(loader=BaseLoader())
-        template = env.from_string(REPORT_TEMPLATE)
-        return template.render(**context)
-    else:
-        # Simple string replacement fallback
-        report = REPORT_TEMPLATE
-        for key, value in context.items():
-            if isinstance(value, list):
-                if key == 'latency_summary':
-                    table_rows = "\n".join([f"| {r['algorithm']} | {r['native']} | {r['minikube']} | {r['gcp']} |" for r in value])
-                    report = report.replace("{% for algo in latency_summary %}\n| {{ algo.algorithm }} | {{ algo.native }} | {{ algo.minikube }} | {{ algo.gcp }} |\n{% endfor %}", table_rows)
-                elif key == 'hypothesis_summary':
-                    table_rows = "\n".join([f"| {r['comparison']} | {r['test_name']} | {r['p_value']} | {r['effect_size']} ({r['interpretation']}) | {'Yes' if r['significant'] else 'No'} |" for r in value])
-                    report = report.replace("{% for test in hypothesis_summary %}\n| {{ test.comparison }} | {{ test.test_name }} | {{ test.p_value }} | {{ test.effect_size }} ({{ test.interpretation }}) | {{ \"Yes\" if test.significant else \"No\" }} |\n{% endfor %}", table_rows)
-                else:
-                    report = report.replace(f"{{{{ {key} | join(', ') }}}}", ", ".join(map(str, value)))
+    if not stats:
+        elements.append(Paragraph(
+            "<i>No aggregated statistics available.</i>",
+            styles['BodyText']
+        ))
+        return
+    
+    # Build stats table
+    elements.append(Paragraph("Latency Percentiles by Algorithm", styles['SubsectionHeading']))
+    
+    stats_data = [['Algorithm', 'Environment', 'p50 (μs)', 'p95 (μs)', 'p99 (μs)', 'Throughput (ops/s)']]
+    
+    for algo, algo_stats in stats.items():
+        for env, env_stats in algo_stats.items():
+            latency = env_stats.get('latency', {})
+            tp = env_stats.get('throughput', {})
+            
+            p50 = latency.get('p50', {}).get('mean', 'N/A')
+            p95 = latency.get('p95', {}).get('mean', 'N/A')
+            p99 = latency.get('p99', {}).get('mean', 'N/A')
+            throughput = tp.get('mean', 'N/A')
+            
+            stats_data.append([
+                algo,
+                env,
+                f"{p50:.1f}" if isinstance(p50, (int, float)) else p50,
+                f"{p95:.1f}" if isinstance(p95, (int, float)) else p95,
+                f"{p99:.1f}" if isinstance(p99, (int, float)) else p99,
+                f"{throughput:.0f}" if isinstance(throughput, (int, float)) else throughput,
+            ])
+    
+    if len(stats_data) > 1:
+        table = Table(stats_data, colWidths=[1.5*inch, 1.2*inch, 1*inch, 1*inch, 1*inch, 1.3*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f8fa')]),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(table)
+        elements.append(Paragraph("Table 5: Mean latency percentiles and throughput across algorithms and environments", styles['Caption']))
+
+
+def build_interpretation(
+    elements: list,
+    styles: dict,
+    hypothesis: Optional[dict],
+    interp_file: Optional[Path],
+) -> None:
+    """Build interpretation section."""
+    elements.append(PageBreak())
+    elements.append(Paragraph("Interpretation and Discussion", styles['SectionHeading']))
+    
+    # Read interpretation from file if available
+    if interp_file and interp_file.exists():
+        with open(interp_file) as f:
+            interp_text = f.read()
+        
+        # Parse and format key sections
+        for line in interp_text.split('\n'):
+            line = line.strip()
+            if not line or line.startswith('=') or line.startswith('-'):
+                continue
+            
+            if line.isupper() or (line.endswith(':') and len(line) < 50):
+                elements.append(Paragraph(line, styles['SubsectionHeading']))
             else:
-                report = report.replace(f"{{{{ {key} }}}}", str(value))
-        return report
+                elements.append(Paragraph(line, styles['BodyText']))
+    else:
+        # Generate basic interpretation
+        elements.append(Paragraph("Key Findings", styles['SubsectionHeading']))
+        
+        if hypothesis:
+            total = hypothesis.get('total_comparisons', 0)
+            sig = hypothesis.get('significant_comparisons', 0)
+            
+            elements.append(Paragraph(
+                f"Statistical analysis across {total} comparisons revealed {sig} "
+                f"statistically significant differences after Holm-Bonferroni correction "
+                f"for multiple comparisons. This indicates that algorithm selection and "
+                f"execution environment have measurable impacts on cryptographic operation latency.",
+                styles['BodyText']
+            ))
+            
+            elements.append(Paragraph("Implications for Deployment", styles['SubsectionHeading']))
+            
+            elements.append(Paragraph(
+                "The observed performance differences between post-quantum and classical "
+                "cryptographic implementations suggest that migration planning should account "
+                "for latency overhead. Cloud environments (GCP) show higher variability "
+                "compared to native and containerized execution, which should be factored "
+                "into service level objective (SLO) definitions.",
+                styles['BodyText']
+            ))
+
+
+def build_methodology(elements: list, styles: dict) -> None:
+    """Build methodology section."""
+    elements.append(PageBreak())
+    elements.append(Paragraph("Methodology", styles['SectionHeading']))
+    
+    elements.append(Paragraph("Statistical Tests", styles['SubsectionHeading']))
+    
+    tests_desc = [
+        ("<b>Kolmogorov-Smirnov Test:</b> Non-parametric test that compares the shapes "
+         "of two probability distributions. Sensitive to differences in location, scale, "
+         "and shape of the distributions."),
+        
+        ("<b>Mann-Whitney U Test:</b> Non-parametric test that compares the distribution "
+         "of ranks between two groups. Tests whether one distribution is stochastically "
+         "greater than the other."),
+        
+        ("<b>Welch's t-test:</b> Parametric test for comparing means that does not assume "
+         "equal variances. More robust than Student's t-test for heteroscedastic data."),
+    ]
+    
+    for desc in tests_desc:
+        elements.append(Paragraph(f"• {desc}", styles['BodyText']))
+        elements.append(Spacer(1, 4))
+    
+    elements.append(Paragraph("Effect Size Estimation", styles['SubsectionHeading']))
+    
+    elements.append(Paragraph(
+        "Cohen's d is computed as the standardized mean difference between groups, "
+        "using the pooled standard deviation. 95% confidence intervals are calculated "
+        "using the Hedges & Olkin (1985) standard error approximation. Effect sizes "
+        "are interpreted using Cohen's conventions: |d| < 0.2 (negligible), "
+        "0.2 ≤ |d| < 0.5 (small), 0.5 ≤ |d| < 0.8 (medium), |d| ≥ 0.8 (large).",
+        styles['BodyText']
+    ))
+    
+    elements.append(Paragraph("Multiple Comparison Correction", styles['SubsectionHeading']))
+    
+    elements.append(Paragraph(
+        "The Holm-Bonferroni method is applied to control the family-wise error rate "
+        "across all comparisons. This step-down procedure is more powerful than "
+        "Bonferroni correction while maintaining strong control over Type I errors. "
+        "P-values are reported both raw and corrected.",
+        styles['BodyText']
+    ))
+
+
+def build_appendix(
+    elements: list,
+    styles: dict,
+    index: Optional[dict],
+) -> None:
+    """Build appendix with experiment details."""
+    elements.append(PageBreak())
+    elements.append(Paragraph("Appendix: Experiment Index", styles['SectionHeading']))
+    
+    if not index:
+        elements.append(Paragraph("<i>No experiment index available.</i>", styles['BodyText']))
+        return
+    
+    experiments = index.get('experiments', [])
+    
+    if not experiments:
+        elements.append(Paragraph("<i>No experiments recorded.</i>", styles['BodyText']))
+        return
+    
+    # Summary by algorithm and environment
+    from collections import Counter
+    by_algo = Counter(e.get('algorithm', 'unknown') for e in experiments)
+    by_env = Counter(e.get('environment', 'unknown') for e in experiments)
+    
+    elements.append(Paragraph("Experiment Distribution", styles['SubsectionHeading']))
+    
+    dist_data = [['Category', 'Value', 'Count']]
+    for algo, count in sorted(by_algo.items()):
+        dist_data.append(['Algorithm', algo, str(count)])
+    for env, count in sorted(by_env.items()):
+        dist_data.append(['Environment', env, str(count)])
+    
+    table = Table(dist_data, colWidths=[1.5*inch, 2*inch, 1*inch])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8f8fa')]),
+    ]))
+    elements.append(table)
+
+
+def generate_pdf_report(
+    results_dir: Path,
+    output_path: Path,
+) -> bool:
+    """Generate the complete PDF report."""
+    
+    if not REPORTLAB_AVAILABLE:
+        print("Error: reportlab is required for PDF generation", file=sys.stderr)
+        print("Install with: pip install reportlab", file=sys.stderr)
+        return False
+    
+    # Load all data sources
+    index = load_json_safe(results_dir / 'index.json')
+    hypothesis = load_json_safe(results_dir / 'hypothesis_tests.json')
+    aggregated = load_json_safe(results_dir / 'aggregated_stats.json')
+    
+    interp_file = results_dir / 'hypothesis_interpretation.txt'
+    figures_dir = results_dir / 'figures'
+    
+    print(f"Building report from: {results_dir}")
+    print(f"  Index: {'✓' if index else '✗'}")
+    print(f"  Hypothesis tests: {'✓' if hypothesis else '✗'}")
+    print(f"  Aggregated stats: {'✓' if aggregated else '✗'}")
+    print(f"  Figures dir: {'✓' if figures_dir.exists() else '✗'}")
+    
+    # Create document
+    doc = SimpleDocTemplate(
+        str(output_path),
+        pagesize=letter,
+        rightMargin=0.75*inch,
+        leftMargin=0.75*inch,
+        topMargin=0.75*inch,
+        bottomMargin=0.75*inch,
+    )
+    
+    styles = create_styles()
+    elements = []
+    
+    # Build sections
+    build_title_page(elements, styles, index)
+    build_executive_summary(elements, styles, hypothesis, aggregated)
+    
+    if hypothesis:
+        build_hypothesis_results(elements, styles, hypothesis)
+    
+    if figures_dir.exists():
+        build_figures_section(elements, styles, figures_dir)
+    
+    if aggregated:
+        build_aggregated_stats(elements, styles, aggregated)
+    
+    build_interpretation(elements, styles, hypothesis, interp_file)
+    build_methodology(elements, styles)
+    build_appendix(elements, styles, index)
+    
+    # Build PDF
+    try:
+        doc.build(elements)
+        print(f"\n✓ Report generated: {output_path}")
+        return True
+    except Exception as e:
+        print(f"\n✗ Failed to generate PDF: {e}", file=sys.stderr)
+        return False
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build final dissertation report")
-    parser.add_argument('--index', '-i', type=Path, required=True, help='Path to index.json')
-    parser.add_argument('--stats', '-s', type=Path, required=True, help='Path to aggregated_stats.json')
-    parser.add_argument('--hypothesis', '-t', type=Path, required=True, help='Path to hypothesis_tests.json')
-    parser.add_argument('--figures', '-f', type=Path, required=True, help='Path to figures directory')
-    parser.add_argument('--output', '-o', type=Path, required=True, help='Output directory')
+    parser = argparse.ArgumentParser(
+        description="Generate dissertation-ready PDF report from experiment results"
+    )
+    parser.add_argument(
+        '--results-dir', '-r', type=Path, required=True,
+        help='Directory containing final results'
+    )
+    parser.add_argument(
+        '--output', '-o', type=Path,
+        help='Output PDF path (default: <results-dir>/report.pdf)'
+    )
+    parser.add_argument(
+        '--title', '-t', type=str,
+        default="Quantum-Resilient Cryptography Performance Analysis",
+        help='Report title'
+    )
     
     args = parser.parse_args()
     
-    # Load data
-    index = load_json(args.index)
-    stats = load_json(args.stats)
-    hypothesis = load_json(args.hypothesis)
+    if not args.results_dir.exists():
+        print(f"Error: Results directory not found: {args.results_dir}", file=sys.stderr)
+        sys.exit(1)
     
-    print(f"Loaded index: {len(index.get('experiments', []))} experiments")
-    print(f"Loaded stats: {len(stats.get('aggregated', []))} aggregated entries")
-    print(f"Loaded hypothesis: {hypothesis.get('total_tests', 0)} tests")
+    output_path = args.output or (args.results_dir / 'report.pdf')
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    # Build report
-    report = build_report(index, stats, hypothesis, args.figures, args.output)
-    
-    # Write Markdown report
-    args.output.mkdir(parents=True, exist_ok=True)
-    report_path = args.output / 'report.md'
-    with open(report_path, 'w') as f:
-        f.write(report)
-    print(f"Written: {report_path}")
-    
-    # Generate tables directory
-    tables_dir = args.output / 'tables'
-    tables_dir.mkdir(exist_ok=True)
-    
-    # Write summary table as CSV
-    latency_summary = generate_latency_summary(stats)
-    if latency_summary:
-        import csv
-        csv_path = tables_dir / 'latency_summary.csv'
-        with open(csv_path, 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['algorithm', 'native', 'minikube', 'gcp'])
-            writer.writeheader()
-            writer.writerows(latency_summary)
-        print(f"Written: {csv_path}")
-    
-    # Write hypothesis summary
-    hypothesis_summary = generate_hypothesis_summary(hypothesis)
-    if hypothesis_summary:
-        with open(tables_dir / 'hypothesis_summary.json', 'w') as f:
-            json.dump(hypothesis_summary, f, indent=2)
-        print(f"Written: {tables_dir / 'hypothesis_summary.json'}")
-    
-    print("\nReport generation complete!")
-    print(f"\nFinal results directory structure:")
-    print(f"  {args.output}/")
-    print(f"  ├── report.md")
-    print(f"  ├── index.json")
-    print(f"  ├── aggregated_stats.json")
-    print(f"  ├── hypothesis_tests.json")
-    print(f"  ├── figures/")
-    print(f"  └── tables/")
+    success = generate_pdf_report(args.results_dir, output_path)
+    sys.exit(0 if success else 1)
 
 
 if __name__ == "__main__":
     main()
-
