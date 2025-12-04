@@ -60,7 +60,10 @@ quantum-resilient/
 │   ├── fixed_pool_burst.yaml
 │   ├── elastic_ramp.yaml
 │   └── hybrid_kyber_dilithium.yaml  # Full PQC hybrid benchmark
-├── run_local.sh            # Local experiment runner script
+├── Containerfile           # Multi-stage container build
+├── podman-compose.yml      # Local container testing
+├── run_local.sh            # Local native experiment runner
+├── run_minikube.sh         # Minikube K8s experiment runner
 ├── k8s/                    # Kubernetes manifests
 │   └── base/
 │       ├── deployment.yaml
@@ -263,6 +266,139 @@ cargo test -p rust-core --test pqc_adapter_smoke
 | No output | Check scenario YAML path is correct |
 | Missing plots | Install Python dependencies: `pip install -r analysis/requirements.txt` |
 | Permission denied | Run `chmod +x run_local.sh` |
+
+## Containerized Minikube Experiments
+
+Run the same benchmark inside a local Kubernetes cluster using Minikube and Podman. This verifies reproducibility between native and containerized execution — a key dissertation requirement.
+
+### Prerequisites
+
+```bash
+# Install Podman (>= 4.0)
+# Fedora/RHEL
+sudo dnf install podman podman-compose
+
+# Ubuntu/Debian
+sudo apt install podman podman-compose
+
+# Install Minikube (>= 1.34)
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+
+# Start Minikube with Podman driver
+minikube start --driver=podman --cpus=4 --memory=8g
+```
+
+### Single Command Execution
+
+```bash
+# Run complete Kubernetes experiment
+./run_minikube.sh \
+  --scenario scenarios/hybrid_kyber_dilithium.yaml \
+  --out results/k8s_exp1 \
+  --exp-id k8s_exp1
+```
+
+### What It Does
+
+1. **Builds** container image using Podman (multi-stage Containerfile)
+2. **Loads** image into Minikube cluster
+3. **Creates** Kubernetes resources (PVC, ConfigMap, Job)
+4. **Runs** the benchmark Job to completion
+5. **Retrieves** results from the cluster
+6. **Analyzes** data (merge, stats, plots)
+
+### Comparing Native vs Kubernetes Results
+
+After running both native and Kubernetes experiments:
+
+```bash
+# Run native experiment first
+./run_local.sh \
+  --scenario scenarios/hybrid_kyber_dilithium.yaml \
+  --out results/native_exp \
+  --seed 1234
+
+# Run Kubernetes experiment
+./run_minikube.sh \
+  --scenario scenarios/hybrid_kyber_dilithium.yaml \
+  --out results/k8s_exp1 \
+  --exp-id k8s_exp1
+
+# Compare results
+python analysis/compare_native_vs_minikube.py \
+  --native results/native_exp/stats/summary.json \
+  --k8s results/k8s_exp1/stats/summary.json \
+  --threshold 15
+```
+
+### Comparison Output
+
+```
+Native vs Kubernetes Comparison
+═══════════════════════════════════════════════════════════════════════
+Metric                  Native           K8s      Diff (%)     Status
+───────────────────────────────────────────────────────────────────────
+p50_latency_us           245.00        258.00       +5.31%         ✅
+p95_latency_us           412.00        445.00       +8.01%         ✅
+p99_latency_us           623.00        698.00      +12.04%         ✅
+mean_throughput          485.00        462.00       -4.74%         ✅
+───────────────────────────────────────────────────────────────────────
+
+✅ REPRODUCIBILITY CONFIRMED
+
+Results demonstrate strong reproducibility between native and Kubernetes
+execution. This supports reproducibility claims for the dissertation.
+```
+
+### Container Architecture
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                    Minikube Cluster                        │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │                   Job: pqc-bench-worker              │  │
+│  │  ┌────────────────┐  ┌─────────────────────────────┐ │  │
+│  │  │ Init Container │  │     Main Container          │ │  │
+│  │  │  (metadata)    │  │  /app/pqc-bench             │ │  │
+│  │  └───────┬────────┘  │  --scenario /config/...     │ │  │
+│  │          │           │  --out /results/raw         │ │  │
+│  │          v           └──────────┬──────────────────┘ │  │
+│  │  ┌───────────────────────────────┴──────────────────┐│  │
+│  │  │              PVC: pqc-bench-results              ││  │
+│  │  │              /results/raw/run.jsonl              ││  │
+│  │  └──────────────────────────────────────────────────┘│  │
+│  └──────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────┘
+        │
+        │ kubectl cp
+        v
+┌────────────────────────────────────────────────────────────┐
+│  Host: results/<exp-id>/                                   │
+│  ├── raw/run.jsonl                                         │
+│  ├── merged/merged.parquet                                 │
+│  ├── stats/summary.json                                    │
+│  ├── figures/latency_cdf.png                               │
+│  └── manifest.json                                         │
+└────────────────────────────────────────────────────────────┘
+```
+
+### Kubernetes Manifest Files
+
+| File | Description |
+|------|-------------|
+| `k8s/worker-job.yaml` | Job definition for pqc-bench |
+| `k8s/results-pvc.yaml` | PersistentVolumeClaim for results |
+| `k8s/scenario-configmap.yaml` | ConfigMap template for scenarios |
+
+### Minikube Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Image not found | Run `minikube image load pqc-bench:latest` |
+| Job fails | Check logs: `kubectl logs -l job-name=pqc-bench-worker` |
+| PVC pending | Verify storage: `kubectl get pvc` |
+| Podman socket | Run `systemctl --user start podman.socket` |
 
 ## Running PQC Experiments (Kyber)
 

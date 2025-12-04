@@ -1,0 +1,27 @@
+# =============================================================================
+# results-pvc.yaml - PersistentVolumeClaim for benchmark results
+#
+# Provides persistent storage for benchmark outputs that survives pod restarts.
+# In Minikube, this uses the default storage class (hostpath provisioner).
+#
+# Apply: kubectl apply -f k8s/results-pvc.yaml
+# =============================================================================
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pqc-bench-results
+  namespace: default
+  labels:
+    app: pqc-bench
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  # Use default storage class (Minikube provides hostpath)
+  # Uncomment to specify explicitly:
+  # storageClassName: standard
+

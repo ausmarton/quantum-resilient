@@ -1,0 +1,98 @@
+# =============================================================================
+# podman-compose.yml - Local container testing for pqc-bench
+#
+# Usage:
+#   podman-compose up worker
+#   podman-compose down
+#
+# Note: Set EXP_ID and SCENARIO_PATH environment variables before running
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # ---------------------------------------------------------------------------
+  # PQC Benchmark Worker
+  # ---------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: pqc-bench:latest
+    container_name: pqc-bench-worker
+    
+    # Command to run benchmark
+    command:
+      - "--scenario"
+      - "/config/scenario.yaml"
+      - "--out"
+      - "/results/raw"
+    
+    # Mount volumes
+    volumes:
+      # Scenario configuration
+      - type: bind
+        source: ${SCENARIO_PATH:-./scenarios/hybrid_kyber_dilithium.yaml}
+        target: /config/scenario.yaml
+        read_only: true
+      
+      # Results output
+      - type: bind
+        source: ${RESULTS_DIR:-./results/container_exp}/raw
+        target: /results/raw
+    
+    # Environment
+    environment:
+      - RUST_LOG=info
+      - QR_MODE=container
+      - QR_RUN_ID=${EXP_ID:-container_exp}
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 4G
+        reservations:
+          cpus: "1"
+          memory: 512M
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Run as non-root
+    user: "65532:65532"
+
+  # ---------------------------------------------------------------------------
+  # Optional: Orchestrator for distributed experiments
+  # ---------------------------------------------------------------------------
+  orchestrator:
+    build:
+      context: .
+      dockerfile: orchestrator/Dockerfile
+    image: qr-orchestrator:latest
+    container_name: qr-orchestrator
+    ports:
+      - "8080:8080"
+    environment:
+      - RUST_LOG=info
+      - QR_STORAGE_TYPE=local
+      - QR_RESULTS_PATH=/results
+    volumes:
+      - type: bind
+        source: ${RESULTS_DIR:-./results/container_exp}
+        target: /results
+    profiles:
+      - orchestrated
+
+# Networks
+networks:
+  default:
+    name: pqc-bench-network
+
+# Volumes (for persistent storage across runs)
+volumes:
+  results:
+    driver: local
+

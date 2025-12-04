@@ -1,0 +1,51 @@
+# =============================================================================
+# scenario-configmap.yaml - ConfigMap template for benchmark scenarios
+#
+# This file serves as a template. The actual ConfigMap is created dynamically
+# by run_minikube.sh using the specified scenario file.
+#
+# Create dynamically:
+#   kubectl create configmap pqc-bench-scenario \
+#     --from-file=scenario.yaml=scenarios/hybrid_kyber_dilithium.yaml \
+#     --dry-run=client -o yaml | kubectl apply -f -
+# =============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pqc-bench-scenario
+  namespace: default
+  labels:
+    app: pqc-bench
+    component: config
+data:
+  # Default scenario - will be overwritten by run_minikube.sh
+  scenario.yaml: |
+    # Hybrid Kyber + Dilithium Benchmark Scenario
+    # This is a placeholder - actual scenario is loaded dynamically
+    
+    id: hybrid_kyber_dilithium
+    description: "Producer -> Kyber512 KEM to derive AES-256-GCM key -> AES-GCM encrypt -> Dilithium2 sign"
+    
+    # Deterministic RNG seed for reproducibility
+    rng_seed: 1234
+    
+    workload:
+      msgs_per_sec: 500
+      msg_size_bytes: 1024
+      duration_sec: 30
+      pattern: constant
+    
+    algorithm:
+      adapter: kyber
+      operation: kem_aead_encrypt
+    
+    execution:
+      mode: fixed_pool
+      workers: 4
+      queue_capacity: 2000
+    
+    metrics:
+      prometheus_endpoint: "0.0.0.0:9898"
+      jsonl_out: "/results/raw/run.jsonl"
+
