@@ -14,6 +14,11 @@ import nbformat
 
 from .analysis import compute_summary, load_metrics_df
 from .analysis import paired_comparisons
+try:
+	from .statistical_tests import compare_pqc_vs_classical, interpret_pvalue, interpret_effect_size
+	HAVE_STATISTICAL_TESTS = True
+except ImportError:
+	HAVE_STATISTICAL_TESTS = False
 
 
 def generate_charts(df: pd.DataFrame, out_dir: Path) -> List[Path]:
@@ -222,6 +227,51 @@ def run_analysis_and_report(results_dir: str) -> None:
 	# Charts
 	charts_dir = out_dir / "charts"
 	chart_files = generate_charts(df, charts_dir)
+	
+	# Statistical comparisons (PQC vs Classical)
+	if HAVE_STATISTICAL_TESTS and not df.empty:
+		try:
+			stat_comparisons = compare_pqc_vs_classical(df, metric_column='latency_micros')
+			if not stat_comparisons.empty:
+				# Save detailed statistical comparisons
+				stat_csv = out_dir / "statistical_comparisons.csv"
+				stat_comparisons.to_csv(stat_csv, index=False)
+				
+				# Create human-readable report
+				stat_report = out_dir / "statistical_report.md"
+				with open(stat_report, 'w') as f:
+					f.write("# Statistical Comparison Report\n")
+					f.write("## PQC vs Classical Algorithms\n\n")
+					
+					for _, row in stat_comparisons.iterrows():
+						f.write(f"### {row['algorithm_a']} vs {row['algorithm_b']} ({row['operation']})\n\n")
+						f.write(f"**Sample sizes:** n_A={row['n_a']}, n_B={row['n_b']}\n\n")
+						f.write(f"**Means:** {row['mean_a']:.6f} vs {row['mean_b']:.6f} µs\n\n")
+						f.write(f"**Medians:** {row['median_a']:.6f} vs {row['median_b']:.6f} µs\n\n")
+						f.write(f"**Faster algorithm:** {row.get('faster_algorithm', 'N/A')}\n\n")
+						mean_diff = row.get('mean_difference', 0)
+						pct_diff = row.get('percent_difference', 0) or 0
+						f.write(f"**Mean difference:** {mean_diff:.6f} µs ({pct_diff:.2f}%)\n\n")
+						
+						f.write("**Statistical Tests:**\n")
+						if pd.notna(row.get('ttest_pvalue')):
+							f.write(f"- Independent t-test: t={row['ttest_statistic']:.4f}, p={row['ttest_pvalue']:.6f} {interpret_pvalue(row['ttest_pvalue'])}\n")
+						if pd.notna(row.get('mannwhitneyu_pvalue')):
+							f.write(f"- Mann-Whitney U: U={row['mannwhitneyu_statistic']:.4f}, p={row['mannwhitneyu_pvalue']:.6f} {interpret_pvalue(row['mannwhitneyu_pvalue'])}\n")
+						
+						f.write("\n**Effect Sizes:**\n")
+						if pd.notna(row.get('cohens_d')):
+							f.write(f"- Cohen's d: {row['cohens_d']:.4f} ({interpret_effect_size(row['cohens_d'])})\n")
+						if pd.notna(row.get('rank_biserial')):
+							f.write(f"- Rank-biserial r: {row['rank_biserial']:.4f}\n")
+						
+						f.write("\n---\n\n")
+				
+				chart_files.append(stat_csv)
+				chart_files.append(stat_report)
+		except Exception as e:
+			print(f"Warning: Statistical comparisons failed: {e}")
+	
 	# Markdown
 	md_path = out_dir / "summary.md"
 	write_markdown_summary(summary_df, md_path)

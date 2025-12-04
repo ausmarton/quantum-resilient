@@ -6,6 +6,7 @@ This repository provides a skeleton for a Post-Quantum Cryptography (PQC) perfor
 Getting Started
 ---------------
 - Explore `docs/` for architecture, methodology, and reproducibility.
+- **NEW**: See `docs/framework_diagrams.md` for comprehensive implementation diagrams.
 - Adjust configs in `configs/` (e.g., `default.yaml`).
 - Use scripts in `./scripts` to run locally or with GCP.
 

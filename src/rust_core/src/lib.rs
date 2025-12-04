@@ -256,6 +256,11 @@ fn sample_resources() -> (Option<u64>, Option<u64>, Option<u64>, Option<u64>, Op
 	}
 }
 
+/// Public wrapper for sample_resources for use in binaries
+pub fn sample_resources_public() -> (Option<u64>, Option<u64>, Option<u64>, Option<u64>, Option<u64>, Option<u64>) {
+	sample_resources()
+}
+
 fn read_proc_self_io_bytes() -> Option<u64> {
 	if cfg!(target_os = "linux") {
 		if let Ok(content) = std::fs::read_to_string("/proc/self/io") {
