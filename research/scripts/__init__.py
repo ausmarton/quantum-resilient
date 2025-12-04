@@ -1,0 +1,2 @@
+"""Research artifact generation scripts."""
+

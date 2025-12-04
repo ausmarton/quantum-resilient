@@ -1,0 +1,205 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{geometry}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\usepackage{subcaption}
+
+\geometry{margin=2.5cm}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{gray!10}
+}
+
+\title{Experiment Report: {{ experiment_id }}}
+\author{Quantum-Resilient Benchmark Framework}
+\date{ {{ timestamp }} }
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report documents the results of experiment \texttt{ {{- experiment_id -}} }, 
+a quantum-resilient cryptography benchmark run. 
+The experiment processed {{ stats.total_events | default(0) | int }} events 
+over {{ "%.2f" | format(stats.throughput.total_duration_sec | default(0)) }} seconds,
+achieving a mean throughput of {{ "%.1f" | format(stats.throughput.mean_msgs_per_sec | default(0)) }} ops/sec.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ============================================================================
+\section{Experiment Overview}
+%% ============================================================================
+
+\subsection{Description}
+
+{{ description | default("Quantum-resilient cryptography benchmark experiment comparing classical and post-quantum cryptographic algorithms under controlled workload conditions.") }}
+
+\subsection{Scenario Configuration}
+
+\begin{lstlisting}[language=yaml,caption={Scenario YAML}]
+{{ scenario_yaml }}
+\end{lstlisting}
+
+\subsection{Provenance Metadata}
+
+\begin{table}[h]
+\centering
+\caption{Experiment Provenance}
+\begin{tabular}{ll}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+Experiment ID & \texttt{ {{- experiment_id -}} } \\
+Git Commit & \texttt{ {{- provenance.git_commit | default("N/A") -}} } \\
+Timestamp & {{ provenance.timestamp | default("N/A") }} \\
+Storage URI & \texttt{ {{- provenance.storage_uri | default("N/A") -}} } \\
+Total Events & {{ stats.total_events | default(0) | int }} \\
+Duration & {{ "%.2f" | format(stats.throughput.total_duration_sec | default(0)) }} s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ============================================================================
+\section{Results Summary}
+%% ============================================================================
+
+\subsection{Latency Statistics}
+
+{{ tables.latency_quantiles_tex | default("% Table not available") }}
+
+\subsection{Throughput Statistics}
+
+{{ tables.throughput_summary_tex | default("% Table not available") }}
+
+{% if stats.queue_delay %}
+\subsection{Queue Delay Statistics}
+
+{{ tables.queue_delay_stats_tex | default("% Table not available") }}
+{% endif %}
+
+%% ============================================================================
+\section{Algorithm Comparison}
+%% ============================================================================
+
+{% if stats.per_algorithm %}
+\subsection{Latency by Algorithm}
+
+{{ tables.adapter_comparison_tex | default("% Table not available") }}
+{% endif %}
+
+{% if effect_sizes %}
+\subsection{Effect Size Analysis}
+
+{{ tables.effect_sizes_tex | default("% Table not available") }}
+
+\textbf{Interpretation Guide:}
+\begin{itemize}
+  \item Cohen's $d$: $|d| < 0.2$ negligible, $0.2$--$0.5$ small, $0.5$--$0.8$ medium, $> 0.8$ large
+  \item Cliff's $\delta$: $|\delta| < 0.147$ negligible, $0.147$--$0.33$ small, $0.33$--$0.474$ medium, $> 0.474$ large
+\end{itemize}
+{% endif %}
+
+%% ============================================================================
+\section{Figures}
+%% ============================================================================
+
+{% for fig in figures %}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{ {{- fig.path -}} }
+\caption{ {{- fig.caption -}} }
+\label{fig:{{ fig.label }}}
+\end{figure}
+
+{% endfor %}
+
+%% ============================================================================
+\section{Cluster Configuration}
+%% ============================================================================
+
+{% if provenance.cluster_config %}
+\begin{table}[h]
+\centering
+\caption{Cluster Configuration}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Node Pool & {{ provenance.cluster_config.node_pool | default("N/A") }} \\
+Machine Type & {{ provenance.cluster_config.machine_type | default("N/A") }} \\
+Min Nodes & {{ provenance.cluster_config.min_nodes | default("N/A") }} \\
+Max Nodes & {{ provenance.cluster_config.max_nodes | default("N/A") }} \\
+Worker Replicas & {{ provenance.cluster_config.worker_replicas | default("N/A") }} \\
+\bottomrule
+\end{tabular}
+\end{table}
+{% endif %}
+
+{% if provenance.worker_jitter_stats %}
+\subsection{Worker Synchronization}
+
+\begin{table}[h]
+\centering
+\caption{Worker Start Time Jitter}
+\begin{tabular}{ll}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Max Start Jitter & {{ "%.2f" | format(provenance.worker_jitter_stats.max_jitter_ms | default(0)) }} ms \\
+Mean Start Jitter & {{ "%.2f" | format(provenance.worker_jitter_stats.mean_jitter_ms | default(0)) }} ms \\
+Worker Count & {{ provenance.worker_jitter_stats.worker_count | default("N/A") }} \\
+\bottomrule
+\end{tabular}
+\end{table}
+{% endif %}
+
+%% ============================================================================
+\section{Data Integrity}
+%% ============================================================================
+
+\subsection{File Checksums}
+
+\begin{table}[h]
+\centering
+\caption{SHA-256 Checksums}
+\begin{tabular}{ll}
+\toprule
+\textbf{File} & \textbf{Checksum (truncated)} \\
+\midrule
+{% for filename, checksum in provenance.checksums.items() %}
+\texttt{ {{- filename -}} } & \texttt{ {{- checksum[:24] -}} ...} \\
+{% endfor %}
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Dataset Version}
+
+\begin{itemize}
+  \item \textbf{Version:} {{ dataset_version }}
+  \item \textbf{Changelog:} {{ version_changelog | default("Initial release") }}
+\end{itemize}
+
+%% ============================================================================
+\section*{Appendix}
+%% ============================================================================
+
+% Raw statistics available in accompanying JSON files.
+
+\end{document}
+

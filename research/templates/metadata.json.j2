@@ -1,0 +1,73 @@
+{
+  "experiment_id": "{{ experiment_id }}",
+  "generated_at": "{{ timestamp }}",
+  "generator": "quantum-resilient-research-pipeline",
+  "generator_version": "1.0.0",
+  
+  "provenance": {
+    "git_commit": "{{ provenance.git_commit | default('unknown') }}",
+    "orchestrator_commit": "{{ provenance.orchestrator_commit | default('unknown') }}",
+    "timestamp": "{{ provenance.timestamp | default('unknown') }}",
+    "storage_uri": "{{ provenance.storage_uri | default('unknown') }}"
+  },
+  
+  "dataset": {
+    "version": "{{ dataset_version }}",
+    "total_events": {{ stats.total_events | default(0) | int }},
+    "duration_sec": {{ "%.2f" | format(stats.throughput.total_duration_sec | default(0)) }},
+    "checksums": {
+      {% for filename, checksum in provenance.checksums.items() %}
+      "{{ filename }}": "{{ checksum }}"{{ "," if not loop.last else "" }}
+      {% endfor %}
+    }
+  },
+  
+  "artifacts": {
+    "tables": [
+      {% for table in tables_list %}
+      {
+        "name": "{{ table.name }}",
+        "formats": {{ table.formats | tojson }},
+        "description": "{{ table.description }}"
+      }{{ "," if not loop.last else "" }}
+      {% endfor %}
+    ],
+    "figures": [
+      {% for fig in figures %}
+      {
+        "name": "{{ fig.name }}",
+        "path": "{{ fig.path }}",
+        "formats": {{ fig.formats | tojson }},
+        "caption": "{{ fig.caption }}",
+        "label": "{{ fig.label }}"
+      }{{ "," if not loop.last else "" }}
+      {% endfor %}
+    ],
+    "reports": [
+      {% for report in reports %}
+      {
+        "format": "{{ report.format }}",
+        "path": "{{ report.path }}"
+      }{{ "," if not loop.last else "" }}
+      {% endfor %}
+    ]
+  },
+  
+  "statistics_summary": {
+    {% if stats.latency %}
+    "latency": {
+      "mean_us": {{ "%.2f" | format(stats.latency.mean) }},
+      "std_us": {{ "%.2f" | format(stats.latency.std) }},
+      "p50_us": {{ "%.2f" | format(stats.latency.p50) }},
+      "p99_us": {{ "%.2f" | format(stats.latency.p99) }}
+    },
+    {% endif %}
+    {% if stats.throughput %}
+    "throughput": {
+      "mean_ops_sec": {{ "%.2f" | format(stats.throughput.mean_msgs_per_sec | default(0)) }},
+      "max_ops_sec": {{ "%.2f" | format(stats.throughput.max_msgs_per_sec | default(0)) }}
+    }
+    {% endif %}
+  }
+}
+

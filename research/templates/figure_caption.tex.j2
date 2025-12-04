@@ -1,0 +1,48 @@
+{# Template for LaTeX figure captions and includes #}
+
+{% macro figure_include(fig, width="0.8\\textwidth") %}
+\begin{figure}[htbp]
+\centering
+\includegraphics[width={{ width }}]{ {{- fig.path -}} }
+\caption{ {{- fig.caption -}} }
+\label{fig:{{ fig.label }}}
+\end{figure}
+{% endmacro %}
+
+{% macro subfigure_pair(fig1, fig2, caption) %}
+\begin{figure}[htbp]
+\centering
+\begin{subfigure}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{ {{- fig1.path -}} }
+\caption{ {{- fig1.caption -}} }
+\label{fig:{{ fig1.label }}}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+\centering
+\includegraphics[width=\textwidth]{ {{- fig2.path -}} }
+\caption{ {{- fig2.caption -}} }
+\label{fig:{{ fig2.label }}}
+\end{subfigure}
+\caption{ {{- caption -}} }
+\end{figure}
+{% endmacro %}
+
+{# Standard figure captions for common plots #}
+
+{% set STANDARD_CAPTIONS = {
+    "latency_cdf": "Cumulative distribution function (CDF) of cryptographic operation latency. Percentile markers indicate p50, p90, p95, and p99 values.",
+    "latency_pdf": "Probability density function (PDF) of operation latency with kernel density estimation overlay.",
+    "latency_tail": "Tail distribution (survival function) of latency on log scale, highlighting extreme values.",
+    "throughput_timeseries": "Throughput over time showing instantaneous operations per second with rolling average.",
+    "throughput_distribution": "Distribution of per-second throughput measurements.",
+    "queue_delay_distribution": "Queue delay distribution showing time spent waiting in the processing pipeline.",
+    "queue_delay_vs_load": "Correlation between system load and queue delay.",
+    "latency_algorithm_comparison": "Latency comparison across cryptographic algorithms (CDF and box plot).",
+} %}
+
+{% macro standard_caption(figure_type) %}
+{{ STANDARD_CAPTIONS.get(figure_type, "Figure description not available.") }}
+{% endmacro %}
+

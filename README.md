@@ -102,6 +102,17 @@ quantum-resilient/
 │   └── terraform/
 │       ├── gcp/              # GCP/GKE deployment
 │       └── modules/          # Reusable modules
+├── research/             # Research artifact generation
+│   ├── templates/            # Jinja2 report templates
+│   ├── scripts/              # Generation scripts
+│   │   ├── provenance.py
+│   │   ├── version_dataset.py
+│   │   ├── generate_tables.py
+│   │   ├── generate_figures_bundle.py
+│   │   ├── generate_report.py
+│   │   └── pipeline_runner.py
+│   ├── output/               # Generated artifacts
+│   └── README.md
 ├── Makefile
 ├── Dockerfile.podman
 └── README.md
@@ -949,6 +960,121 @@ The analysis suite computes standard effect size metrics for algorithm compariso
 | Cliff's δ | Non-parametric | <0.147 negligible, 0.147-0.33 small, 0.33-0.474 medium, >0.474 large |
 | Wasserstein | Earth mover's distance | In original units |
 | KS statistic | Distribution distance | 0-1, with p-value |
+
+## Publishing Experiment Results
+
+The framework includes tools for generating dissertation-ready research artifacts.
+
+### Research Artifact Generation Pipeline
+
+Run the complete documentation pipeline:
+
+```bash
+python research/scripts/pipeline_runner.py \
+  --exp-id exp_2025_02_01_001 \
+  --uri gs://qr-results/exp_2025_02_01_001 \
+  --generate-all
+```
+
+This generates:
+1. **Provenance metadata** (`provenance.json`)
+2. **Dataset version** (`dataset_version.json`)
+3. **LaTeX/Markdown tables** (`tables/*.tex`, `tables/*.md`)
+4. **Figure bundle** (PDF, EPS, high-DPI PNG)
+5. **Reports** (`report.tex`, `report.md`)
+
+### Individual Scripts
+
+```bash
+# Generate provenance metadata
+python research/scripts/provenance.py \
+  --exp-id exp_001 \
+  --data-dir analysis/data/exp_001 \
+  --out research/output/exp_001/
+
+# Version dataset with checksums
+python research/scripts/version_dataset.py \
+  --exp-id exp_001 \
+  --data-dir analysis/data/exp_001 \
+  --version 1.0.0 \
+  --out research/output/exp_001/
+
+# Generate LaTeX and Markdown tables
+python research/scripts/generate_tables.py \
+  --exp-id exp_001 \
+  --stats-file analysis/data/exp_001/stats/summary.json \
+  --out research/output/exp_001/tables/
+
+# Bundle figures for publication
+python research/scripts/generate_figures_bundle.py \
+  --exp-id exp_001 \
+  --figures-dir analysis/figures/exp_001 \
+  --out research/output/exp_001/figures/
+
+# Generate reports
+python research/scripts/generate_report.py \
+  --exp-id exp_001 --format tex \
+  --out research/output/exp_001/
+```
+
+### Output Structure
+
+```
+research/output/exp_001/
+├── provenance.json           # Full experiment provenance
+├── dataset_version.json      # Dataset checksums and version
+├── tables/
+│   ├── latency_quantiles.tex
+│   ├── latency_quantiles.md
+│   ├── throughput_summary.tex
+│   ├── adapter_comparison.tex
+│   └── effect_sizes.tex
+├── figures/
+│   ├── png/                  # High-DPI PNG (300 DPI)
+│   ├── pdf/                  # Vector PDF
+│   ├── eps/                  # Vector EPS (LaTeX)
+│   ├── manifest.json         # Figure metadata
+│   └── figures_bundle_exp_001.tar.gz
+├── report.tex                # LaTeX report
+└── report.md                 # Markdown report
+```
+
+### Using in Dissertation
+
+Insert tables and figures into LaTeX documents:
+
+```latex
+% Include a table
+\input{research/output/exp_001/tables/latency_quantiles.tex}
+
+% Include a figure
+\includegraphics{research/output/exp_001/figures/pdf/latency_cdf.pdf}
+```
+
+### Publishing Workflow
+
+1. **Run pipeline:**
+   ```bash
+   python research/scripts/pipeline_runner.py --exp-id exp_001 --uri gs://... --generate-all
+   ```
+
+2. **Verify provenance:**
+   ```bash
+   cat research/output/exp_001/provenance.json | jq '.checksums'
+   ```
+
+3. **Check dataset version:**
+   ```bash
+   cat research/output/exp_001/dataset_version.json
+   ```
+
+4. **Tag release:**
+   ```bash
+   git add research/output/exp_001/
+   git commit -m "Published experiment exp_001"
+   git tag -a exp_001_published -m "Published experiment exp_001"
+   git push --tags
+   ```
 
 ## Development
 

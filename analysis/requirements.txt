@@ -34,3 +34,10 @@ statsmodels>=0.14.0
 python-dateutil>=2.8.0
 click>=8.1.0
 rich>=13.0.0
+
+# Report generation (for research artifacts)
+jinja2>=3.1.0
+pylatexenc>=2.10
+pyyaml>=6.0
+tabulate>=0.9.0
+Pillow>=10.0.0  # For figure format conversion
