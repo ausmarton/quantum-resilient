@@ -21,17 +21,142 @@ pub struct Scenario {
     /// Metrics configuration (optional)
     #[serde(default)]
     pub metrics: MetricsConfig,
+    /// Execution model configuration (optional)
+    #[serde(default)]
+    pub execution: ExecutionConfig,
 }
 
 /// Workload configuration for a scenario
 #[derive(Debug, Deserialize, Clone)]
 pub struct WorkloadConfig {
-    /// Target messages per second
+    /// Target messages per second (baseline for burst/ramp patterns)
+    #[serde(default = "default_msgs_per_sec")]
     pub msgs_per_sec: u32,
     /// Size of each message in bytes
     pub msg_size_bytes: usize,
     /// Duration of the benchmark in seconds
     pub duration_sec: u64,
+
+    // NEW: Workload pattern configuration
+    /// Workload pattern: constant, burst, ramp, or trace
+    #[serde(default)]
+    pub pattern: WorkloadPattern,
+
+    /// Burst pattern configuration
+    #[serde(default)]
+    pub burst: Option<BurstConfig>,
+
+    /// Ramp pattern configuration
+    #[serde(default)]
+    pub ramp: Option<RampConfig>,
+
+    /// Path to trace file for trace pattern (CSV: timestamp_ms, rps)
+    #[serde(default)]
+    pub trace_file: Option<String>,
+}
+
+/// Workload pattern types
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum WorkloadPattern {
+    /// Constant rate of operations (default)
+    #[default]
+    Constant,
+    /// Burst pattern with periodic spikes
+    Burst,
+    /// Gradually ramping load
+    Ramp,
+    /// Trace-driven replay from CSV file
+    Trace,
+}
+
+/// Configuration for burst workload pattern
+#[derive(Debug, Deserialize, Clone)]
+pub struct BurstConfig {
+    /// Multiplier for burst RPS (e.g., 5 = 5× baseline)
+    #[serde(default = "default_burst_factor")]
+    pub factor: u32,
+    /// Duration of each burst in milliseconds
+    #[serde(default = "default_burst_duration_ms")]
+    pub duration_ms: u64,
+    /// Interval between bursts in milliseconds
+    #[serde(default = "default_burst_interval_ms")]
+    pub interval_ms: u64,
+}
+
+impl Default for BurstConfig {
+    fn default() -> Self {
+        Self {
+            factor: default_burst_factor(),
+            duration_ms: default_burst_duration_ms(),
+            interval_ms: default_burst_interval_ms(),
+        }
+    }
+}
+
+/// Configuration for ramp workload pattern
+#[derive(Debug, Deserialize, Clone)]
+pub struct RampConfig {
+    /// Starting RPS
+    #[serde(default = "default_ramp_from")]
+    pub from: u32,
+    /// Ending RPS
+    #[serde(default = "default_ramp_to")]
+    pub to: u32,
+    /// Duration of the ramp in seconds
+    #[serde(default = "default_ramp_duration_sec")]
+    pub duration_sec: u64,
+}
+
+impl Default for RampConfig {
+    fn default() -> Self {
+        Self {
+            from: default_ramp_from(),
+            to: default_ramp_to(),
+            duration_sec: default_ramp_duration_sec(),
+        }
+    }
+}
+
+/// Execution model configuration
+#[derive(Debug, Deserialize, Clone)]
+pub struct ExecutionConfig {
+    /// Execution mode: single, fixed_pool, or elastic
+    #[serde(default)]
+    pub mode: ExecutionMode,
+    /// Number of workers for fixed_pool mode
+    #[serde(default = "default_workers")]
+    pub workers: usize,
+    /// Maximum workers for elastic mode
+    #[serde(default = "default_max_workers")]
+    pub max_workers: usize,
+    /// Bounded queue capacity
+    #[serde(default = "default_queue_capacity")]
+    pub queue_capacity: usize,
+}
+
+impl Default for ExecutionConfig {
+    fn default() -> Self {
+        Self {
+            mode: ExecutionMode::default(),
+            workers: default_workers(),
+            max_workers: default_max_workers(),
+            queue_capacity: default_queue_capacity(),
+        }
+    }
+}
+
+/// Execution mode types
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionMode {
+    /// Single processor task (default, existing behavior)
+    #[default]
+    Single,
+    /// Fixed number of processor tasks
+    FixedPool,
+    /// Elastic pool that scales based on queue length
+    Elastic,
 }
 
 /// Algorithm configuration for a scenario
@@ -65,14 +190,53 @@ impl Default for MetricsConfig {
     }
 }
 
-/// Default operation if not specified in YAML
+// Default value functions
+fn default_msgs_per_sec() -> u32 {
+    100
+}
+
 fn default_operation() -> String {
     "sign".to_string()
 }
 
-/// Default Prometheus endpoint
 fn default_prometheus_endpoint() -> String {
     "0.0.0.0:9898".to_string()
+}
+
+fn default_burst_factor() -> u32 {
+    5
+}
+
+fn default_burst_duration_ms() -> u64 {
+    200
+}
+
+fn default_burst_interval_ms() -> u64 {
+    1000
+}
+
+fn default_ramp_from() -> u32 {
+    10
+}
+
+fn default_ramp_to() -> u32 {
+    200
+}
+
+fn default_ramp_duration_sec() -> u64 {
+    5
+}
+
+fn default_workers() -> usize {
+    4
+}
+
+fn default_max_workers() -> usize {
+    16
+}
+
+fn default_queue_capacity() -> usize {
+    2000
 }
 
 impl Scenario {
@@ -255,5 +419,113 @@ algorithm:
         let ops = supported_operations();
         assert!(ops.contains(&"kem_aead_encrypt"));
         assert!(ops.contains(&"kem_aead_decrypt"));
+    }
+
+    #[test]
+    fn test_scenario_with_execution_config() {
+        let yaml = r#"
+id: execution_test
+workload:
+  msgs_per_sec: 100
+  msg_size_bytes: 64
+  duration_sec: 5
+algorithm:
+  adapter: noop
+execution:
+  mode: fixed_pool
+  workers: 8
+  queue_capacity: 3000
+"#;
+        let scenario: Scenario = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(scenario.execution.mode, ExecutionMode::FixedPool);
+        assert_eq!(scenario.execution.workers, 8);
+        assert_eq!(scenario.execution.queue_capacity, 3000);
+    }
+
+    #[test]
+    fn test_scenario_with_burst_pattern() {
+        let yaml = r#"
+id: burst_test
+workload:
+  msgs_per_sec: 100
+  msg_size_bytes: 128
+  duration_sec: 5
+  pattern: burst
+  burst:
+    factor: 4
+    duration_ms: 200
+    interval_ms: 1000
+algorithm:
+  adapter: noop
+"#;
+        let scenario: Scenario = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(scenario.workload.pattern, WorkloadPattern::Burst);
+        let burst = scenario.workload.burst.unwrap();
+        assert_eq!(burst.factor, 4);
+        assert_eq!(burst.duration_ms, 200);
+        assert_eq!(burst.interval_ms, 1000);
+    }
+
+    #[test]
+    fn test_scenario_with_ramp_pattern() {
+        let yaml = r#"
+id: ramp_test
+workload:
+  msg_size_bytes: 256
+  duration_sec: 5
+  pattern: ramp
+  ramp:
+    from: 20
+    to: 300
+    duration_sec: 5
+algorithm:
+  adapter: kyber
+  operation: kem_aead_encrypt
+"#;
+        let scenario: Scenario = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(scenario.workload.pattern, WorkloadPattern::Ramp);
+        let ramp = scenario.workload.ramp.unwrap();
+        assert_eq!(ramp.from, 20);
+        assert_eq!(ramp.to, 300);
+        assert_eq!(ramp.duration_sec, 5);
+    }
+
+    #[test]
+    fn test_scenario_default_execution() {
+        let yaml = r#"
+id: default_exec
+workload:
+  msgs_per_sec: 10
+  msg_size_bytes: 64
+  duration_sec: 1
+algorithm:
+  adapter: noop
+"#;
+        let scenario: Scenario = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(scenario.execution.mode, ExecutionMode::Single);
+        assert_eq!(scenario.execution.workers, 4);
+        assert_eq!(scenario.execution.max_workers, 16);
+        assert_eq!(scenario.execution.queue_capacity, 2000);
+    }
+
+    #[test]
+    fn test_scenario_elastic_mode() {
+        let yaml = r#"
+id: elastic_test
+workload:
+  msgs_per_sec: 100
+  msg_size_bytes: 64
+  duration_sec: 5
+algorithm:
+  adapter: noop
+execution:
+  mode: elastic
+  max_workers: 32
+  queue_capacity: 5000
+"#;
+        let scenario: Scenario = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(scenario.execution.mode, ExecutionMode::Elastic);
+        assert_eq!(scenario.execution.max_workers, 32);
+        assert_eq!(scenario.execution.queue_capacity, 5000);
     }
 }

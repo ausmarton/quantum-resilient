@@ -6,9 +6,11 @@
 use clap::Parser;
 use rust_core::{
     get_adapter, init_tracing, load_scenario, supported_adapters, supported_operations,
-    JsonlWriter, Metrics, Pipeline, SysInfoSampler,
+    ControlPlaneState, ExecutionMode, JsonlWriter, Metrics, Pipeline,
+    SysInfoSampler, start_control_plane_server,
 };
 use rust_core::telemetry::start_metrics_server;
+use tokio::signal;
 use tracing::info;
 
 /// PQC Benchmark Framework - Compare PQC vs classical cryptography performance
@@ -19,6 +21,10 @@ struct Args {
     /// Path to the scenario YAML file
     #[arg(long)]
     scenario: String,
+
+    /// Control plane server port (default: 6060)
+    #[arg(long, default_value = "6060")]
+    control_port: u16,
 }
 
 #[tokio::main]
@@ -38,6 +44,9 @@ async fn main() {
     };
 
     println!("Loaded scenario: {}", scenario.id);
+    if let Some(ref desc) = scenario.description {
+        println!("Description: {}", desc);
+    }
 
     // Initialize tracing
     init_tracing("pqc-bench");
@@ -69,6 +78,39 @@ async fn main() {
     }
 
     println!("Running operation: {}", operation);
+
+    // Print execution configuration
+    let exec_mode = match scenario.execution.mode {
+        ExecutionMode::Single => "single",
+        ExecutionMode::FixedPool => "fixed_pool",
+        ExecutionMode::Elastic => "elastic",
+    };
+    println!("Execution mode: {}", exec_mode);
+    println!("Queue capacity: {}", scenario.execution.queue_capacity);
+
+    match scenario.execution.mode {
+        ExecutionMode::Single => {
+            println!("Workers: 1 (single)");
+        }
+        ExecutionMode::FixedPool => {
+            println!("Workers: {} (fixed)", scenario.execution.workers);
+        }
+        ExecutionMode::Elastic => {
+            println!(
+                "Workers: 1-{} (elastic)",
+                scenario.execution.max_workers
+            );
+        }
+    }
+
+    // Print workload configuration
+    let workload_pattern = match scenario.workload.pattern {
+        rust_core::WorkloadPattern::Constant => "constant",
+        rust_core::WorkloadPattern::Burst => "burst",
+        rust_core::WorkloadPattern::Ramp => "ramp",
+        rust_core::WorkloadPattern::Trace => "trace",
+    };
+    println!("Workload pattern: {}", workload_pattern);
 
     // Create results directory
     let jsonl_path = scenario.jsonl_output_path();
@@ -109,18 +151,91 @@ async fn main() {
     // Initialize system sampler
     let sampler = SysInfoSampler::new();
 
+    // Create shared execution state (will be used by both control plane and pipeline)
+    let execution_state = rust_core::pipeline::ExecutionState::new(scenario.execution.queue_capacity);
+
+    // Create control plane state
+    let control_state = ControlPlaneState::new(metrics.clone(), exec_mode)
+        .with_execution_state(execution_state.clone());
+    control_state.set_metrics_server_running(true);
+
+    // Start control plane server
+    let control_addr = format!("0.0.0.0:{}", args.control_port);
+    println!("Starting control plane server on {}", control_addr);
+    let _control_handle = start_control_plane_server(&control_addr, control_state).await;
+
     // Create and run pipeline
     let pipeline = Pipeline::new();
 
     info!(
-        "Starting pipeline: {} events at {} msg/s for {} seconds",
-        scenario.workload.duration_sec as u64 * scenario.workload.msgs_per_sec as u64,
-        scenario.workload.msgs_per_sec,
+        "Starting pipeline: workload={}, execution_mode={}, duration={}s",
+        workload_pattern,
+        exec_mode,
         scenario.workload.duration_sec
     );
 
+    println!();
+    println!("========================================");
+    println!("Pipeline starting...");
+    println!("Prometheus: http://{}/metrics", prometheus_endpoint);
+    println!("Control plane: http://127.0.0.1:{}/healthz", args.control_port);
+    println!("========================================");
+    println!();
+
+    // Set up shutdown signal handler
+    let shutdown_state = execution_state.clone();
+    let shutdown_handle = tokio::spawn(async move {
+        // Wait for either SIGTERM or Ctrl+C
+        let ctrl_c = async {
+            signal::ctrl_c()
+                .await
+                .expect("Failed to install Ctrl+C handler");
+        };
+
+        #[cfg(unix)]
+        let terminate = async {
+            signal::unix::signal(signal::unix::SignalKind::terminate())
+                .expect("Failed to install SIGTERM handler")
+                .recv()
+                .await;
+        };
+
+        #[cfg(not(unix))]
+        let terminate = std::future::pending::<()>();
+
+        tokio::select! {
+            _ = ctrl_c => {
+                info!("Received Ctrl+C, initiating shutdown...");
+            }
+            _ = terminate => {
+                info!("Received SIGTERM, initiating shutdown...");
+            }
+            _ = async {
+                // Also check for shutdown flag from control plane
+                loop {
+                    if shutdown_state.is_shutdown_requested() {
+                        break;
+                    }
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                }
+            } => {
+                info!("Shutdown requested via control plane...");
+            }
+        }
+
+        shutdown_state.request_shutdown();
+    });
+
+    // Run the pipeline with shared execution state
     let stats = match pipeline
-        .run_async(&scenario, adapter.clone(), metrics.clone(), jsonl_writer.clone(), sampler)
+        .run_async(
+            &scenario,
+            adapter.clone(),
+            metrics.clone(),
+            jsonl_writer.clone(),
+            sampler,
+            Some(execution_state.clone()),
+        )
         .await
     {
         Ok(s) => s,
@@ -130,13 +245,21 @@ async fn main() {
         }
     };
 
+    // Cancel the shutdown handler since pipeline completed naturally
+    shutdown_handle.abort();
+
     // Print summary
     println!();
     println!("========================================");
     println!("Run complete: {} events processed", stats.events_processed);
+    println!("Total events planned: {}", stats.total_events);
     println!("Duration: {:.2}s", stats.duration.as_secs_f64());
     println!("Average latency: {:.2} μs", stats.avg_latency_us);
-    println!("Throughput: {:.2} ops/sec", stats.events_processed as f64 / stats.duration.as_secs_f64());
+    println!(
+        "Throughput: {:.2} ops/sec",
+        stats.events_processed as f64 / stats.duration.as_secs_f64()
+    );
+    println!("Max active workers: {}", stats.max_active_workers);
     println!("JSONL output: {}", jsonl_writer.path());
     println!(
         "Metrics available at: http://{}/metrics",

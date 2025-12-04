@@ -48,6 +48,7 @@ FROM docker.io/debian:bookworm-slim AS runtime
 # Install runtime dependencies (minimal)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
@@ -71,6 +72,13 @@ USER appuser
 
 # Expose Prometheus metrics port
 EXPOSE 9898
+
+# Expose control plane port (for Kubernetes probes)
+EXPOSE 6060
+
+# Health check using control plane endpoint
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:6060/healthz || exit 1
 
 # Set the entrypoint
 ENTRYPOINT ["/app/pqc-bench"]

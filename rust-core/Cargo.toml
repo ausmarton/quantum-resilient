@@ -48,7 +48,7 @@ hkdf = "0.12"
 zeroize = { version = "1.8", features = ["derive"] }
 
 # Async runtime
-tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "time", "sync", "net"] }
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "time", "sync", "net", "signal"] }
 futures = "0.3"
 
 # Metrics and telemetry

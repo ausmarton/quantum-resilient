@@ -1,0 +1,16 @@
+id: kyber_hybrid_decrypt
+description: "Kyber KEM -> AES-GCM hybrid decrypt test (encrypt+decrypt roundtrip)"
+
+workload:
+  msgs_per_sec: 50
+  msg_size_bytes: 256
+  duration_sec: 2
+
+algorithm:
+  adapter: kyber
+  operation: kem_aead_decrypt
+
+metrics:
+  prometheus_endpoint: "0.0.0.0:9898"
+  jsonl_out: "./results/kyber_hybrid_decrypt.jsonl"
+

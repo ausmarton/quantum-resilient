@@ -1,0 +1,15 @@
+id: rsa_smoke
+description: "RSA-2048 benchmark scenario"
+
+workload:
+  msgs_per_sec: 5
+  msg_size_bytes: 64
+  duration_sec: 2
+
+algorithm:
+  adapter: rsa2048
+  operation: sign
+
+metrics:
+  prometheus_endpoint: "0.0.0.0:9898"
+  jsonl_out: "./results/rsa_smoke.jsonl"

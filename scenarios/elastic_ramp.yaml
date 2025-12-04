@@ -1,0 +1,20 @@
+id: elastic_ramp
+description: "Elastic pool with ramping workload"
+workload:
+  pattern: ramp
+  ramp:
+    from: 20
+    to: 300
+    duration_sec: 5
+  msg_size_bytes: 256
+  duration_sec: 5
+execution:
+  mode: elastic
+  max_workers: 16
+  queue_capacity: 5000
+algorithm:
+  adapter: kyber
+  operation: kem_aead_encrypt
+metrics:
+  prometheus_endpoint: "0.0.0.0:9898"
+  jsonl_out: "./results/elastic_ramp.jsonl"

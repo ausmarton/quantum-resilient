@@ -1,0 +1,15 @@
+id: ecdsa_smoke
+description: "ECDSA P-256 benchmark scenario"
+
+workload:
+  msgs_per_sec: 10
+  msg_size_bytes: 64
+  duration_sec: 2
+
+algorithm:
+  adapter: ecdsa_p256
+  operation: sign
+
+metrics:
+  prometheus_endpoint: "0.0.0.0:9898"
+  jsonl_out: "./results/ecdsa_smoke.jsonl"
