@@ -65,6 +65,28 @@ pub struct ExperimentScheduler {
 }
 
 impl ExperimentScheduler {
+    /// Parse a cron expression, accepting either standard 6-field or 5-field (minute-level) forms.
+    /// For 5-field inputs we prepend a leading seconds field so `cron` can parse it.
+    fn parse_cron_expr(expr: &str) -> Result<(String, Schedule), SchedulerError> {
+        let trimmed = expr.trim();
+
+        match Schedule::from_str(trimmed) {
+            Ok(schedule) => Ok((trimmed.to_string(), schedule)),
+            Err(initial_err) => {
+                // Allow 5-field expressions like "0 3 * * *" by assuming 0 seconds.
+                let parts: Vec<_> = trimmed.split_whitespace().collect();
+                if parts.len() == 5 {
+                    let with_seconds = format!("0 {}", trimmed);
+                    Schedule::from_str(&with_seconds)
+                        .map(|schedule| (with_seconds, schedule))
+                        .map_err(|_| SchedulerError::InvalidCronExpression(initial_err.to_string()))
+                } else {
+                    Err(SchedulerError::InvalidCronExpression(initial_err.to_string()))
+                }
+            }
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             schedules: Arc::new(RwLock::new(HashMap::new())),
@@ -80,15 +102,14 @@ impl ExperimentScheduler {
     /// Add a new scheduled experiment
     pub fn add_schedule(&self, request: CreateScheduleRequest) -> Result<ScheduledExperiment, SchedulerError> {
         // Validate cron expression
-        let schedule = Schedule::from_str(&request.cron)
-            .map_err(|e| SchedulerError::InvalidCronExpression(e.to_string()))?;
+        let (cron_expr, schedule) = Self::parse_cron_expr(&request.cron)?;
 
         // Calculate next run time
         let next_run = schedule.upcoming(Utc).next();
 
         let scheduled = ScheduledExperiment {
             name: request.name.clone(),
-            cron_expr: request.cron,
+            cron_expr,
             scenario_yaml: request.scenario_config,
             replicas: request.replicas,
             enabled: true,
