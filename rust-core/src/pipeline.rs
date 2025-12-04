@@ -3,6 +3,9 @@
 //! This module provides the streaming pipeline infrastructure for running
 //! cryptographic benchmarks in real-time data processing scenarios.
 
+use crate::crypto_adapter::{CryptoAdapter, CryptoError};
+use std::time::Instant;
+
 /// Error type for pipeline operations
 #[derive(Debug)]
 pub enum PipelineError {
@@ -79,6 +82,45 @@ impl Pipeline {
     pub fn config(&self) -> &PipelineConfig {
         &self.config
     }
+
+    /// Runs a timed cryptographic operation
+    ///
+    /// # Arguments
+    /// * `adapter` - The crypto adapter to use
+    /// * `operation` - The operation to perform: "sign", "verify", "encrypt", "decrypt", "keygen"
+    /// * `payload` - The payload data for the operation
+    ///
+    /// # Returns
+    /// The duration of the operation in microseconds
+    pub fn run_timed_operation(
+        adapter: &dyn CryptoAdapter,
+        operation: &str,
+        payload: &[u8],
+    ) -> Result<u128, CryptoError> {
+        let start = Instant::now();
+
+        match operation {
+            "sign" => {
+                adapter.sign(&[], payload)?;
+            }
+            "verify" => {
+                adapter.verify(&[], payload, payload)?;
+            }
+            "encrypt" => {
+                adapter.encapsulate(payload)?;
+            }
+            "decrypt" => {
+                adapter.decapsulate(payload, payload)?;
+            }
+            "keygen" => {
+                adapter.keygen()?;
+            }
+            _ => return Err(CryptoError::NotImplemented),
+        }
+
+        let duration = start.elapsed().as_micros();
+        Ok(duration)
+    }
 }
 
 impl Default for Pipeline {
@@ -90,6 +132,7 @@ impl Default for Pipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto_adapter::NoOpCryptoAdapter;
 
     #[test]
     fn test_pipeline_new() {
@@ -102,5 +145,28 @@ mod tests {
         let mut pipeline = Pipeline::new();
         assert!(pipeline.run().is_ok());
     }
-}
 
+    #[test]
+    fn test_run_timed_operation_sign() {
+        let adapter = NoOpCryptoAdapter;
+        let payload = vec![0u8; 64];
+        let result = Pipeline::run_timed_operation(&adapter, "sign", &payload);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_timed_operation_keygen() {
+        let adapter = NoOpCryptoAdapter;
+        let payload = vec![0u8; 64];
+        let result = Pipeline::run_timed_operation(&adapter, "keygen", &payload);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_timed_operation_unknown() {
+        let adapter = NoOpCryptoAdapter;
+        let payload = vec![0u8; 64];
+        let result = Pipeline::run_timed_operation(&adapter, "unknown_op", &payload);
+        assert!(matches!(result, Err(CryptoError::NotImplemented)));
+    }
+}

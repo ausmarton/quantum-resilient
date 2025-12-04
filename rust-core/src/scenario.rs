@@ -34,8 +34,16 @@ pub struct WorkloadConfig {
 /// Algorithm configuration for a scenario
 #[derive(Debug, Deserialize)]
 pub struct AlgorithmConfig {
-    /// Name of the crypto adapter to use (e.g., "noop", "kyber", "dilithium")
+    /// Name of the crypto adapter to use (e.g., "noop", "rsa2048", "ecdsa_p256")
     pub adapter: String,
+    /// Operation to perform: "sign", "verify", "encrypt", "decrypt", "keygen"
+    #[serde(default = "default_operation")]
+    pub operation: String,
+}
+
+/// Default operation if not specified in YAML
+fn default_operation() -> String {
+    "sign".to_string()
 }
 
 /// Loads a scenario from a YAML file
@@ -68,6 +76,11 @@ pub fn load_scenario(path: &str) -> Result<Scenario, Box<dyn std::error::Error>>
     Ok(scenario)
 }
 
+/// Returns a list of supported operations
+pub fn supported_operations() -> &'static [&'static str] {
+    &["sign", "verify", "encrypt", "decrypt", "keygen"]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -83,6 +96,7 @@ workload:
   duration_sec: 10
 algorithm:
   adapter: noop
+  operation: sign
 "#;
         let scenario: Scenario = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(scenario.id, "test_scenario");
@@ -91,6 +105,7 @@ algorithm:
         assert_eq!(scenario.workload.msg_size_bytes, 256);
         assert_eq!(scenario.workload.duration_sec, 10);
         assert_eq!(scenario.algorithm.adapter, "noop");
+        assert_eq!(scenario.algorithm.operation, "sign");
     }
 
     #[test]
@@ -103,10 +118,27 @@ workload:
   duration_sec: 1
 algorithm:
   adapter: noop
+  operation: keygen
 "#;
         let scenario: Scenario = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(scenario.id, "minimal");
         assert!(scenario.description.is_none());
+        assert_eq!(scenario.algorithm.operation, "keygen");
+    }
+
+    #[test]
+    fn test_scenario_default_operation() {
+        let yaml = r#"
+id: default_op
+workload:
+  msgs_per_sec: 10
+  msg_size_bytes: 64
+  duration_sec: 1
+algorithm:
+  adapter: noop
+"#;
+        let scenario: Scenario = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(scenario.algorithm.operation, "sign");
     }
 
     #[test]
@@ -117,4 +149,3 @@ algorithm:
         assert!(err.to_string().contains("Failed to open"));
     }
 }
-

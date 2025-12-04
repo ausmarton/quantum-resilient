@@ -3,9 +3,15 @@
 //! This module defines the `CryptoAdapter` trait which provides a unified interface
 //! for both classical and post-quantum cryptographic operations.
 
+pub mod ecdsa_adapter;
 pub mod noop_adapter;
+pub mod registry;
+pub mod rsa_adapter;
 
+pub use ecdsa_adapter::EcdsaP256Adapter;
 pub use noop_adapter::NoOpCryptoAdapter;
+pub use registry::{get_adapter, supported_adapters};
+pub use rsa_adapter::Rsa2048Adapter;
 
 /// Metadata about a generated keypair
 #[derive(Debug, Clone)]
@@ -131,4 +137,3 @@ mod tests {
         assert_eq!(cloned.secret_key_length, meta.secret_key_length);
     }
 }
-

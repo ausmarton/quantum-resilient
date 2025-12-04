@@ -8,4 +8,4 @@ workload:
 
 algorithm:
   adapter: noop
-
+  operation: sign
