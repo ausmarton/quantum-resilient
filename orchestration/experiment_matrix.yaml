@@ -18,6 +18,23 @@ defaults:
     workers: 4
     queue_capacity: 4000
 
+# Scaling experiment configuration
+scaling:
+  # Replica counts to test for horizontal scaling
+  replicas: [1, 2, 4, 8]
+  
+  # Which algorithms to include in scaling tests
+  # (subset to reduce experiment time)
+  scaling_algorithms:
+    - kyber512
+    - dilithium2
+    - hybrid_kyber_dilithium
+  
+  # Fixed parameters for scaling tests
+  scaling_payload: 1024
+  scaling_rate: 500
+  scaling_runs: 3
+
 # Environment configurations
 environments:
   native:

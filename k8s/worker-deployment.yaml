@@ -1,0 +1,257 @@
+# =============================================================================
+# worker-deployment.yaml - Kubernetes Deployment for multi-replica scaling tests
+#
+# Runs N replicas of pqc-bench for horizontal scaling experiments.
+# Each replica processes the same workload independently.
+#
+# Usage:
+#   kubectl apply -f k8s/worker-deployment.yaml
+#   kubectl scale deployment pqc-bench-workers --replicas=4
+#
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pqc-bench-workers
+  namespace: default
+  labels:
+    app: pqc-bench
+    component: worker
+    experiment-type: scaling
+spec:
+  # Replicas set dynamically via kubectl or kustomize
+  replicas: 1
+  
+  selector:
+    matchLabels:
+      app: pqc-bench
+      component: worker
+  
+  template:
+    metadata:
+      labels:
+        app: pqc-bench
+        component: worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9898"
+        prometheus.io/path: "/metrics"
+    spec:
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+      
+      # Security context
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      
+      # Init container for metadata
+      initContainers:
+        - name: gather-metadata
+          image: busybox:1.36
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              mkdir -p /results/raw
+              
+              # Generate unique replica ID from pod name
+              REPLICA_ID=$(echo "$POD_NAME" | sed 's/.*-//')
+              
+              cat > /results/replica_metadata.json << EOF
+              {
+                "type": "kubernetes_replica",
+                "replica_id": "${REPLICA_ID}",
+                "node_name": "${NODE_NAME:-unknown}",
+                "pod_name": "${POD_NAME:-unknown}",
+                "pod_namespace": "${POD_NAMESPACE:-default}",
+                "pod_ip": "${POD_IP:-unknown}",
+                "replica_count": "${REPLICA_COUNT:-1}",
+                "experiment_id": "${EXPERIMENT_ID:-unknown}",
+                "container_image": "pqc-bench:latest",
+                "kernel_version": "$(uname -r)",
+                "arch": "$(uname -m)",
+                "hostname": "$(hostname)",
+                "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              }
+              EOF
+              
+              echo "Replica metadata written"
+              cat /results/replica_metadata.json
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: REPLICA_COUNT
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['replica-count']
+            - name: EXPERIMENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: pqc-scaling-config
+                  key: experiment_id
+                  optional: true
+          volumeMounts:
+            - name: results
+              mountPath: /results
+      
+      # Main benchmark container
+      containers:
+        - name: pqc-bench
+          image: pqc-bench:latest
+          imagePullPolicy: IfNotPresent
+          
+          args:
+            - "--scenario"
+            - "/config/scenario.yaml"
+          
+          env:
+            - name: RUST_LOG
+              value: "info"
+            - name: QR_MODE
+              value: "container"
+            - name: QR_REPLICA_MODE
+              value: "true"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          
+          volumeMounts:
+            - name: scenario-config
+              mountPath: /config
+              readOnly: true
+            - name: results
+              mountPath: /results
+          
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          
+          ports:
+            - name: metrics
+              containerPort: 9898
+              protocol: TCP
+          
+          # Liveness probe
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9898
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          
+          # Readiness probe
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 9898
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      
+      volumes:
+        - name: scenario-config
+          configMap:
+            name: pqc-bench-scenario
+        - name: results
+          emptyDir:
+            sizeLimit: 1Gi
+      
+      # Pod anti-affinity to spread replicas across nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: pqc-bench
+                    component: worker
+                topologyKey: kubernetes.io/hostname
+      
+      tolerations:
+        - key: "node.kubernetes.io/not-ready"
+          operator: "Exists"
+          effect: "NoSchedule"
+
+---
+# ConfigMap for scaling experiment configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pqc-scaling-config
+  namespace: default
+  labels:
+    app: pqc-bench
+data:
+  experiment_id: "scaling-test"
+  replica_count: "1"
+  duration_sec: "30"
+
+---
+# Service for metrics aggregation
+apiVersion: v1
+kind: Service
+metadata:
+  name: pqc-bench-workers
+  namespace: default
+  labels:
+    app: pqc-bench
+spec:
+  selector:
+    app: pqc-bench
+    component: worker
+  ports:
+    - name: metrics
+      port: 9898
+      targetPort: 9898
+  clusterIP: None  # Headless service for individual pod access
+

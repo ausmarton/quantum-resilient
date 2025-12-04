@@ -36,6 +36,7 @@ OUT_DIR=""
 EXP_ID=""
 RUNS=1
 SEED=""
+REPLICAS=1
 SKIP_BUILD=false
 SKIP_ANALYSIS=false
 SKIP_AGGREGATION=false
@@ -83,13 +84,14 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Run PQC benchmark experiment in Minikube Kubernetes cluster.
-Supports multiple repeated runs with aggregated statistics.
+Supports multiple repeated runs and horizontal scaling experiments.
 
 OPTIONS:
     --scenario PATH     Path to scenario YAML file (required)
     --out DIR           Output directory for results (required)
     --exp-id ID         Experiment identifier (required)
     --runs N            Number of repeated runs (default: 1)
+    --replicas N        Number of parallel pod replicas (default: 1)
     --seed NUM          Base RNG seed (each run gets seed+run_index)
     --skip-build        Skip container image build
     --skip-analysis     Skip Python analysis after run
@@ -106,6 +108,10 @@ EXAMPLES:
     # Five repeated runs
     $0 --scenario scenarios/hybrid_kyber_dilithium.yaml \\
        --out results/k8s_exp1 --exp-id k8s_exp1 --runs 5
+
+    # Scaling test with 4 replicas
+    $0 --scenario scenarios/hybrid_kyber_dilithium.yaml \\
+       --out results/scale_test --exp-id scale_4x --replicas 4
 
 PREREQUISITES:
     1. Start Minikube with Podman driver:
@@ -142,6 +148,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --runs)
             RUNS="$2"
+            shift 2
+            ;;
+        --replicas)
+            REPLICAS="$2"
             shift 2
             ;;
         --seed)
@@ -219,8 +229,16 @@ log_info "Experiment ID: $EXP_ID"
 log_info "Scenario: $SCENARIO"
 log_info "Output: $OUT_DIR"
 log_info "Runs: $RUNS"
+log_info "Replicas: $REPLICAS"
 [[ -n "$SEED" ]] && log_info "Base RNG seed: $SEED"
 log_info "Started: $START_ISO"
+
+# Determine if we're doing a scaling test
+SCALING_MODE=false
+if [[ $REPLICAS -gt 1 ]]; then
+    SCALING_MODE=true
+    log_info "Mode: Scaling test (parallel job with $REPLICAS pods)"
+fi
 
 # =============================================================================
 # Step 1: Verify prerequisites
@@ -397,9 +415,28 @@ kubectl create configmap "$CONFIGMAP_NAME" \
 rm -f "$TEMP_SCENARIO"
 log_success "ConfigMap created"
 
-# Apply Job
-log_info "Creating Job..."
-kubectl apply -f "$SCRIPT_DIR/k8s/worker-job.yaml" -n "$NAMESPACE"
+# Apply Job (use parallel job for scaling tests)
+if [[ "$SCALING_MODE" == "true" ]]; then
+    log_info "Creating parallel Job with $REPLICAS replicas..."
+    
+    # Update scaling config
+    kubectl create configmap pqc-scaling-config \
+        --from-literal=experiment_id="$RUN_EXP_ID" \
+        --from-literal=replica_count="$REPLICAS" \
+        --from-literal=duration_sec="30" \
+        --dry-run=client -o yaml | kubectl apply -f - -n "$NAMESPACE"
+    
+    # Create the parallel job with dynamic parallelism
+    cat "$SCRIPT_DIR/k8s/worker-parallel-job.yaml" | \
+        sed "s/parallelism: 1/parallelism: $REPLICAS/" | \
+        sed "s/completions: 1/completions: $REPLICAS/" | \
+        kubectl apply -f - -n "$NAMESPACE"
+    
+    JOB_NAME="pqc-bench-scaling"
+else
+    log_info "Creating Job..."
+    kubectl apply -f "$SCRIPT_DIR/k8s/worker-job.yaml" -n "$NAMESPACE"
+fi
 
 log_success "Kubernetes resources deployed"
 
@@ -529,6 +566,8 @@ cat > "$RUN_OUT_DIR/manifest.json" <<EOF
     "duration_sec": $ELAPSED,
     "events_count": $EVENT_COUNT,
     "rng_seed": $MANIFEST_SEED,
+    "replicas": $REPLICAS,
+    "scaling_mode": $SCALING_MODE,
     "kubernetes": {
         "node_name": "$NODE_NAME",
         "k8s_version": "$K8S_VERSION",

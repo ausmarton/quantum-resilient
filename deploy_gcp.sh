@@ -40,6 +40,7 @@ BUCKET=""
 MACHINE_TYPE="n2-standard-2"
 NODE_COUNT=1
 RUNS=1
+REPLICAS=1
 SEED=""
 SKIP_TERRAFORM=false
 SKIP_BUILD=false
@@ -150,6 +151,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --runs)
             RUNS="$2"
+            shift 2
+            ;;
+        --replicas)
+            REPLICAS="$2"
             shift 2
             ;;
         --seed)

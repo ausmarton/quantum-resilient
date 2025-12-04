@@ -1,0 +1,237 @@
+# =============================================================================
+# worker-parallel-job.yaml - Kubernetes Job with parallelism for scaling tests
+#
+# Runs N parallel pods for horizontal scaling experiments.
+# Each pod executes the benchmark and writes results to a shared volume or GCS.
+#
+# Usage:
+#   # Set parallelism dynamically
+#   kubectl apply -f k8s/worker-parallel-job.yaml
+#
+#   # Or patch:
+#   kubectl patch job pqc-bench-scaling --type=json \
+#     -p='[{"op": "replace", "path": "/spec/parallelism", "value": 4}]'
+#
+# =============================================================================
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pqc-bench-scaling
+  namespace: default
+  labels:
+    app: pqc-bench
+    component: worker
+    experiment-type: scaling
+spec:
+  # Parallelism controls how many pods run concurrently
+  parallelism: 1
+  
+  # Completions = parallelism means each pod runs once
+  completions: 1
+  
+  # Completion mode: Indexed gives each pod a unique index
+  completionMode: Indexed
+  
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  
+  template:
+    metadata:
+      labels:
+        app: pqc-bench
+        component: worker
+        experiment-type: scaling
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9898"
+    spec:
+      restartPolicy: Never
+      
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      
+      initContainers:
+        - name: gather-metadata
+          image: busybox:1.36
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              
+              # Use JOB_COMPLETION_INDEX as replica ID
+              REPLICA_ID="${JOB_COMPLETION_INDEX:-0}"
+              REPLICA_DIR="/results/replica-${REPLICA_ID}"
+              mkdir -p "${REPLICA_DIR}/raw"
+              
+              cat > "${REPLICA_DIR}/replica_metadata.json" << EOF
+              {
+                "type": "kubernetes_parallel_job",
+                "replica_id": "${REPLICA_ID}",
+                "replica_count": "${REPLICA_COUNT:-1}",
+                "job_completion_index": "${JOB_COMPLETION_INDEX:-0}",
+                "node_name": "${NODE_NAME:-unknown}",
+                "pod_name": "${POD_NAME:-unknown}",
+                "pod_namespace": "${POD_NAMESPACE:-default}",
+                "pod_ip": "${POD_IP:-unknown}",
+                "experiment_id": "${EXPERIMENT_ID:-unknown}",
+                "container_image": "pqc-bench:latest",
+                "kernel_version": "$(uname -r)",
+                "arch": "$(uname -m)",
+                "hostname": "$(hostname)",
+                "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              }
+              EOF
+              
+              # Create symlink for output path
+              ln -sf "${REPLICA_DIR}" /results/current
+              
+              echo "Replica ${REPLICA_ID} metadata written to ${REPLICA_DIR}"
+              cat "${REPLICA_DIR}/replica_metadata.json"
+          env:
+            - name: JOB_COMPLETION_INDEX
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['batch.kubernetes.io/job-completion-index']
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: REPLICA_COUNT
+              valueFrom:
+                configMapKeyRef:
+                  name: pqc-scaling-config
+                  key: replica_count
+                  optional: true
+            - name: EXPERIMENT_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: pqc-scaling-config
+                  key: experiment_id
+                  optional: true
+          volumeMounts:
+            - name: results
+              mountPath: /results
+      
+      containers:
+        - name: pqc-bench
+          image: pqc-bench:latest
+          imagePullPolicy: IfNotPresent
+          
+          # Run benchmark with replica-specific output
+          command:
+            - /bin/sh
+            - -c
+            - |
+              REPLICA_ID="${JOB_COMPLETION_INDEX:-0}"
+              OUTPUT_DIR="/results/replica-${REPLICA_ID}"
+              
+              echo "Starting replica ${REPLICA_ID}"
+              echo "Output directory: ${OUTPUT_DIR}"
+              
+              # Run the benchmark
+              /app/pqc-bench \
+                --scenario /config/scenario.yaml \
+                --out "${OUTPUT_DIR}/raw" \
+                2>&1 | tee "${OUTPUT_DIR}/benchmark.log"
+              
+              EXIT_CODE=$?
+              
+              # Write completion marker
+              echo "{\"replica_id\": \"${REPLICA_ID}\", \"exit_code\": ${EXIT_CODE}, \"completed_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > "${OUTPUT_DIR}/completed.json"
+              
+              exit ${EXIT_CODE}
+          
+          env:
+            - name: RUST_LOG
+              value: "info"
+            - name: QR_MODE
+              value: "container"
+            - name: QR_REPLICA_MODE
+              value: "true"
+            - name: JOB_COMPLETION_INDEX
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.annotations['batch.kubernetes.io/job-completion-index']
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          
+          volumeMounts:
+            - name: scenario-config
+              mountPath: /config
+              readOnly: true
+            - name: results
+              mountPath: /results
+          
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+      
+      volumes:
+        - name: scenario-config
+          configMap:
+            name: pqc-bench-scenario
+        - name: results
+          persistentVolumeClaim:
+            claimName: pqc-bench-results
+      
+      # Spread replicas across nodes when possible
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: pqc-bench
+                    experiment-type: scaling
+                topologyKey: kubernetes.io/hostname
+      
+      tolerations:
+        - key: "node.kubernetes.io/not-ready"
+          operator: "Exists"
+          effect: "NoSchedule"
+

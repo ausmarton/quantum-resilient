@@ -37,11 +37,13 @@ PROJECT=""
 BUCKET=""
 REGION="us-central1"
 PARALLEL_JOBS=1
+REPLICAS="1"  # Comma-separated list: 1,2,4,8
 SKIP_GENERATION=false
 SKIP_NATIVE=false
 SKIP_MINIKUBE=false
 SKIP_GCP=false
 SKIP_ANALYSIS=false
+SKIP_SCALING=false
 DRY_RUN=false
 CONTINUE_ON_ERROR=true
 MAX_RETRIES=2
@@ -105,21 +107,30 @@ OPTIONS:
     --bucket NAME           GCS bucket name (required for gcp env)
     --region REGION         GCP region (default: us-central1)
     --parallel N            Parallel jobs per environment (default: 1)
+    --replicas LIST         Comma-separated replica counts for scaling tests: 1,2,4,8
     --skip-generation       Skip scenario generation
     --skip-native           Skip native experiments
     --skip-minikube         Skip Minikube experiments
     --skip-gcp              Skip GCP experiments
     --skip-analysis         Skip final analysis
+    --skip-scaling          Skip scaling analysis
     --dry-run               Show what would be executed
     --continue-on-error     Continue if individual experiments fail (default: true)
     --max-retries N         Max retries per failed experiment (default: 2)
     -h, --help              Show this help message
 
 EXAMPLE:
+    # Standard experiments
     $0 --envs native,minikube,gcp \\
        --project my-gcp-project \\
        --bucket pqc-bench-results \\
        --matrix orchestration/experiment_matrix.yaml
+
+    # Scaling experiments with multiple replica counts
+    $0 --envs minikube,gcp \\
+       --replicas 1,2,4,8 \\
+       --project my-gcp-project \\
+       --bucket pqc-bench-results
 EOF
     exit 1
 }
@@ -140,6 +151,7 @@ run_experiment() {
     local scenario_path=$2
     local scenario_id=$3
     local output_dir=$4
+    local replicas=${5:-1}
     local retries=0
     
     while [[ $retries -le $MAX_RETRIES ]]; do
@@ -147,6 +159,7 @@ run_experiment() {
         
         case $env in
             native)
+                # Native doesn't support replicas
                 "$SCRIPT_DIR/run_local.sh" \
                     --scenario "$scenario_path" \
                     --out "$output_dir" \
@@ -156,6 +169,7 @@ run_experiment() {
                 "$SCRIPT_DIR/run_minikube.sh" \
                     --scenario "$scenario_path" \
                     --out "$output_dir" \
+                    --replicas "$replicas" \
                     --exp-id "$scenario_id" 2>&1 || exit_code=$?
                 ;;
             gcp)
@@ -164,7 +178,8 @@ run_experiment() {
                     --exp-id "$scenario_id" \
                     --project "$PROJECT" \
                     --bucket "$BUCKET" \
-                    --region "$REGION" 2>&1 || exit_code=$?
+                    --region "$REGION" \
+                    --replicas "$replicas" 2>&1 || exit_code=$?
                 
                 if [[ $exit_code -eq 0 ]]; then
                     "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
@@ -198,8 +213,9 @@ add_to_index() {
     local rate=$5
     local output_dir=$6
     local status=$7
+    local replicas=${8:-1}
     
-    MASTER_INDEX+=("{\"scenario_id\":\"$scenario_id\",\"environment\":\"$env\",\"algorithm\":\"$algorithm\",\"payload_size\":$payload,\"rate\":$rate,\"output_dir\":\"$output_dir\",\"status\":\"$status\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}")
+    MASTER_INDEX+=("{\"scenario_id\":\"$scenario_id\",\"environment\":\"$env\",\"algorithm\":\"$algorithm\",\"payload_size\":$payload,\"rate\":$rate,\"replicas\":$replicas,\"output_dir\":\"$output_dir\",\"status\":\"$status\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}")
 }
 
 # -----------------------------------------------------------------------------
@@ -231,6 +247,10 @@ while [[ $# -gt 0 ]]; do
             PARALLEL_JOBS="$2"
             shift 2
             ;;
+        --replicas)
+            REPLICAS="$2"
+            shift 2
+            ;;
         --skip-generation)
             SKIP_GENERATION=true
             shift
@@ -249,6 +269,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-analysis)
             SKIP_ANALYSIS=true
+            shift
+            ;;
+        --skip-scaling)
+            SKIP_SCALING=true
             shift
             ;;
         --dry-run)
@@ -305,7 +329,11 @@ echo -e "${NC}"
 
 log_info "Matrix: $MATRIX"
 log_info "Environments: $ENVS"
+log_info "Replicas: $REPLICAS"
 log_info "Started: $START_ISO"
+
+# Parse replicas into array
+IFS=',' read -ra REPLICA_ARRAY <<< "$REPLICAS"
 
 if [[ "$DRY_RUN" == "true" ]]; then
     log_warn "DRY RUN MODE - No experiments will be executed"
@@ -402,41 +430,56 @@ for s in manifest['scenarios']:
     while IFS='|' read -r scenario_id scenario_path algorithm payload rate; do
         scenario_count=$((scenario_count + 1))
         
-        output_dir="$RESULTS_BASE/$env/$scenario_id"
-        
-        update_progress $scenario_count $TOTAL_SCENARIOS "$env" "$scenario_id"
-        
-        if [[ "$DRY_RUN" == "true" ]]; then
-            log_info "  Would run: $scenario_id"
-            add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "dry_run"
-            continue
-        fi
-        
-        # Check if already completed
-        if [[ -f "$output_dir/stats/summary.json" ]] || [[ -f "$output_dir/merged/merged.jsonl" ]]; then
-            log_info "  Skipping (already completed): $scenario_id"
-            add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached"
-            env_completed=$((env_completed + 1))
-            continue
-        fi
-        
-        # Run experiment
-        if run_experiment "$env" "$scenario_path" "$scenario_id" "$output_dir"; then
-            log_success "  Completed: $scenario_id"
-            add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "success"
-            env_completed=$((env_completed + 1))
-            COMPLETED_SCENARIOS=$((COMPLETED_SCENARIOS + 1))
-        else
-            log_error "  Failed: $scenario_id"
-            add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed"
-            env_failed=$((env_failed + 1))
-            FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
-            
-            if [[ "$CONTINUE_ON_ERROR" != "true" ]]; then
-                log_error "Stopping due to failure (use --continue-on-error to ignore)"
-                exit 1
+        # Iterate over replica counts
+        for replica_count in "${REPLICA_ARRAY[@]}"; do
+            # For native, only run with 1 replica
+            if [[ "$env" == "native" ]] && [[ "$replica_count" -gt 1 ]]; then
+                continue
             fi
-        fi
+            
+            # Generate unique output dir and ID for scaling experiments
+            if [[ "$replica_count" -gt 1 ]]; then
+                output_dir="$RESULTS_BASE/$env/${scenario_id}_r${replica_count}"
+                run_scenario_id="${scenario_id}_r${replica_count}"
+            else
+                output_dir="$RESULTS_BASE/$env/$scenario_id"
+                run_scenario_id="$scenario_id"
+            fi
+            
+            update_progress $scenario_count $TOTAL_SCENARIOS "$env" "$run_scenario_id"
+            
+            if [[ "$DRY_RUN" == "true" ]]; then
+                log_info "  Would run: $run_scenario_id (replicas: $replica_count)"
+                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "dry_run" "$replica_count"
+                continue
+            fi
+            
+            # Check if already completed
+            if [[ -f "$output_dir/stats/summary.json" ]] || [[ -f "$output_dir/merged/merged.jsonl" ]]; then
+                log_info "  Skipping (already completed): $run_scenario_id"
+                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
+                env_completed=$((env_completed + 1))
+                continue
+            fi
+            
+            # Run experiment with replica count
+            if run_experiment "$env" "$scenario_path" "$run_scenario_id" "$output_dir" "$replica_count"; then
+                log_success "  Completed: $run_scenario_id (replicas: $replica_count)"
+                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "success" "$replica_count"
+                env_completed=$((env_completed + 1))
+                COMPLETED_SCENARIOS=$((COMPLETED_SCENARIOS + 1))
+            else
+                log_error "  Failed: $run_scenario_id"
+                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                env_failed=$((env_failed + 1))
+                FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
+                
+                if [[ "$CONTINUE_ON_ERROR" != "true" ]]; then
+                    log_error "Stopping due to failure (use --continue-on-error to ignore)"
+                    exit 1
+                fi
+            fi
+        done
         
     done <<< "$scenarios"
     
@@ -569,6 +612,42 @@ else
 fi
 
 # =============================================================================
+# Phase 9: Replica Scaling Analysis
+# =============================================================================
+log_phase "9. Replica Scaling Analysis"
+
+if [[ "$SKIP_ANALYSIS" == "true" ]] || [[ "$SKIP_SCALING" == "true" ]] || [[ "$DRY_RUN" == "true" ]]; then
+    log_warn "Skipping scaling analysis"
+else
+    # Check if we have scaling experiments (replicas > 1)
+    HAS_SCALING=false
+    for r in "${REPLICA_ARRAY[@]}"; do
+        if [[ "$r" -gt 1 ]]; then
+            HAS_SCALING=true
+            break
+        fi
+    done
+    
+    if [[ "$HAS_SCALING" == "true" ]]; then
+        log_info "Generating replica scaling plots..."
+        
+        mkdir -p "$FINAL_RESULTS_DIR/figures/scaling"
+        
+        python3 "$SCRIPT_DIR/analysis/plot_replica_scaling.py" \
+            --index "$INDEX_FILE" \
+            --output "$FINAL_RESULTS_DIR/figures/scaling" 2>&1 || log_warn "Scaling plots completed with warnings"
+        
+        # List generated files
+        if [[ -d "$FINAL_RESULTS_DIR/figures/scaling" ]]; then
+            SCALING_FILES=$(ls "$FINAL_RESULTS_DIR/figures/scaling/"*.png 2>/dev/null | wc -l)
+            log_success "Generated $SCALING_FILES scaling figures"
+        fi
+    else
+        log_info "No scaling experiments (replicas > 1) detected, skipping"
+    fi
+fi
+
+# =============================================================================
 # Final Summary
 # =============================================================================
 END_TIME=$(date +%s)
@@ -601,6 +680,7 @@ log_info "Key outputs:"
 [[ -f "$FINAL_RESULTS_DIR/hypothesis_table.csv" ]] && echo "  ├── hypothesis_table.csv"
 [[ -f "$FINAL_RESULTS_DIR/hypothesis_interpretation.txt" ]] && echo "  ├── hypothesis_interpretation.txt"
 [[ -d "$FINAL_RESULTS_DIR/figures" ]] && echo "  ├── figures/"
+[[ -d "$FINAL_RESULTS_DIR/figures/scaling" ]] && echo "  │   └── scaling/ (throughput, latency, efficiency)"
 [[ -d "$FINAL_RESULTS_DIR/stats" ]] && echo "  ├── stats/"
 [[ -d "$FINAL_RESULTS_DIR/tables" ]] && echo "  ├── tables/"
 [[ -f "$FINAL_RESULTS_DIR/report.pdf" ]] && echo "  └── report.pdf (dissertation-ready)"
