@@ -51,6 +51,8 @@ class PipelineRunner:
         self.research_scripts = research_scripts_dir or (root / "research" / "scripts")
         self.packaging_dir = root / "packaging"
         self.packaging_output = root / "packaging" / "output" / experiment_id
+        self.reproducibility_dir = root / "reproducibility"
+        self.reproducibility_output = root / "reproducibility" / "output" / experiment_id
         
         self.steps_completed = []
         self.errors = []
@@ -286,7 +288,87 @@ class PipelineRunner:
             ]
         )
     
-    def run_all(self, version: str = "1.0.0", package: bool = False, publish_target: Optional[str] = None, publish_uri: Optional[str] = None) -> bool:
+    def step_reproducibility_variance(self) -> bool:
+        """Reproducibility: Variance analysis."""
+        return self.run_step(
+            "Variance Analysis",
+            [
+                sys.executable,
+                str(self.reproducibility_dir / "variance.py"),
+                "--input", str(self.reproducibility_output),
+                "--out", str(self.reproducibility_output / "analysis"),
+            ]
+        )
+    
+    def step_reproducibility_confidence(self) -> bool:
+        """Reproducibility: Confidence intervals."""
+        return self.run_step(
+            "Confidence Intervals",
+            [
+                sys.executable,
+                str(self.reproducibility_dir / "confidence.py"),
+                "--input", str(self.reproducibility_output),
+                "--out", str(self.reproducibility_output / "analysis"),
+                "--method", "bca",
+            ]
+        )
+    
+    def step_reproducibility_stability(self) -> bool:
+        """Reproducibility: Stability analysis."""
+        return self.run_step(
+            "Stability Analysis",
+            [
+                sys.executable,
+                str(self.reproducibility_dir / "stability.py"),
+                "--input", str(self.reproducibility_output),
+                "--out", str(self.reproducibility_output / "analysis"),
+            ]
+        )
+    
+    def step_reproducibility_report(self) -> bool:
+        """Generate reproducibility report."""
+        # This would generate the Jinja2 report - simplified for now
+        analysis_dir = self.reproducibility_output / "analysis"
+        if not analysis_dir.exists():
+            print("Warning: Analysis directory not found")
+            return False
+        
+        # Copy summary to output
+        import shutil
+        repro_output = self.output_dir / "reproducibility"
+        repro_output.mkdir(parents=True, exist_ok=True)
+        
+        for src_file in analysis_dir.glob("*"):
+            if src_file.is_file():
+                shutil.copy2(src_file, repro_output / src_file.name)
+        
+        self.steps_completed.append("Reproducibility Report")
+        return True
+    
+    def run_reproducibility_analysis(self) -> bool:
+        """Run complete reproducibility analysis on existing data."""
+        print(f"\n{'#'*60}")
+        print(f"# Reproducibility Analysis: {self.experiment_id}")
+        print(f"{'#'*60}")
+        
+        success = True
+        
+        # Run analysis steps
+        steps = [
+            ("variance", self.step_reproducibility_variance),
+            ("confidence", self.step_reproducibility_confidence),
+            ("stability", self.step_reproducibility_stability),
+            ("report", self.step_reproducibility_report),
+        ]
+        
+        for name, step_func in steps:
+            if not step_func():
+                print(f"\nWarning: Reproducibility step '{name}' failed")
+                success = False
+        
+        return success
+    
+    def run_all(self, version: str = "1.0.0", package: bool = False, publish_target: Optional[str] = None, publish_uri: Optional[str] = None, reproducibility: bool = False) -> bool:
         """Run complete pipeline."""
         print(f"\n{'#'*60}")
         print(f"# Research Pipeline: {self.experiment_id}")
@@ -322,6 +404,11 @@ class PipelineRunner:
         if publish_target and publish_uri:
             if not self.step_publish(publish_target, publish_uri):
                 print("\nWarning: Publishing failed")
+        
+        # Optional: Reproducibility analysis
+        if reproducibility:
+            if not self.run_reproducibility_analysis():
+                print("\nWarning: Reproducibility analysis failed")
         
         # Print summary
         self.print_summary()
@@ -391,6 +478,23 @@ def main():
         "--publish-uri",
         help="URI for publishing (e.g., gs://bucket/path)"
     )
+    parser.add_argument(
+        "--reproducibility",
+        action="store_true",
+        help="Run reproducibility analysis"
+    )
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=10,
+        help="Number of runs for reproducibility (default: 10)"
+    )
+    parser.add_argument(
+        "--cluster-sizes",
+        type=int,
+        nargs="+",
+        help="Cluster sizes for scaling analysis"
+    )
     
     args = parser.parse_args()
     
@@ -410,6 +514,7 @@ def main():
             package=args.package,
             publish_target=args.publish_target,
             publish_uri=args.publish_uri,
+            reproducibility=args.reproducibility,
         )
         sys.exit(0 if success else 1)
     elif args.step:
@@ -433,6 +538,7 @@ def main():
         print("Use --step <name> to run a single step")
         print("Use --package to also create bundle")
         print("Use --publish-target and --publish-uri to publish")
+        print("Use --reproducibility to run reproducibility analysis")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,8 @@
+# Output directory
+output/
+!output/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+

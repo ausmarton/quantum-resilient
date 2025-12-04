@@ -1,0 +1,190 @@
+# Reproducibility Report: {{ experiment_id }}
+
+**Generated:** {{ timestamp }}
+**Runs:** {{ num_runs }}
+**Scenario:** {{ scenario_name }}
+
+---
+
+## 1. Experiment Description
+
+{{ description | default("Reproducibility analysis of quantum-resilient cryptography benchmarks.") }}
+
+### Configuration
+
+| Parameter | Value |
+|-----------|-------|
+| Scenario | `{{ scenario_name }}` |
+| Number of Runs | {{ num_runs }} |
+| Replicas per Run | {{ replicas }} |
+| Total Events | {{ "{:,}".format(total_events | default(0) | int) }} |
+
+---
+
+## 2. Summary Statistics Across {{ num_runs }} Runs
+
+### Latency (μs)
+
+| Metric | Mean | Std Dev | CV (%) | Min | Max |
+|--------|------|---------|--------|-----|-----|
+| Mean Latency | {{ "%.2f" | format(stats.latency_mean.mean) }} | {{ "%.2f" | format(stats.latency_mean.std) }} | {{ "%.2f" | format(stats.latency_mean.cv * 100) }} | {{ "%.2f" | format(stats.latency_mean.min) }} | {{ "%.2f" | format(stats.latency_mean.max) }} |
+| p50 Latency | {{ "%.2f" | format(stats.latency_p50.mean) }} | {{ "%.2f" | format(stats.latency_p50.std) }} | {{ "%.2f" | format(stats.latency_p50.cv * 100) }} | {{ "%.2f" | format(stats.latency_p50.min) }} | {{ "%.2f" | format(stats.latency_p50.max) }} |
+| p99 Latency | {{ "%.2f" | format(stats.latency_p99.mean) }} | {{ "%.2f" | format(stats.latency_p99.std) }} | {{ "%.2f" | format(stats.latency_p99.cv * 100) }} | {{ "%.2f" | format(stats.latency_p99.min) }} | {{ "%.2f" | format(stats.latency_p99.max) }} |
+
+### Throughput (ops/s)
+
+| Metric | Mean | Std Dev | CV (%) |
+|--------|------|---------|--------|
+| Mean Throughput | {{ "%.2f" | format(stats.throughput_mean.mean) }} | {{ "%.2f" | format(stats.throughput_mean.std) }} | {{ "%.2f" | format(stats.throughput_mean.cv * 100) }} |
+| Max Throughput | {{ "%.2f" | format(stats.throughput_max.mean) }} | {{ "%.2f" | format(stats.throughput_max.std) }} | {{ "%.2f" | format(stats.throughput_max.cv * 100) }} |
+
+---
+
+## 3. Variability Analysis
+
+### Coefficient of Variation
+
+The coefficient of variation (CV) measures relative variability:
+
+| Metric | CV (%) | Interpretation |
+|--------|--------|----------------|
+| Latency Mean | {{ "%.2f" | format(variance.latency_cv * 100) }} | {{ 'Low' if variance.latency_cv < 0.1 else 'Moderate' if variance.latency_cv < 0.25 else 'High' }} |
+| Throughput Mean | {{ "%.2f" | format(variance.throughput_cv * 100) }} | {{ 'Low' if variance.throughput_cv < 0.1 else 'Moderate' if variance.throughput_cv < 0.25 else 'High' }} |
+| p99 Latency | {{ "%.2f" | format(variance.p99_cv * 100) }} | {{ 'Low' if variance.p99_cv < 0.15 else 'Moderate' if variance.p99_cv < 0.3 else 'High' }} |
+
+### Variance Interpretation
+
+{% if variance.overall_stable %}
+✅ **Results are stable**: Low run-to-run variability indicates reproducible results.
+{% else %}
+⚠️ **Results show variability**: Consider investigating sources of variance.
+{% endif %}
+
+---
+
+## 4. Confidence Intervals
+
+### 95% Confidence Intervals
+
+| Metric | Point Estimate | Lower Bound | Upper Bound | Method |
+|--------|----------------|-------------|-------------|--------|
+| Mean Latency | {{ "%.2f" | format(ci.latency_mean.estimate) }} | {{ "%.2f" | format(ci.latency_mean.lower) }} | {{ "%.2f" | format(ci.latency_mean.upper) }} | {{ ci.latency_mean.method }} |
+| p50 Latency | {{ "%.2f" | format(ci.latency_p50.estimate) }} | {{ "%.2f" | format(ci.latency_p50.lower) }} | {{ "%.2f" | format(ci.latency_p50.upper) }} | {{ ci.latency_p50.method }} |
+| p99 Latency | {{ "%.2f" | format(ci.latency_p99.estimate) }} | {{ "%.2f" | format(ci.latency_p99.lower) }} | {{ "%.2f" | format(ci.latency_p99.upper) }} | {{ ci.latency_p99.method }} |
+| Throughput | {{ "%.2f" | format(ci.throughput.estimate) }} | {{ "%.2f" | format(ci.throughput.lower) }} | {{ "%.2f" | format(ci.throughput.upper) }} | {{ ci.throughput.method }} |
+
+---
+
+## 5. Stability Metrics
+
+### Distribution Consistency
+
+| Run Pair | KS Statistic | KS p-value | Wasserstein Dist | Stable? |
+|----------|--------------|------------|------------------|---------|
+{% for pair in stability.pairwise[:10] %}
+| Run {{ pair.run_a }} vs {{ pair.run_b }} | {{ "%.4f" | format(pair.ks_stat) }} | {{ "%.4f" | format(pair.ks_pval) }} | {{ "%.2f" | format(pair.wasserstein) }} | {{ '✅' if pair.stable else '⚠️' }} |
+{% endfor %}
+{% if stability.pairwise | length > 10 %}
+| ... | ... | ... | ... | ({{ stability.pairwise | length - 10 }} more pairs) |
+{% endif %}
+
+### Tail Stability (p99/p99.9)
+
+| Metric | Stable | Max Deviation (%) |
+|--------|--------|-------------------|
+| p99 Latency | {{ '✅' if stability.p99_stable else '⚠️' }} | {{ "%.2f" | format(stability.p99_max_deviation * 100) }} |
+| p99.9 Latency | {{ '✅' if stability.p999_stable else '⚠️' }} | {{ "%.2f" | format(stability.p999_max_deviation * 100) }} |
+
+### Overall Stability Assessment
+
+{% if stability.overall_stable %}
+✅ **System is stable**: Distributions are consistent across runs.
+{% else %}
+⚠️ **Stability concerns**: Some runs show significant deviations.
+
+**Recommendations:**
+{% for rec in stability.recommendations %}
+- {{ rec }}
+{% endfor %}
+{% endif %}
+
+---
+
+## 6. Regression Detection
+
+{% if regression.detected %}
+### ⚠️ Regressions Detected
+
+| Metric | Baseline | Current | Change (%) | Threshold | Status |
+|--------|----------|---------|------------|-----------|--------|
+{% for reg in regression.failures %}
+| {{ reg.metric }} | {{ "%.2f" | format(reg.baseline) }} | {{ "%.2f" | format(reg.current) }} | {{ "%+.2f" | format(reg.change_pct) }} | {{ reg.threshold }}% | ❌ FAIL |
+{% endfor %}
+
+{% else %}
+### ✅ No Regressions Detected
+
+All metrics are within acceptable thresholds compared to baseline.
+{% endif %}
+
+---
+
+{% if scaling %}
+## 7. Cluster Scaling Analysis
+
+### Throughput Scaling
+
+| Cluster Size | Throughput (ops/s) | Efficiency (%) |
+|--------------|-------------------|----------------|
+{% for point in scaling.throughput_curve %}
+| {{ point.size }} pods | {{ "%.2f" | format(point.throughput) }} | {{ "%.1f" | format(point.efficiency * 100) }} |
+{% endfor %}
+
+### Latency Scaling
+
+| Cluster Size | Mean Latency (μs) | p99 Latency (μs) |
+|--------------|-------------------|------------------|
+{% for point in scaling.latency_curve %}
+| {{ point.size }} pods | {{ "%.2f" | format(point.mean_latency) }} | {{ "%.2f" | format(point.p99_latency) }} |
+{% endfor %}
+
+### Scaling Model
+
+- **Best Fit Model:** {{ scaling.best_model }}
+- **Scaling Factor:** {{ "%.3f" | format(scaling.scaling_factor) }}
+- **Saturation Point:** {{ scaling.saturation_point }} pods
+- **R² Score:** {{ "%.4f" | format(scaling.r2_score) }}
+
+{% endif %}
+
+---
+
+## 8. Interpretation
+
+### Key Findings
+
+{% for finding in interpretation.findings %}
+- {{ finding }}
+{% endfor %}
+
+### Recommendations
+
+{% for rec in interpretation.recommendations %}
+- {{ rec }}
+{% endfor %}
+
+---
+
+## 9. Provenance
+
+| Property | Value |
+|----------|-------|
+| Experiment ID | `{{ experiment_id }}` |
+| Git Commit | `{{ provenance.git_commit | default("N/A") }}` |
+| Dataset Version | {{ dataset_version }} |
+| Generated | {{ timestamp }} |
+
+---
+
+*Report generated by Quantum-Resilient Reproducibility Suite v{{ suite_version | default("1.0.0") }}*
+

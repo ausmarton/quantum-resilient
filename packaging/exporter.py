@@ -156,6 +156,32 @@ def create_export_structure(
         shutil.copy2(release_notes, export_dir / "release_notes.md")
         files_copied += 1
     
+    # Reproducibility content
+    console.print("[cyan]Copying reproducibility content...[/cyan]")
+    repro_src = research_dir / "reproducibility"
+    if repro_src.exists():
+        repro_export = export_dir / "reproducibility"
+        repro_export.mkdir(exist_ok=True)
+        
+        for f in repro_src.glob("*"):
+            if f.is_file():
+                shutil.copy2(f, repro_export / f.name)
+                files_copied += 1
+    
+    # Also check reproducibility output directory
+    root = research_dir.parent.parent
+    repro_analysis = root / "reproducibility" / "output" / experiment_id / "analysis"
+    if repro_analysis.exists():
+        repro_export = export_dir / "reproducibility"
+        repro_export.mkdir(exist_ok=True)
+        
+        for f in repro_analysis.glob("*"):
+            if f.is_file():
+                dst = repro_export / f.name
+                if not dst.exists():
+                    shutil.copy2(f, dst)
+                    files_copied += 1
+    
     # Create README for the export
     create_export_readme(export_dir, experiment_id, lite)
     files_copied += 1
@@ -192,6 +218,12 @@ This directory contains the research data export for experiment `{experiment_id}
 │   ├── manifest.json       # Complete bundle manifest
 │   ├── provenance.json     # Experiment provenance
 │   └── dataset_version.json
+├── reproducibility/         # Reproducibility analysis (if available)
+│   ├── variance_summary.json
+│   ├── confidence_intervals.json
+│   ├── stability_summary.json
+│   ├── stability_matrix.png
+│   └── reproducibility_report.md
 └── README.md               # This file
 ```
 

@@ -122,6 +122,15 @@ quantum-resilient/
 │   ├── publish.py            # Publish to GCS/S3/GitHub
 │   ├── templates/            # Jinja2 templates
 │   └── output/               # Generated bundles
+├── reproducibility/      # Reproducibility test suite
+│   ├── runner.py             # Multi-run execution
+│   ├── variance.py           # Variance analysis
+│   ├── confidence.py         # Confidence intervals
+│   ├── stability.py          # Distribution stability
+│   ├── regression.py         # Regression detection
+│   ├── cluster_scaling.py    # Scaling analysis
+│   ├── templates/            # Report templates
+│   └── output/               # Generated reports
 ├── Makefile
 ├── Dockerfile.podman
 └── README.md
@@ -1168,6 +1177,88 @@ gsutil ls gs://public-artifacts/quantum-resilient/exp_001/
    git tag -a exp_001_published -m "Published experiment exp_001"
    git push --tags
    ```
+
+## Running Reproducibility Tests
+
+The framework includes a reproducibility suite for validating experimental stability.
+
+### Execute Multiple Runs
+
+```bash
+# Run experiment 20 times for statistical analysis
+python reproducibility/runner.py \
+  --scenario scenarios/kyber_benchmark.yaml \
+  --runs 20 \
+  --replicas 30 \
+  --exp-prefix kyber_stability
+```
+
+### Analyze Reproducibility
+
+```bash
+# Variance analysis
+python reproducibility/variance.py \
+  --input reproducibility/output/kyber_stability_20250201_120000
+
+# Confidence intervals (BCa bootstrap)
+python reproducibility/confidence.py \
+  --input reproducibility/output/kyber_stability_20250201_120000 \
+  --method bca
+
+# Stability testing
+python reproducibility/stability.py \
+  --input reproducibility/output/kyber_stability_20250201_120000
+
+# Regression detection
+python reproducibility/regression.py \
+  --current batch_002 \
+  --baseline batch_001
+```
+
+### Integrated Pipeline
+
+```bash
+# Run complete pipeline with reproducibility analysis
+python research/scripts/pipeline_runner.py \
+  --exp-id exp_001 \
+  --generate-all \
+  --reproducibility \
+  --package
+```
+
+### Cluster Scaling Analysis
+
+```bash
+# Analyze performance at different cluster sizes
+python reproducibility/cluster_scaling.py \
+  --input scaling_experiments/ \
+  --cluster-sizes 2 5 10 20 40
+```
+
+### Output
+
+```
+reproducibility/output/batch_001/
+├── analysis/
+│   ├── variance_summary.json
+│   ├── variance_plots.png
+│   ├── confidence_intervals.json
+│   ├── stability_summary.json
+│   ├── stability_matrix.png
+│   └── reproducibility_report.md
+└── run_*/
+    ├── merged/
+    └── stats/
+```
+
+### Interpretation Guide
+
+| Metric | Good | Acceptable | Investigate |
+|--------|------|------------|-------------|
+| CV (Latency) | < 10% | 10-25% | > 25% |
+| CV (Throughput) | < 10% | 10-25% | > 25% |
+| p99 CV | < 15% | 15-30% | > 30% |
+| KS p-value | > 0.05 | 0.01-0.05 | < 0.01 |
 
 ## Development
 

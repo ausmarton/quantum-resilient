@@ -45,3 +45,6 @@ Pillow>=10.0.0  # For figure format conversion
 # CLI and packaging
 typer>=0.9.0
 requests>=2.31.0  # For GitHub API
+
+# Reproducibility analysis
+statsmodels>=0.14.0  # For statistical modeling

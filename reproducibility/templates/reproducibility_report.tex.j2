@@ -1,0 +1,229 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{siunitx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\geometry{margin=2.5cm}
+
+\definecolor{passgreen}{RGB}{34, 139, 34}
+\definecolor{failred}{RGB}{178, 34, 34}
+
+\title{Reproducibility Report: {{ experiment_id }}}
+\author{Quantum-Resilient Benchmark Framework}
+\date{ {{ timestamp }} }
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report documents the reproducibility analysis of experiment \texttt{ {{- experiment_id -}} }.
+The experiment was executed {{ num_runs }} times to assess statistical stability.
+Mean latency was {{ "%.2f" | format(stats.latency_mean.mean) }}~$\mu$s with a coefficient of variation of {{ "%.2f" | format(variance.latency_cv * 100) }}\%.
+{% if stability.overall_stable %}Results demonstrate high reproducibility.{% else %}Some variability was observed.{% endif %}
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ============================================================================
+\section{Experiment Description}
+%% ============================================================================
+
+{{ description | default("Reproducibility analysis of quantum-resilient cryptography benchmarks.") }}
+
+\begin{table}[h]
+\centering
+\caption{Experiment Configuration}
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Scenario & \texttt{ {{- scenario_name -}} } \\
+Number of Runs & {{ num_runs }} \\
+Replicas per Run & {{ replicas }} \\
+Total Events & {{ "{:,}".format(total_events | default(0) | int) }} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ============================================================================
+\section{Summary Statistics Across {{ num_runs }} Runs}
+%% ============================================================================
+
+\subsection{Latency Distribution}
+
+\begin{table}[h]
+\centering
+\caption{Latency Statistics (\si{\micro\second})}
+\begin{tabular}{l S[table-format=6.2] S[table-format=4.2] S[table-format=2.2] S[table-format=6.2] S[table-format=6.2]}
+\toprule
+\textbf{Metric} & \textbf{Mean} & \textbf{Std Dev} & \textbf{CV (\%)} & \textbf{Min} & \textbf{Max} \\
+\midrule
+Mean Latency & {{ "%.2f" | format(stats.latency_mean.mean) }} & {{ "%.2f" | format(stats.latency_mean.std) }} & {{ "%.2f" | format(stats.latency_mean.cv * 100) }} & {{ "%.2f" | format(stats.latency_mean.min) }} & {{ "%.2f" | format(stats.latency_mean.max) }} \\
+p50 Latency & {{ "%.2f" | format(stats.latency_p50.mean) }} & {{ "%.2f" | format(stats.latency_p50.std) }} & {{ "%.2f" | format(stats.latency_p50.cv * 100) }} & {{ "%.2f" | format(stats.latency_p50.min) }} & {{ "%.2f" | format(stats.latency_p50.max) }} \\
+p99 Latency & {{ "%.2f" | format(stats.latency_p99.mean) }} & {{ "%.2f" | format(stats.latency_p99.std) }} & {{ "%.2f" | format(stats.latency_p99.cv * 100) }} & {{ "%.2f" | format(stats.latency_p99.min) }} & {{ "%.2f" | format(stats.latency_p99.max) }} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Throughput}
+
+\begin{table}[h]
+\centering
+\caption{Throughput Statistics (ops/s)}
+\begin{tabular}{l S[table-format=6.2] S[table-format=4.2] S[table-format=2.2]}
+\toprule
+\textbf{Metric} & \textbf{Mean} & \textbf{Std Dev} & \textbf{CV (\%)} \\
+\midrule
+Mean Throughput & {{ "%.2f" | format(stats.throughput_mean.mean) }} & {{ "%.2f" | format(stats.throughput_mean.std) }} & {{ "%.2f" | format(stats.throughput_mean.cv * 100) }} \\
+Max Throughput & {{ "%.2f" | format(stats.throughput_max.mean) }} & {{ "%.2f" | format(stats.throughput_max.std) }} & {{ "%.2f" | format(stats.throughput_max.cv * 100) }} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ============================================================================
+\section{Variability Analysis}
+%% ============================================================================
+
+The coefficient of variation (CV) measures relative variability as $CV = \sigma / \mu$.
+
+\begin{table}[h]
+\centering
+\caption{Coefficient of Variation Summary}
+\begin{tabular}{l S[table-format=2.2] l}
+\toprule
+\textbf{Metric} & \textbf{CV (\%)} & \textbf{Interpretation} \\
+\midrule
+Latency Mean & {{ "%.2f" | format(variance.latency_cv * 100) }} & {{ 'Low' if variance.latency_cv < 0.1 else 'Moderate' if variance.latency_cv < 0.25 else 'High' }} \\
+Throughput & {{ "%.2f" | format(variance.throughput_cv * 100) }} & {{ 'Low' if variance.throughput_cv < 0.1 else 'Moderate' if variance.throughput_cv < 0.25 else 'High' }} \\
+p99 Latency & {{ "%.2f" | format(variance.p99_cv * 100) }} & {{ 'Low' if variance.p99_cv < 0.15 else 'Moderate' if variance.p99_cv < 0.3 else 'High' }} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+{% if variance.overall_stable %}
+\textcolor{passgreen}{\textbf{Results are stable:}} Low run-to-run variability indicates reproducible results.
+{% else %}
+\textcolor{failred}{\textbf{Results show variability:}} Consider investigating sources of variance.
+{% endif %}
+
+%% ============================================================================
+\section{Confidence Intervals}
+%% ============================================================================
+
+\begin{table}[h]
+\centering
+\caption{95\% Confidence Intervals}
+\begin{tabular}{l S[table-format=6.2] S[table-format=6.2] S[table-format=6.2] l}
+\toprule
+\textbf{Metric} & \textbf{Estimate} & \textbf{Lower} & \textbf{Upper} & \textbf{Method} \\
+\midrule
+Mean Latency & {{ "%.2f" | format(ci.latency_mean.estimate) }} & {{ "%.2f" | format(ci.latency_mean.lower) }} & {{ "%.2f" | format(ci.latency_mean.upper) }} & {{ ci.latency_mean.method }} \\
+p50 Latency & {{ "%.2f" | format(ci.latency_p50.estimate) }} & {{ "%.2f" | format(ci.latency_p50.lower) }} & {{ "%.2f" | format(ci.latency_p50.upper) }} & {{ ci.latency_p50.method }} \\
+p99 Latency & {{ "%.2f" | format(ci.latency_p99.estimate) }} & {{ "%.2f" | format(ci.latency_p99.lower) }} & {{ "%.2f" | format(ci.latency_p99.upper) }} & {{ ci.latency_p99.method }} \\
+Throughput & {{ "%.2f" | format(ci.throughput.estimate) }} & {{ "%.2f" | format(ci.throughput.lower) }} & {{ "%.2f" | format(ci.throughput.upper) }} & {{ ci.throughput.method }} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ============================================================================
+\section{Stability Metrics}
+%% ============================================================================
+
+\subsection{Distribution Consistency}
+
+Kolmogorov-Smirnov (KS) tests were used to compare distributions between runs.
+
+{% if stability.overall_stable %}
+\textcolor{passgreen}{\textbf{System is stable:}} Distributions are consistent across runs.
+{% else %}
+\textcolor{failred}{\textbf{Stability concerns:}} Some runs show significant deviations.
+{% endif %}
+
+\subsection{Tail Stability}
+
+\begin{table}[h]
+\centering
+\caption{Tail Latency Stability}
+\begin{tabular}{l c S[table-format=2.2]}
+\toprule
+\textbf{Metric} & \textbf{Stable} & \textbf{Max Deviation (\%)} \\
+\midrule
+p99 Latency & {{ '\\checkmark' if stability.p99_stable else '\\texttimes' }} & {{ "%.2f" | format(stability.p99_max_deviation * 100) }} \\
+p99.9 Latency & {{ '\\checkmark' if stability.p999_stable else '\\texttimes' }} & {{ "%.2f" | format(stability.p999_max_deviation * 100) }} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ============================================================================
+\section{Regression Detection}
+%% ============================================================================
+
+{% if regression.detected %}
+\textcolor{failred}{\textbf{Regressions Detected}}
+
+\begin{table}[h]
+\centering
+\caption{Regression Failures}
+\begin{tabular}{l S[table-format=6.2] S[table-format=6.2] S[table-format=+3.2] l}
+\toprule
+\textbf{Metric} & \textbf{Baseline} & \textbf{Current} & \textbf{Change (\%)} & \textbf{Status} \\
+\midrule
+{% for reg in regression.failures %}
+{{ reg.metric }} & {{ "%.2f" | format(reg.baseline) }} & {{ "%.2f" | format(reg.current) }} & {{ "%+.2f" | format(reg.change_pct) }} & FAIL \\
+{% endfor %}
+\bottomrule
+\end{tabular}
+\end{table}
+{% else %}
+\textcolor{passgreen}{\textbf{No Regressions Detected}}
+
+All metrics are within acceptable thresholds compared to baseline.
+{% endif %}
+
+{% if scaling %}
+%% ============================================================================
+\section{Cluster Scaling Analysis}
+%% ============================================================================
+
+\subsection{Scaling Model}
+
+\begin{itemize}
+  \item \textbf{Best Fit Model:} {{ scaling.best_model }}
+  \item \textbf{Scaling Factor:} {{ "%.3f" | format(scaling.scaling_factor) }}
+  \item \textbf{Saturation Point:} {{ scaling.saturation_point }} pods
+  \item \textbf{$R^2$ Score:} {{ "%.4f" | format(scaling.r2_score) }}
+\end{itemize}
+
+{% endif %}
+
+%% ============================================================================
+\section{Provenance}
+%% ============================================================================
+
+\begin{table}[h]
+\centering
+\caption{Experiment Provenance}
+\begin{tabular}{ll}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+Experiment ID & \texttt{ {{- experiment_id -}} } \\
+Git Commit & \texttt{ {{- provenance.git_commit | default("N/A") -}} } \\
+Dataset Version & {{ dataset_version }} \\
+Generated & {{ timestamp }} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
+
