@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "quantum-resilient-orchestrator.fullname" . }}
+  labels:
+    {{- include "quantum-resilient-orchestrator.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "quantum-resilient-orchestrator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "quantum-resilient-orchestrator.selectorLabels" . | nindent 8 }}
+        app: quantum-resilient
+        component: orchestrator
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "quantum-resilient-orchestrator.serviceAccountName" . }}
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: api
+              containerPort: 7070
+              protocol: TCP
+          env:
+            - name: QR_ORCH_LISTEN_ADDR
+              value: {{ .Values.orchestrator.listenAddr | quote }}
+            - name: QR_ORCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: QR_WORKER_IMAGE
+              value: {{ .Values.orchestrator.workerImage | quote }}
+            - name: QR_LOCAL_RESULTS_DIR
+              value: {{ .Values.orchestrator.localResultsDir | quote }}
+            - name: QR_MAX_TIME_DRIFT_NS
+              value: {{ .Values.orchestrator.maxTimeDriftNs | quote }}
+            {{- if .Values.orchestrator.storageUri }}
+            - name: QR_STORAGE_URI
+              value: {{ .Values.orchestrator.storageUri | quote }}
+            {{- end }}
+            - name: RUST_LOG
+              value: "info"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: api
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: api
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: results-data
+              mountPath: {{ .Values.orchestrator.localResultsDir }}
+      volumes:
+        - name: results-data
+          {{- if eq .Values.resultsVolume.type "emptyDir" }}
+          emptyDir:
+            sizeLimit: {{ .Values.resultsVolume.emptyDir.sizeLimit }}
+          {{- else if eq .Values.resultsVolume.type "persistentVolumeClaim" }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.resultsVolume.persistentVolumeClaim.claimName }}
+          {{- else if eq .Values.resultsVolume.type "hostPath" }}
+          hostPath:
+            path: {{ .Values.resultsVolume.hostPath.path }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+

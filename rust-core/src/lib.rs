@@ -27,4 +27,4 @@ pub use scenario::{
 };
 pub use telemetry::{init_tracing, JsonlWriter, Metrics, SysInfoSampler, Telemetry};
 pub use workload::Workload;
-pub use controlplane::{start_control_plane_server, ControlPlaneState};
+pub use controlplane::{start_control_plane_server, ControlPlaneState, OrchestrationState};

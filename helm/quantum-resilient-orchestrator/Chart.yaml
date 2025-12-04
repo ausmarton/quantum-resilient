@@ -1,0 +1,18 @@
+apiVersion: v2
+name: quantum-resilient-orchestrator
+description: Distributed experiment orchestrator for PQC benchmark framework
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - quantum-resilient
+  - pqc
+  - benchmark
+  - orchestrator
+  - distributed
+maintainers:
+  - name: Quantum Resilient Team
+home: https://github.com/quantum-resilient/quantum-resilient
+sources:
+  - https://github.com/quantum-resilient/quantum-resilient
+

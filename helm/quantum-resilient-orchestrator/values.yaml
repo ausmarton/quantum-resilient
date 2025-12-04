@@ -1,0 +1,114 @@
+# Default values for quantum-resilient-orchestrator
+# This is a YAML-formatted file.
+
+# Replica count (typically 1 for the orchestrator)
+replicaCount: 1
+
+# Container image configuration
+image:
+  repository: localhost/qr-orchestrator
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# Image pull secrets
+imagePullSecrets: []
+
+# Override name and fullname
+nameOverride: ""
+fullnameOverride: ""
+
+# Service account configuration
+serviceAccount:
+  # Create a service account
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # Name of the service account (auto-generated if not set)
+  name: ""
+
+# Pod annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "7070"
+  prometheus.io/path: "/metrics"
+
+# Pod security context
+podSecurityContext: {}
+
+# Container security context
+securityContext: {}
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 7070
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: qr-orchestrator.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# Resource limits
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+# Autoscaling configuration
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Orchestrator-specific configuration
+orchestrator:
+  # Listen address
+  listenAddr: "0.0.0.0:7070"
+  # Worker image to spawn
+  workerImage: "localhost/pqc-bench:latest"
+  # Local results directory
+  localResultsDir: "/data/results"
+  # Maximum time drift allowed (nanoseconds)
+  maxTimeDriftNs: 5000000
+  # Storage backend URI (s3://bucket/prefix or gs://bucket/prefix)
+  storageUri: ""
+
+# Results volume configuration
+resultsVolume:
+  # Type: emptyDir, persistentVolumeClaim, or hostPath
+  type: emptyDir
+  # EmptyDir size limit
+  emptyDir:
+    sizeLimit: 10Gi
+  # PVC configuration (if type is persistentVolumeClaim)
+  persistentVolumeClaim:
+    claimName: ""
+  # HostPath configuration (if type is hostPath)
+  hostPath:
+    path: ""
+
+# RBAC configuration
+rbac:
+  # Create RBAC resources
+  create: true
+

@@ -69,3 +69,6 @@ parking_lot = "0.12"
 
 # Time utilities
 chrono = "0.4"
+
+# HTTP client for orchestrator communication
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }

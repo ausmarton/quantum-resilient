@@ -1,0 +1,60 @@
+---
+# Service Account for the Orchestrator
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: qr-orchestrator
+  labels:
+    app: quantum-resilient
+    component: orchestrator
+---
+# Role with permissions to manage experiments
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: qr-orchestrator
+  labels:
+    app: quantum-resilient
+    component: orchestrator
+rules:
+  # Jobs management for experiment workers
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "delete", "get", "list", "watch", "patch"]
+  # Pod management and monitoring
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+  # Pod logs for debugging
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  # Pod exec for result collection
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  # ConfigMap management for scenario distribution
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create", "delete", "get", "list", "watch", "patch"]
+  # Services for worker discovery
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+---
+# RoleBinding to attach role to service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: qr-orchestrator
+  labels:
+    app: quantum-resilient
+    component: orchestrator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: qr-orchestrator
+subjects:
+  - kind: ServiceAccount
+    name: qr-orchestrator
+

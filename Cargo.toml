@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
-members = ["rust-core"]
+members = ["rust-core", "orchestrator"]
 

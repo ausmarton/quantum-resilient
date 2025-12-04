@@ -16,7 +16,7 @@ This framework provides tools for:
 ```
 quantum-resilient/
 ├── Cargo.toml              # Workspace definition
-├── rust-core/              # Core library and binary
+├── rust-core/              # Core library and binary (worker)
 │   ├── Cargo.toml
 │   └── src/
 │       ├── lib.rs              # Library entry point
@@ -39,6 +39,17 @@ quantum-resilient/
 │       ├── scenario.rs         # Scenario loading
 │       ├── telemetry/          # Metrics & logging
 │       └── workload.rs         # Workload generator
+├── orchestrator/           # Distributed experiment orchestrator
+│   ├── Cargo.toml
+│   ├── Dockerfile
+│   └── src/
+│       ├── main.rs             # Orchestrator entry point
+│       ├── api.rs              # REST API endpoints
+│       ├── controller.rs       # Experiment lifecycle management
+│       ├── coordinator.rs      # Worker coordination
+│       ├── k8s_client.rs       # Kubernetes API integration
+│       ├── aggregator.rs       # Result aggregation
+│       └── storage.rs          # Object storage (S3/GCS)
 ├── scenarios/              # Benchmark scenario definitions
 │   ├── smoke_noop.yaml
 │   ├── rsa_smoke.yaml
@@ -58,9 +69,16 @@ quantum-resilient/
 │       ├── serviceaccount.yaml
 │       ├── role.yaml
 │       ├── rolebinding.yaml
-│       └── ingress.yaml
-├── helm/                   # Helm chart
-│   └── quantum-resilient/
+│       ├── ingress.yaml
+│       ├── orchestrator-deployment.yaml
+│       ├── orchestrator-service.yaml
+│       └── orchestrator-rbac.yaml
+├── helm/                   # Helm charts
+│   ├── quantum-resilient/
+│   │   ├── Chart.yaml
+│   │   ├── values.yaml
+│   │   └── templates/
+│   └── quantum-resilient-orchestrator/
 │       ├── Chart.yaml
 │       ├── values.yaml
 │       └── templates/
@@ -436,6 +454,153 @@ The container supports these environment variables:
 | `QR_CONTROL_PLANE_PORT` | Control plane port | `6060` |
 | `QR_PROM_PORT` | Prometheus metrics port | `9898` |
 | `RUST_LOG` | Log level | `info` |
+
+## Distributed Experiments with Orchestrator
+
+The orchestrator enables coordinated, multi-pod benchmark experiments across a Kubernetes cluster.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Orchestrator (qr-orchestrator)              │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────────────┐ │
+│  │   REST API  │  │  Coordinator │  │  K8s Client             │ │
+│  │  :7070      │  │  (barriers)  │  │  (Jobs, ConfigMaps)     │ │
+│  └─────────────┘  └──────────────┘  └─────────────────────────┘ │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+         ┌───────────────────┼───────────────────┐
+         │                   │                   │
+         ▼                   ▼                   ▼
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│  Worker Pod 1   │ │  Worker Pod 2   │ │  Worker Pod N   │
+│  (pqc-bench)    │ │  (pqc-bench)    │ │  (pqc-bench)    │
+│  :6060 :9898    │ │  :6060 :9898    │ │  :6060 :9898    │
+└─────────────────┘ └─────────────────┘ └─────────────────┘
+```
+
+### Orchestrator API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `POST /experiment` | Create | Create new experiment with scenario and replicas |
+| `GET /experiments` | List | List all experiments |
+| `GET /experiment/{id}/status` | Status | Get experiment status and worker counts |
+| `POST /experiment/{id}/start` | Start | Signal all workers to begin |
+| `POST /experiment/{id}/stop` | Stop | Gracefully stop all workers |
+| `POST /experiment/{id}/collect` | Collect | Aggregate results from all workers |
+| `DELETE /experiment/{id}` | Delete | Clean up experiment resources |
+
+### Creating a Distributed Experiment
+
+1. **Deploy the orchestrator:**
+
+```bash
+kubectl apply -f k8s/base/orchestrator-rbac.yaml
+kubectl apply -f k8s/base/orchestrator-deployment.yaml
+kubectl apply -f k8s/base/orchestrator-service.yaml
+```
+
+Or via Helm:
+
+```bash
+helm install qr-orch ./helm/quantum-resilient-orchestrator
+```
+
+2. **Create an experiment:**
+
+```bash
+# Port-forward to orchestrator
+kubectl port-forward svc/qr-orchestrator 7070:7070
+
+# Create experiment with 12 replicas
+curl -X POST http://localhost:7070/experiment \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scenarioConfig": "id: distributed_kyber\nworkload:\n  msgs_per_sec: 100\n  msg_size_bytes: 256\n  duration_sec: 60\nalgorithm:\n  adapter: kyber\n  operation: kem_aead_encrypt\nexecution:\n  mode: fixed_pool\n  workers: 4\n  queue_capacity: 2000\nmetrics:\n  prometheus_endpoint: \"0.0.0.0:9898\"\n  jsonl_out: \"./results/results.jsonl\"",
+    "replicas": 12,
+    "startDelayMs": 5000,
+    "experimentId": "exp_2025_0101_001"
+  }'
+```
+
+3. **Wait for workers to register:**
+
+```bash
+curl http://localhost:7070/experiment/exp_2025_0101_001/status
+# {"replicas": 12, "ready": 12, "completed": 0, "phase": "waiting"}
+```
+
+4. **Start the experiment:**
+
+```bash
+curl -X POST http://localhost:7070/experiment/exp_2025_0101_001/start
+```
+
+All workers will begin processing at a synchronized global start time.
+
+5. **Monitor progress:**
+
+```bash
+watch -n 2 'curl -s http://localhost:7070/experiment/exp_2025_0101_001/status'
+```
+
+6. **Collect and aggregate results:**
+
+```bash
+curl -X POST http://localhost:7070/experiment/exp_2025_0101_001/collect
+# {
+#   "artifactUri": "file:///data/results/exp_2025_0101_001/merged_results.jsonl",
+#   "events": 520000,
+#   "duration_sec": 60,
+#   "summary": {
+#     "total_events": 520000,
+#     "throughput_ops_sec": 8666.67,
+#     "latency_p50_us": 523,
+#     "latency_p99_us": 1245
+#   }
+# }
+```
+
+### Worker Environment Variables (Orchestrated Mode)
+
+When workers are spawned by the orchestrator, these variables are set:
+
+| Variable | Description |
+|----------|-------------|
+| `QR_ORCHESTRATOR_ADDRESS` | Orchestrator HTTP endpoint |
+| `QR_EXPERIMENT_ID` | Experiment identifier |
+| `QR_ENFORCE_TIMESYNC` | Warn on time drift > 5ms |
+| `POD_NAME` | Kubernetes pod name |
+| `POD_IP` | Kubernetes pod IP |
+
+### Time Synchronization
+
+Workers verify time synchronization with the orchestrator at registration:
+- If drift > 5ms, a warning is logged
+- With `QR_ENFORCE_TIMESYNC=true`, the warning is more prominent
+- All workers wait for a global start timestamp to ensure coordinated execution
+
+### Object Storage Integration
+
+Upload results to S3 or GCS:
+
+```bash
+# Deploy orchestrator with storage backend
+helm install qr-orch ./helm/quantum-resilient-orchestrator \
+  --set orchestrator.storageUri=s3://my-bucket/experiments
+```
+
+Enable storage features in build:
+
+```bash
+# S3 (AWS/MinIO)
+cargo build -p orchestrator --features storage-s3
+
+# GCS
+cargo build -p orchestrator --features storage-gcs
+```
 
 ## Development
 

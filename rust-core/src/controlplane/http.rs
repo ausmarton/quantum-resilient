@@ -1,7 +1,7 @@
 //! Control Plane HTTP Server
 //!
 //! Provides HTTP endpoints for Kubernetes liveness, readiness probes,
-//! worker status, and graceful shutdown.
+//! worker status, graceful shutdown, and orchestrator coordination.
 
 use crate::pipeline::ExecutionState;
 use crate::telemetry::Metrics;
@@ -11,13 +11,73 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::{info, warn};
+
+/// Orchestration state for distributed experiments
+#[derive(Clone)]
+pub struct OrchestrationState {
+    /// Worker ID assigned by orchestrator
+    pub worker_id: Arc<AtomicU32>,
+    /// Global start timestamp in nanoseconds
+    pub global_start_ns: Arc<AtomicU64>,
+    /// Whether this worker is registered with orchestrator
+    pub registered: Arc<AtomicBool>,
+    /// Whether start signal has been received
+    pub start_signal_received: Arc<AtomicBool>,
+    /// Whether worker is ready to start
+    pub ready_for_start: Arc<AtomicBool>,
+}
+
+impl OrchestrationState {
+    pub fn new() -> Self {
+        Self {
+            worker_id: Arc::new(AtomicU32::new(0)),
+            global_start_ns: Arc::new(AtomicU64::new(0)),
+            registered: Arc::new(AtomicBool::new(false)),
+            start_signal_received: Arc::new(AtomicBool::new(false)),
+            ready_for_start: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn set_registered(&self, worker_id: u32, global_start_ns: u64) {
+        self.worker_id.store(worker_id, Ordering::SeqCst);
+        self.global_start_ns.store(global_start_ns, Ordering::SeqCst);
+        self.registered.store(true, Ordering::SeqCst);
+    }
+
+    pub fn set_ready(&self) {
+        self.ready_for_start.store(true, Ordering::SeqCst);
+    }
+
+    pub fn set_start_signal(&self, global_start_ns: u64) {
+        self.global_start_ns.store(global_start_ns, Ordering::SeqCst);
+        self.start_signal_received.store(true, Ordering::SeqCst);
+    }
+
+    pub fn is_start_signal_received(&self) -> bool {
+        self.start_signal_received.load(Ordering::Relaxed)
+    }
+
+    pub fn get_global_start_ns(&self) -> u64 {
+        self.global_start_ns.load(Ordering::Relaxed)
+    }
+
+    pub fn get_worker_id(&self) -> u32 {
+        self.worker_id.load(Ordering::Relaxed)
+    }
+}
+
+impl Default for OrchestrationState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Shared state for the control plane
 pub struct ControlPlaneState {
@@ -29,6 +89,8 @@ pub struct ControlPlaneState {
     pub metrics_server_running: Arc<AtomicBool>,
     /// Execution mode string
     pub execution_mode: String,
+    /// Orchestration state for distributed experiments
+    pub orchestration: OrchestrationState,
 }
 
 impl Clone for ControlPlaneState {
@@ -38,6 +100,7 @@ impl Clone for ControlPlaneState {
             metrics: self.metrics.clone(),
             metrics_server_running: self.metrics_server_running.clone(),
             execution_mode: self.execution_mode.clone(),
+            orchestration: self.orchestration.clone(),
         }
     }
 }
@@ -49,6 +112,7 @@ impl ControlPlaneState {
             metrics,
             metrics_server_running: Arc::new(AtomicBool::new(false)),
             execution_mode: execution_mode.to_string(),
+            orchestration: OrchestrationState::new(),
         }
     }
 
@@ -57,8 +121,17 @@ impl ControlPlaneState {
         self
     }
 
+    pub fn with_orchestration(mut self, orchestration: OrchestrationState) -> Self {
+        self.orchestration = orchestration;
+        self
+    }
+
     pub fn set_metrics_server_running(&self, running: bool) {
         self.metrics_server_running.store(running, Ordering::SeqCst);
+    }
+
+    pub fn orchestration(&self) -> &OrchestrationState {
+        &self.orchestration
     }
 }
 
@@ -91,6 +164,43 @@ struct WorkersResponse {
 struct ShutdownResponse {
     status: String,
     message: String,
+}
+
+/// Request for /register endpoint (from orchestrator)
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RegisterRequest {
+    worker_id: u32,
+    global_start_unix_ns: u64,
+}
+
+/// Response for /register endpoint
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RegisterResponse {
+    registered: bool,
+    worker_id: u32,
+}
+
+/// Response for /ready_for_start endpoint
+#[derive(Serialize)]
+struct ReadyForStartResponse {
+    ready: bool,
+}
+
+/// Request for /start_signal endpoint
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StartSignalRequest {
+    global_start_unix_ns: u64,
+}
+
+/// Response for /start_signal endpoint
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StartSignalResponse {
+    acknowledged: bool,
+    worker_id: u32,
 }
 
 /// Starts the control plane HTTP server
@@ -135,9 +245,30 @@ async fn handle_request(
     state: ControlPlaneState,
     _remote_addr: SocketAddr,
 ) -> Result<Response<Full<Bytes>>, Infallible> {
-    let response = match (req.method(), req.uri().path()) {
+    use http_body_util::BodyExt;
+
+    let method = req.method().clone();
+    let path = req.uri().path().to_string();
+
+    // Collect body for POST requests
+    let body_bytes = if method == Method::POST {
+        match req.collect().await {
+            Ok(collected) => collected.to_bytes(),
+            Err(e) => {
+                warn!("Failed to read request body: {}", e);
+                return Ok(json_response(
+                    StatusCode::BAD_REQUEST,
+                    &serde_json::json!({"error": "Failed to read body"}),
+                ));
+            }
+        }
+    } else {
+        Bytes::new()
+    };
+
+    let response = match (method.clone(), path.as_str()) {
         // Health check - always returns OK if server is running
-        (&Method::GET, "/healthz") => {
+        (Method::GET, "/healthz") => {
             let body = HealthResponse {
                 status: "ok".to_string(),
             };
@@ -145,7 +276,7 @@ async fn handle_request(
         }
 
         // Readiness check - indicates if the service is ready to receive traffic
-        (&Method::GET, "/readyz") => {
+        (Method::GET, "/readyz") => {
             let (metrics_running, pipeline_started, scenario_loaded) =
                 if let Some(ref exec_state) = state.execution_state {
                     (
@@ -176,7 +307,7 @@ async fn handle_request(
         }
 
         // Worker status
-        (&Method::GET, "/workers") => {
+        (Method::GET, "/workers") => {
             let (active_workers, queue_length, queue_capacity) =
                 if let Some(ref exec_state) = state.execution_state {
                     (
@@ -203,7 +334,7 @@ async fn handle_request(
         }
 
         // Graceful shutdown
-        (&Method::POST, "/shutdown") | (&Method::GET, "/shutdown") => {
+        (Method::POST, "/shutdown") | (Method::GET, "/shutdown") => {
             info!("Shutdown requested via control plane");
 
             if let Some(ref exec_state) = state.execution_state {
@@ -222,6 +353,71 @@ async fn handle_request(
                 };
 
                 json_response(StatusCode::INTERNAL_SERVER_ERROR, &body)
+            }
+        }
+
+        // Orchestrator registration - called during distributed experiment setup
+        (Method::POST, "/register") => {
+            match serde_json::from_slice::<RegisterRequest>(&body_bytes) {
+                Ok(request) => {
+                    info!(
+                        "Registering with orchestrator: worker_id={}, global_start={}",
+                        request.worker_id, request.global_start_unix_ns
+                    );
+
+                    state
+                        .orchestration
+                        .set_registered(request.worker_id, request.global_start_unix_ns);
+
+                    let body = RegisterResponse {
+                        registered: true,
+                        worker_id: request.worker_id,
+                    };
+
+                    json_response(StatusCode::OK, &body)
+                }
+                Err(e) => {
+                    warn!("Failed to parse register request: {}", e);
+                    json_response(
+                        StatusCode::BAD_REQUEST,
+                        &serde_json::json!({"error": e.to_string()}),
+                    )
+                }
+            }
+        }
+
+        // Ready for start check - called by orchestrator to check if worker is ready
+        (Method::GET, "/ready_for_start") => {
+            let ready = state.orchestration.ready_for_start.load(Ordering::Relaxed);
+            let body = ReadyForStartResponse { ready };
+            json_response(StatusCode::OK, &body)
+        }
+
+        // Start signal - orchestrator signals worker to begin
+        (Method::POST, "/start_signal") => {
+            match serde_json::from_slice::<StartSignalRequest>(&body_bytes) {
+                Ok(request) => {
+                    info!(
+                        "Received start signal: global_start_ns={}",
+                        request.global_start_unix_ns
+                    );
+
+                    state.orchestration.set_start_signal(request.global_start_unix_ns);
+
+                    let body = StartSignalResponse {
+                        acknowledged: true,
+                        worker_id: state.orchestration.get_worker_id(),
+                    };
+
+                    json_response(StatusCode::OK, &body)
+                }
+                Err(e) => {
+                    warn!("Failed to parse start_signal request: {}", e);
+                    json_response(
+                        StatusCode::BAD_REQUEST,
+                        &serde_json::json!({"error": e.to_string()}),
+                    )
+                }
             }
         }
 
