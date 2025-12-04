@@ -3,10 +3,12 @@
 //! This module provides the async streaming pipeline infrastructure for running
 //! cryptographic benchmarks in real-time data processing scenarios.
 
-use crate::crypto_adapter::{CryptoAdapter, CryptoError};
+use crate::crypto_adapter::{
+    hybrid_decrypt, hybrid_encrypt, CryptoAdapter, CryptoError, HybridSizes, KeypairWithSecret,
+};
 use crate::scenario::Scenario;
-use crate::telemetry::{JsonlWriter, Metrics, SysInfoSampler};
 use crate::telemetry::jsonl_logger::EventRow;
+use crate::telemetry::{JsonlWriter, Metrics, SysInfoSampler};
 use chrono::Utc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -63,6 +65,19 @@ pub struct ProcessedEvent {
     pub output_size: Option<usize>,
 }
 
+/// Pipeline context containing shared state for KEM operations
+#[derive(Clone)]
+pub struct PipelineContext {
+    /// Cached keypair for KEM operations
+    pub keypair: Option<Arc<KeypairWithSecret>>,
+}
+
+impl Default for PipelineContext {
+    fn default() -> Self {
+        Self { keypair: None }
+    }
+}
+
 /// The main pipeline struct for orchestrating benchmark runs
 pub struct Pipeline {
     config: PipelineConfig,
@@ -90,10 +105,43 @@ impl Pipeline {
         jsonl_writer: JsonlWriter,
         sampler: SysInfoSampler,
     ) -> Result<PipelineStats, PipelineError> {
-        let (producer_tx, processor_rx) = mpsc::channel::<PipelineEvent>(self.config.buffer_size);
-        let (processor_tx, mut consumer_rx) = mpsc::channel::<ProcessedEvent>(self.config.buffer_size);
+        // Generate keypair if needed for KEM operations
+        let context = if scenario.requires_keypair() {
+            info!("Generating keypair for KEM operations...");
+            let meta = adapter
+                .keygen()
+                .map_err(|e| PipelineError::InitializationError(e.to_string()))?;
 
-        let total_events = scenario.workload.duration_sec as u64 * scenario.workload.msgs_per_sec as u64;
+            // For Kyber, we need the full keypair including secret key
+            // Generate a fresh keypair and store both parts
+            let (pk, sk) = generate_keypair_with_secret(&adapter)?;
+
+            let keypair = KeypairWithSecret {
+                public_key: pk,
+                secret_key: sk,
+                params: meta.params,
+            };
+
+            info!(
+                "Keypair generated: pk_len={}, sk_len={}",
+                keypair.public_key.len(),
+                keypair.secret_key.len()
+            );
+
+            PipelineContext {
+                keypair: Some(Arc::new(keypair)),
+            }
+        } else {
+            PipelineContext::default()
+        };
+
+        let (producer_tx, processor_rx) =
+            mpsc::channel::<PipelineEvent>(self.config.buffer_size);
+        let (processor_tx, mut consumer_rx) =
+            mpsc::channel::<ProcessedEvent>(self.config.buffer_size);
+
+        let total_events =
+            scenario.workload.duration_sec as u64 * scenario.workload.msgs_per_sec as u64;
         let events_processed = Arc::new(AtomicU64::new(0));
         let total_latency_us = Arc::new(AtomicU64::new(0));
 
@@ -102,8 +150,9 @@ impl Pipeline {
         // Spawn producer
         let producer_handle = {
             let scenario = scenario.clone();
+            let context = context.clone();
             tokio::spawn(async move {
-                producer_task(producer_tx, &scenario).await;
+                producer_task(producer_tx, &scenario, &context).await;
             })
         };
 
@@ -112,6 +161,7 @@ impl Pipeline {
             let scenario = scenario.clone();
             let metrics = metrics.clone();
             let sampler = sampler.clone();
+            let context = context.clone();
             tokio::spawn(async move {
                 processor_task(
                     processor_rx,
@@ -121,6 +171,7 @@ impl Pipeline {
                     metrics,
                     jsonl_writer,
                     sampler,
+                    context,
                 )
                 .await;
             })
@@ -207,15 +258,62 @@ pub struct PipelineStats {
     pub avg_latency_us: f64,
 }
 
+/// Generates a keypair with both public and secret key for KEM operations
+fn generate_keypair_with_secret(
+    adapter: &Arc<dyn CryptoAdapter + Send + Sync>,
+) -> Result<(Vec<u8>, Vec<u8>), PipelineError> {
+    // For Kyber adapter, we need to call keygen and get both keys
+    // The adapter's keygen returns KeypairMeta which only has public key
+    // We need to use the internal generation that gives us both
+    
+    // First, check if adapter is Kyber by name
+    if adapter.name() == "kyber" {
+        // Use encapsulate with a dummy to trigger key generation
+        // Actually, we need a different approach - generate keys properly
+        
+        // For pqcrypto-kyber, we generate directly here
+        #[cfg(feature = "pqcrypto_fallback")]
+        {
+            use pqcrypto_kyber::kyber512;
+            use pqcrypto_traits::kem::{PublicKey, SecretKey};
+            
+            let (pk, sk) = kyber512::keypair();
+            return Ok((pk.as_bytes().to_vec(), sk.as_bytes().to_vec()));
+        }
+        
+        #[cfg(not(feature = "pqcrypto_fallback"))]
+        {
+            return Err(PipelineError::InitializationError(
+                "No PQC implementation available".to_string(),
+            ));
+        }
+    }
+    
+    // For other adapters, use the standard keygen
+    let meta = adapter
+        .keygen()
+        .map_err(|e| PipelineError::InitializationError(e.to_string()))?;
+    
+    // For non-KEM adapters, return dummy secret key
+    Ok((meta.public_key, vec![0u8; meta.secret_key_length]))
+}
+
 /// Producer task: generates events at the specified rate
-async fn producer_task(tx: mpsc::Sender<PipelineEvent>, scenario: &Scenario) {
-    let total_events = scenario.workload.duration_sec as u64 * scenario.workload.msgs_per_sec as u64;
+async fn producer_task(
+    tx: mpsc::Sender<PipelineEvent>,
+    scenario: &Scenario,
+    _context: &PipelineContext,
+) {
+    let total_events =
+        scenario.workload.duration_sec as u64 * scenario.workload.msgs_per_sec as u64;
     let interval_ns = 1_000_000_000u64 / scenario.workload.msgs_per_sec as u64;
     let payload_size = scenario.workload.msg_size_bytes;
 
     let start = Instant::now();
 
     for event_id in 1..=total_events {
+        // For kem_aead_decrypt, we'd normally load pre-encrypted payloads
+        // For this iteration, we generate plaintext and let processor handle encryption
         let payload = vec![0xAB; payload_size];
         let event = PipelineEvent {
             event_id,
@@ -248,6 +346,7 @@ async fn processor_task(
     metrics: Metrics,
     jsonl_writer: JsonlWriter,
     sampler: SysInfoSampler,
+    context: PipelineContext,
 ) {
     let run_id = scenario.id.clone();
     let operation = scenario.algorithm.operation.clone();
@@ -267,18 +366,87 @@ async fn processor_task(
 
             // Perform the crypto operation
             let op_result = match operation.as_str() {
-                "sign" => adapter.sign(&[], &event.payload).map(|s| Some(s.len())),
-                "verify" => adapter.verify(&[], &event.payload, &event.payload).map(|_| None),
-                "encrypt" => adapter.encapsulate(&event.payload).map(|(ct, _)| Some(ct.len())),
-                "decrypt" => adapter.decapsulate(&event.payload, &event.payload).map(|_| None),
-                "keygen" => adapter.keygen().map(|_| None),
+                "sign" => adapter.sign(&[], &event.payload).map(|s| (Some(s.len()), None)),
+                "verify" => adapter
+                    .verify(&[], &event.payload, &event.payload)
+                    .map(|_| (None, None)),
+                "encrypt" => adapter
+                    .encapsulate(&event.payload)
+                    .map(|(ct, _)| (Some(ct.len()), None)),
+                "decrypt" => adapter
+                    .decapsulate(&event.payload, &event.payload)
+                    .map(|_| (None, None)),
+                "keygen" => adapter.keygen().map(|_| (None, None)),
+                "kem_aead_encrypt" => {
+                    // Hybrid encryption: KEM + AES-GCM
+                    if let Some(ref keypair) = context.keypair {
+                        let adapter_clone = adapter.clone();
+                        let pk = keypair.public_key.clone();
+                        
+                        let result = hybrid_encrypt(
+                            |pubkey| adapter_clone.encapsulate(pubkey),
+                            &pk,
+                            &event.payload,
+                        );
+                        
+                        match result {
+                            Ok(combined) => {
+                                let sizes = HybridSizes::from_payload(&combined).ok();
+                                Ok((Some(combined.len()), sizes.map(|s| s.ct_kem_len)))
+                            }
+                            Err(e) => Err(e),
+                        }
+                    } else {
+                        Err(CryptoError::InternalError(
+                            "No keypair available for KEM operation".to_string(),
+                        ))
+                    }
+                }
+                "kem_aead_decrypt" => {
+                    // For decrypt benchmark, we first encrypt then decrypt
+                    // This measures the full roundtrip
+                    if let Some(ref keypair) = context.keypair {
+                        let adapter_clone = adapter.clone();
+                        let pk = keypair.public_key.clone();
+                        let sk = keypair.secret_key.clone();
+                        
+                        // First encrypt, then decrypt
+                        hybrid_encrypt(
+                            |pubkey| adapter_clone.encapsulate(pubkey),
+                            &pk,
+                            &event.payload,
+                        )
+                        .and_then(|combined| {
+                            let adapter_clone2 = adapter.clone();
+                            hybrid_decrypt(
+                                |secret_key, ciphertext| adapter_clone2.decapsulate(secret_key, ciphertext),
+                                &sk,
+                                &combined,
+                            )
+                        })
+                        .and_then(|decrypted| {
+                            // Verify decryption succeeded
+                            if decrypted != event.payload {
+                                Err(CryptoError::InternalError(
+                                    "Decryption verification failed".to_string(),
+                                ))
+                            } else {
+                                Ok((Some(decrypted.len()), None))
+                            }
+                        })
+                    } else {
+                        Err(CryptoError::InternalError(
+                            "No keypair available for KEM operation".to_string(),
+                        ))
+                    }
+                }
                 _ => Err(CryptoError::NotImplemented),
             };
 
             let latency_us = start.elapsed().as_micros();
-            let (success, output_size, error_msg) = match op_result {
-                Ok(size) => (true, size, None),
-                Err(e) => (false, None, Some(e.to_string())),
+            let (success, output_size, _ct_kem_size, error_msg) = match op_result {
+                Ok((size, kem_size)) => (true, size, kem_size, None),
+                Err(e) => (false, None, None, Some(e.to_string())),
             };
 
             // Sample system metrics
@@ -288,6 +456,13 @@ async fn processor_task(
             metrics.observe_latency(&algorithm, &operation, latency_us as f64);
             metrics.inc_ops(&algorithm, &operation, success);
             metrics.set_memory_bytes(memory_rss);
+
+            // Determine ciphertext size for JSONL
+            let ciphertext_size = if operation == "encrypt" || operation == "kem_aead_encrypt" {
+                output_size
+            } else {
+                None
+            };
 
             // Write JSONL row
             let row = EventRow {
@@ -299,7 +474,7 @@ async fn processor_task(
                 algorithm: algorithm.clone(),
                 latency_us,
                 payload_size_bytes: event.payload.len(),
-                ciphertext_size_bytes: if operation == "encrypt" { output_size } else { None },
+                ciphertext_size_bytes: ciphertext_size,
                 signature_size_bytes: if operation == "sign" { output_size } else { None },
                 cpu_user_seconds: cpu_user,
                 memory_rss_bytes: memory_rss,
@@ -393,6 +568,42 @@ mod tests {
             .unwrap();
 
         assert_eq!(stats.total_events, 10);
+        assert!(stats.events_processed > 0);
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "pqcrypto_fallback")]
+    async fn test_pipeline_kyber_kem_aead_encrypt() {
+        use crate::crypto_adapter::KyberAdapter;
+
+        let scenario = Scenario {
+            id: "kyber_test".to_string(),
+            description: None,
+            workload: crate::scenario::WorkloadConfig {
+                msgs_per_sec: 5,
+                msg_size_bytes: 64,
+                duration_sec: 1,
+            },
+            algorithm: crate::scenario::AlgorithmConfig {
+                adapter: "kyber".to_string(),
+                operation: "kem_aead_encrypt".to_string(),
+            },
+            metrics: crate::scenario::MetricsConfig::default(),
+        };
+
+        let pipeline = Pipeline::new();
+        let adapter: Arc<dyn CryptoAdapter + Send + Sync> =
+            Arc::new(KyberAdapter::new("kyber512").unwrap());
+        let metrics = Metrics::new().unwrap();
+        let jsonl_writer = JsonlWriter::new("/tmp/test_kyber_pipeline.jsonl").unwrap();
+        let sampler = SysInfoSampler::new();
+
+        let stats = pipeline
+            .run_async(&scenario, adapter, metrics, jsonl_writer, sampler)
+            .await
+            .unwrap();
+
+        assert_eq!(stats.total_events, 5);
         assert!(stats.events_processed > 0);
     }
 }

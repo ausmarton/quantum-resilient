@@ -13,6 +13,10 @@ path = "src/lib.rs"
 name = "pqc-bench"
 path = "src/main.rs"
 
+[features]
+default = ["pqcrypto_fallback"]
+pqcrypto_fallback = ["pqcrypto-kyber"]
+
 [dependencies]
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -22,7 +26,7 @@ serde_json = "1.0"
 # CLI
 clap = { version = "4.5", features = ["derive"] }
 
-# Cryptography dependencies
+# Classical cryptography dependencies
 rsa = "0.9"
 pkcs8 = "0.10"
 rand = "0.8"
@@ -30,6 +34,18 @@ sha2 = "0.10"
 p256 = { version = "0.13", features = ["ecdsa"] }
 ecdsa = { version = "0.16", features = ["signing", "verifying"] }
 base64 = "0.22"
+
+# PQC fallback (pure Rust Kyber implementation)
+pqcrypto-kyber = { version = "0.8", optional = true }
+pqcrypto-traits = "0.3"
+
+# AEAD + KDF for hybrid encryption
+aes-gcm = "0.10"
+aead = "0.5"
+hkdf = "0.12"
+
+# Security
+zeroize = { version = "1.8", features = ["derive"] }
 
 # Async runtime
 tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "time", "sync", "net"] }

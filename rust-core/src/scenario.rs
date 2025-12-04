@@ -37,9 +37,10 @@ pub struct WorkloadConfig {
 /// Algorithm configuration for a scenario
 #[derive(Debug, Deserialize, Clone)]
 pub struct AlgorithmConfig {
-    /// Name of the crypto adapter to use (e.g., "noop", "rsa2048", "ecdsa_p256")
+    /// Name of the crypto adapter to use (e.g., "noop", "rsa2048", "ecdsa_p256", "kyber")
     pub adapter: String,
-    /// Operation to perform: "sign", "verify", "encrypt", "decrypt", "keygen"
+    /// Operation to perform: "sign", "verify", "encrypt", "decrypt", "keygen",
+    /// "kem_aead_encrypt", "kem_aead_decrypt"
     #[serde(default = "default_operation")]
     pub operation: String,
 }
@@ -82,6 +83,22 @@ impl Scenario {
             .clone()
             .unwrap_or_else(|| format!("./results/{}.jsonl", self.id))
     }
+
+    /// Returns true if the operation requires a cached keypair
+    pub fn requires_keypair(&self) -> bool {
+        matches!(
+            self.algorithm.operation.as_str(),
+            "kem_aead_encrypt" | "kem_aead_decrypt"
+        )
+    }
+
+    /// Returns true if this is a KEM-based hybrid operation
+    pub fn is_kem_hybrid_operation(&self) -> bool {
+        matches!(
+            self.algorithm.operation.as_str(),
+            "kem_aead_encrypt" | "kem_aead_decrypt"
+        )
+    }
 }
 
 /// Loads a scenario from a YAML file
@@ -98,7 +115,8 @@ impl Scenario {
 /// println!("Loaded scenario: {}", scenario.id);
 /// ```
 pub fn load_scenario(path: &str) -> Result<Scenario, Box<dyn std::error::Error>> {
-    let mut f = File::open(path).map_err(|e| format!("Failed to open scenario file '{}': {}", path, e))?;
+    let mut f = File::open(path)
+        .map_err(|e| format!("Failed to open scenario file '{}': {}", path, e))?;
 
     let mut contents = String::new();
     f.read_to_string(&mut contents)
@@ -112,7 +130,15 @@ pub fn load_scenario(path: &str) -> Result<Scenario, Box<dyn std::error::Error>>
 
 /// Returns a list of supported operations
 pub fn supported_operations() -> &'static [&'static str] {
-    &["sign", "verify", "encrypt", "decrypt", "keygen"]
+    &[
+        "sign",
+        "verify",
+        "encrypt",
+        "decrypt",
+        "keygen",
+        "kem_aead_encrypt",
+        "kem_aead_decrypt",
+    ]
 }
 
 #[cfg(test)]
@@ -140,6 +166,25 @@ algorithm:
         assert_eq!(scenario.workload.duration_sec, 10);
         assert_eq!(scenario.algorithm.adapter, "noop");
         assert_eq!(scenario.algorithm.operation, "sign");
+    }
+
+    #[test]
+    fn test_scenario_kem_aead() {
+        let yaml = r#"
+id: kyber_test
+workload:
+  msgs_per_sec: 10
+  msg_size_bytes: 64
+  duration_sec: 1
+algorithm:
+  adapter: kyber
+  operation: kem_aead_encrypt
+"#;
+        let scenario: Scenario = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(scenario.algorithm.adapter, "kyber");
+        assert_eq!(scenario.algorithm.operation, "kem_aead_encrypt");
+        assert!(scenario.is_kem_hybrid_operation());
+        assert!(scenario.requires_keypair());
     }
 
     #[test]
@@ -203,5 +248,12 @@ algorithm:
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("Failed to open"));
+    }
+
+    #[test]
+    fn test_supported_operations_includes_kem() {
+        let ops = supported_operations();
+        assert!(ops.contains(&"kem_aead_encrypt"));
+        assert!(ops.contains(&"kem_aead_decrypt"));
     }
 }

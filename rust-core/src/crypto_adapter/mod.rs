@@ -4,11 +4,18 @@
 //! for both classical and post-quantum cryptographic operations.
 
 pub mod ecdsa_adapter;
+pub mod kem_hybrid;
+pub mod kyber_adapter;
 pub mod noop_adapter;
 pub mod registry;
 pub mod rsa_adapter;
 
 pub use ecdsa_adapter::EcdsaP256Adapter;
+pub use kem_hybrid::{
+    aead_decrypt, aead_encrypt, derive_aead_key, hybrid_decrypt, hybrid_encrypt, HybridSizes,
+    KEY_SIZE, NONCE_SIZE, TAG_SIZE,
+};
+pub use kyber_adapter::KyberAdapter;
 pub use noop_adapter::NoOpCryptoAdapter;
 pub use registry::{get_adapter, supported_adapters};
 pub use rsa_adapter::Rsa2048Adapter;
@@ -22,6 +29,29 @@ pub struct KeypairMeta {
     pub secret_key_length: usize,
     /// Parameter set name or description
     pub params: String,
+}
+
+/// Extended keypair metadata that includes secret key for pipeline operations
+/// WARNING: Handle with care - contains secret key material
+#[derive(Debug, Clone)]
+pub struct KeypairWithSecret {
+    /// The public key bytes
+    pub public_key: Vec<u8>,
+    /// The secret key bytes (handle securely!)
+    pub secret_key: Vec<u8>,
+    /// Parameter set name or description
+    pub params: String,
+}
+
+impl KeypairWithSecret {
+    /// Convert to KeypairMeta (drops secret key)
+    pub fn to_meta(&self) -> KeypairMeta {
+        KeypairMeta {
+            public_key: self.public_key.clone(),
+            secret_key_length: self.secret_key.len(),
+            params: self.params.clone(),
+        }
+    }
 }
 
 /// Error type for cryptographic operations
@@ -137,5 +167,18 @@ mod tests {
         let cloned = meta.clone();
         assert_eq!(cloned.public_key, meta.public_key);
         assert_eq!(cloned.secret_key_length, meta.secret_key_length);
+    }
+
+    #[test]
+    fn test_keypair_with_secret_to_meta() {
+        let kp = KeypairWithSecret {
+            public_key: vec![1, 2, 3],
+            secret_key: vec![4, 5, 6, 7],
+            params: "test".to_string(),
+        };
+        let meta = kp.to_meta();
+        assert_eq!(meta.public_key, vec![1, 2, 3]);
+        assert_eq!(meta.secret_key_length, 4);
+        assert_eq!(meta.params, "test");
     }
 }

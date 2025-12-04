@@ -11,10 +11,12 @@ pub mod workload;
 
 // Re-export main types for convenience
 pub use crypto_adapter::{
-    get_adapter, supported_adapters, CryptoAdapter, CryptoError, EcdsaP256Adapter, KeypairMeta,
-    NoOpCryptoAdapter, Rsa2048Adapter,
+    aead_decrypt, aead_encrypt, derive_aead_key, get_adapter, hybrid_decrypt, hybrid_encrypt,
+    supported_adapters, CryptoAdapter, CryptoError, EcdsaP256Adapter, HybridSizes, KeypairMeta,
+    KeypairWithSecret, KyberAdapter, NoOpCryptoAdapter, Rsa2048Adapter, KEY_SIZE, NONCE_SIZE,
+    TAG_SIZE,
 };
-pub use pipeline::{Pipeline, PipelineConfig, PipelineStats};
+pub use pipeline::{Pipeline, PipelineConfig, PipelineContext, PipelineStats};
 pub use scenario::{load_scenario, supported_operations, Scenario};
 pub use telemetry::{init_tracing, JsonlWriter, Metrics, SysInfoSampler, Telemetry};
 pub use workload::Workload;

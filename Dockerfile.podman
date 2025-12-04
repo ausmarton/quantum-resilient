@@ -1,15 +1,33 @@
 # Quantum-Resilient PQC Benchmark Framework
-# Multi-stage Podman/Docker build
+# Multi-stage Podman/Docker build with liboqs support
 
 # =============================================================================
 # Stage 1: Builder
 # =============================================================================
 FROM docker.io/rust:1.85-slim-bookworm AS builder
 
-# Install build dependencies
+# Install build dependencies for liboqs and Rust
 RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    ninja-build \
     pkg-config \
+    git \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Build liboqs from source (optional - for future liboqs feature support)
+# Currently using pqcrypto-kyber fallback which doesn't require liboqs
+# Uncomment the following if enabling liboqs_support feature:
+#
+# RUN git clone --depth 1 --branch 0.10.1 https://github.com/open-quantum-safe/liboqs.git /tmp/liboqs \
+#     && cd /tmp/liboqs \
+#     && mkdir build && cd build \
+#     && cmake -GNinja -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_BUILD_TYPE=Release .. \
+#     && ninja \
+#     && ninja install \
+#     && ldconfig \
+#     && rm -rf /tmp/liboqs
 
 # Create app directory
 WORKDIR /app
@@ -18,7 +36,8 @@ WORKDIR /app
 COPY Cargo.toml ./
 COPY rust-core ./rust-core
 
-# Build the release binary
+# Build the release binary with default features (pqcrypto fallback)
+# For liboqs support, use: --features liboqs_support --no-default-features
 RUN cargo build --release --bin pqc-bench
 
 # =============================================================================
@@ -41,8 +60,11 @@ RUN mkdir -p /app/results && chown -R appuser:appuser /app
 # Copy the built binary from builder stage
 COPY --from=builder /app/target/release/pqc-bench /app/pqc-bench
 
+# Copy scenario files
+COPY scenarios /app/scenarios
+
 # Set ownership
-RUN chown appuser:appuser /app/pqc-bench
+RUN chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
