@@ -303,8 +303,14 @@ sudo apt install podman podman-compose
 curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
 sudo install minikube-linux-amd64 /usr/local/bin/minikube
 
-# Start Minikube with Podman driver
-minikube start --driver=podman --cpus=4 --memory=8g
+# Start Minikube with Podman driver (rootless) and kindnet CNI
+MINIKUBE_ROOTLESS=true minikube start --driver=podman --rootless \
+  --kubernetes-version=v1.32.0 \
+  --container-runtime=containerd \
+  --cni=kindnet \
+  --extra-config=controller-manager.cluster-cidr=10.244.0.0/16 \
+  --extra-config=kube-proxy.cluster-cidr=10.244.0.0/16 \
+  --extra-config=kubelet.pod-cidr=10.244.0.0/16
 ```
 
 ### Single Command Execution
@@ -417,6 +423,7 @@ execution. This supports reproducibility claims for the dissertation.
 | Job fails | Check logs: `kubectl logs -l job-name=pqc-bench-worker` |
 | PVC pending | Verify storage: `kubectl get pvc` |
 | Podman socket | Run `systemctl --user start podman.socket` |
+| Flannel errors (`/run/flannel/subnet.env`) | Start minikube with `--cni=kindnet` and a larger pod CIDR (see prerequisites above) |
 
 ## Running PQC Experiments (Kyber)
 

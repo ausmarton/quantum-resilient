@@ -9,7 +9,8 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Builder - Compile Rust binary in release mode
 # -----------------------------------------------------------------------------
-FROM docker.io/rust:1.78-slim-bookworm AS builder
+# Use a Rust toolchain new enough to support edition2024 dependencies.
+FROM docker.io/rustlang/rust:nightly-slim AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

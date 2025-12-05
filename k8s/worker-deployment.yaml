@@ -81,7 +81,7 @@ spec:
                 "pod_ip": "${POD_IP:-unknown}",
                 "replica_count": "${REPLICA_COUNT:-1}",
                 "experiment_id": "${EXPERIMENT_ID:-unknown}",
-                "container_image": "pqc-bench:latest",
+                "container_image": "localhost/pqc-bench:latest",
                 "kernel_version": "$(uname -r)",
                 "arch": "$(uname -m)",
                 "hostname": "$(hostname)",
@@ -125,8 +125,8 @@ spec:
       # Main benchmark container
       containers:
         - name: pqc-bench
-          image: pqc-bench:latest
-          imagePullPolicy: IfNotPresent
+          image: localhost/pqc-bench:latest
+          imagePullPolicy: Never
           
           args:
             - "--scenario"

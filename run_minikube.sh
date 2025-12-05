@@ -10,8 +10,8 @@
 #                     --out results/exp2 --exp-id exp2
 #
 # Requirements:
-#   - Podman >= 4.0
-#   - Minikube >= 1.34
+#   - Podman >= 4.0 (rootless recommended)
+#   - Minikube >= 1.37 (tested) with containerd runtime
 #   - kubectl
 #   - Python 3.10+ with analysis dependencies
 # =============================================================================
@@ -113,9 +113,15 @@ EXAMPLES:
     $0 --scenario scenarios/hybrid_kyber_dilithium.yaml \\
        --out results/scale_test --exp-id scale_4x --replicas 4
 
-PREREQUISITES:
-    1. Start Minikube with Podman driver:
-       minikube start --driver=podman
+PREREQUISITES (recommended for Podman rootless):
+    1. Start Minikube with Podman driver, containerd, kindnet CNI, and larger pod CIDR:
+       MINIKUBE_ROOTLESS=true minikube start --driver=podman --rootless \\
+         --kubernetes-version=v1.32.0 \\
+         --container-runtime=containerd \\
+         --cni=kindnet \\
+         --extra-config=controller-manager.cluster-cidr=10.244.0.0/16 \\
+         --extra-config=kube-proxy.cluster-cidr=10.244.0.0/16 \\
+         --extra-config=kubelet.pod-cidr=10.244.0.0/16
 
     2. Ensure kubectl is configured:
        kubectl cluster-info
