@@ -235,11 +235,18 @@ def run_all_tests(
     group_a_name: str,
     group_b_name: str,
     metric: str = 'latency_us',
+    min_sample_size: int = 10,
 ) -> Optional[TestResult]:
     """Run all statistical tests between two groups."""
     
     if len(group_a) < 2 or len(group_b) < 2:
         return None
+    
+    # Warn if sample sizes are very small (smoke-test mode)
+    if len(group_a) < min_sample_size or len(group_b) < min_sample_size:
+        print(f"Warning: Small sample sizes detected (n_a={len(group_a)}, n_b={len(group_b)}). "
+              f"Statistical tests may have reduced power. This is expected in smoke-test mode.",
+              file=sys.stderr)
     
     result = TestResult(
         comparison_id=comparison_id,

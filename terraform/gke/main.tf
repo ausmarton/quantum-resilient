@@ -183,12 +183,12 @@ resource "google_container_node_pool" "primary" {
   location   = var.region
   cluster    = google_container_cluster.primary.name
   project    = var.project_id
-  node_count = var.node_count
+  node_count = var.smoke_test ? 1 : var.node_count
 
   # Node configuration
   node_config {
-    machine_type = var.machine_type
-    disk_size_gb = var.disk_size_gb
+    machine_type = var.smoke_test ? "e2-micro" : var.machine_type
+    disk_size_gb = var.smoke_test ? 10 : var.disk_size_gb
     disk_type    = "pd-standard"
 
     # Service account for nodes

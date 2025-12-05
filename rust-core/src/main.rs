@@ -263,6 +263,32 @@ async fn main() {
         println!("Description: {}", desc);
     }
 
+    // Check for smoke-test mode
+    let smoke_test = env::var("PQC_SMOKE_TEST")
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+    
+    if smoke_test {
+        println!("\n╔══════════════════════════════════════════════════════════════╗");
+        println!("║                    SMOKE-TEST MODE ENABLED                    ║");
+        println!("╚══════════════════════════════════════════════════════════════╝");
+        println!("Running in smoke-test mode with reduced scale:");
+        println!("  - Duration: {} seconds", scenario.workload.duration_sec);
+        println!("  - Payload: {} bytes", scenario.workload.msg_size_bytes);
+        println!("  - Rate: {} msg/s", scenario.workload.msgs_per_sec);
+        println!("  - All cryptographic operations will execute normally");
+        println!("  - Full telemetry will be captured");
+        println!("");
+        
+        // Verify reduced config
+        if scenario.workload.duration_sec > 10 {
+            warn!("Warning: Duration ({}) exceeds smoke-test threshold (10s)", scenario.workload.duration_sec);
+        }
+        if scenario.workload.msgs_per_sec > 500 {
+            warn!("Warning: Rate ({}) exceeds smoke-test threshold (500 msg/s)", scenario.workload.msgs_per_sec);
+        }
+    }
+
     // Initialize tracing
     init_tracing("pqc-bench");
 

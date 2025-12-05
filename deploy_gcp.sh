@@ -46,6 +46,7 @@ SKIP_TERRAFORM=false
 SKIP_BUILD=false
 SKIP_AGGREGATION=false
 DESTROY_AFTER=false
+SMOKE_TEST=false
 
 # Colors
 RED='\033[0;31m'
@@ -98,6 +99,7 @@ OPTIONS:
     --region REGION       GCP region (default: us-central1)
     --bucket NAME         GCS bucket name (required)
     --runs N              Number of repeated runs (default: 1)
+    --replicas N          Number of replicas (default: 1)
     --seed NUM            Base RNG seed (each run gets seed+run_index)
     --machine-type TYPE   GKE node machine type (default: n2-standard-2)
     --node-count N        Number of nodes (default: 1)
@@ -106,6 +108,7 @@ OPTIONS:
     --skip-aggregation    Skip aggregation across runs
     --destroy-after       Destroy infrastructure after experiment
     --timeout SEC         Job timeout in seconds (default: 900)
+    --smoke-test          Enable smoke-test mode (minimal infrastructure)
     -h, --help            Show this help message
 
 EXAMPLES:
@@ -120,8 +123,9 @@ EOF
 }
 
 cleanup_job() {
+    local namespace=${1:-default}
     log_info "Cleaning up previous job..."
-    kubectl delete job "$JOB_NAME" --ignore-not-found=true 2>/dev/null || true
+    kubectl delete job "$JOB_NAME" --namespace="$namespace" --ignore-not-found=true 2>/dev/null || true
 }
 
 # -----------------------------------------------------------------------------
@@ -189,6 +193,10 @@ while [[ $# -gt 0 ]]; do
             JOB_TIMEOUT="${2}s"
             shift 2
             ;;
+        --smoke-test)
+            SMOKE_TEST=true
+            shift
+            ;;
         -h|--help)
             usage
             ;;
@@ -229,7 +237,17 @@ fi
 SCENARIO="$(cd "$(dirname "$SCENARIO")" && pwd)/$(basename "$SCENARIO")"
 
 # Derived values
-CLUSTER_NAME="pqc-bench-gke"
+if [[ "$SMOKE_TEST" == "true" ]]; then
+    CLUSTER_NAME="pqc-smoke-test"
+    MACHINE_TYPE="e2-micro"
+    NODE_COUNT=1
+    RUNS=1
+    REPLICAS=1
+    JOB_TIMEOUT="300s"  # 5 minutes
+    log_info "Smoke-test mode: using minimal infrastructure"
+else
+    CLUSTER_NAME="pqc-bench-gke"
+fi
 IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/pqc"
 IMAGE_NAME="${IMAGE_REPO}/pqc-bench:latest"
 GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
@@ -252,6 +270,8 @@ log_info "Region: $REGION"
 log_info "Bucket: $BUCKET"
 log_info "Scenario: $SCENARIO"
 log_info "Runs: $RUNS"
+log_info "Replicas: $REPLICAS"
+[[ "$SMOKE_TEST" == "true" ]] && log_info "Mode: SMOKE-TEST (minimal infrastructure)"
 [[ -n "$SEED" ]] && log_info "Base RNG seed: $SEED"
 log_info "Git Commit: ${GIT_COMMIT:0:8}"
 log_info "Started: $START_ISO"
@@ -318,7 +338,9 @@ else
         -var="bucket_name=$BUCKET" \
         -var="machine_type=$MACHINE_TYPE" \
         -var="node_count=$NODE_COUNT" \
-        -var="cluster_name=$CLUSTER_NAME"
+        -var="cluster_name=$CLUSTER_NAME" \
+        -var="smoke_test=$SMOKE_TEST" \
+        -var="disk_size_gb=$([ "$SMOKE_TEST" == "true" ] && echo "10" || echo "50")"
     
     log_success "Infrastructure deployed"
     
@@ -383,14 +405,36 @@ fi
 # =============================================================================
 log_step "Step 5/8: Deploying Kubernetes resources"
 
-# Clean up any existing job
-cleanup_job
+# Set namespace based on smoke-test mode
+if [[ "$SMOKE_TEST" == "true" ]]; then
+    NAMESPACE="pqc-smoke-test"
+    log_info "Creating smoke-test namespace..."
+    kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+else
+    NAMESPACE="default"
+fi
 
-# Create scenario ConfigMap
+# Clean up any existing job
+cleanup_job "$NAMESPACE"
+
+# Create scenario ConfigMap (with smoke-test overrides if needed)
 log_info "Creating scenario ConfigMap..."
-kubectl create configmap pqc-scenario \
-    --from-file=scenario.yaml="$SCENARIO" \
-    --dry-run=client -o yaml | kubectl apply -f -
+if [[ "$SMOKE_TEST" == "true" ]]; then
+    # Create temporary scenario with smoke-test overrides
+    TEMP_SCENARIO=$(mktemp)
+    cp "$SCENARIO" "$TEMP_SCENARIO"
+    sed -i "s/duration_sec:.*/duration_sec: 5/" "$TEMP_SCENARIO"
+    kubectl create configmap pqc-scenario \
+        --from-file=scenario.yaml="$TEMP_SCENARIO" \
+        --namespace="$NAMESPACE" \
+        --dry-run=client -o yaml | kubectl apply -f -
+    rm -f "$TEMP_SCENARIO"
+else
+    kubectl create configmap pqc-scenario \
+        --from-file=scenario.yaml="$SCENARIO" \
+        --namespace="$NAMESPACE" \
+        --dry-run=client -o yaml | kubectl apply -f -
+fi
 
 # Create GCP config ConfigMap
 log_info "Creating GCP config ConfigMap..."
@@ -399,7 +443,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: pqc-gcp-config
-  namespace: default
+  namespace: $NAMESPACE
 data:
   bucket_name: "$BUCKET"
   experiment_id: "$EXP_ID"
@@ -407,6 +451,7 @@ data:
   container_image: "$IMAGE_NAME"
   region: "$REGION"
   project_id: "$PROJECT"
+  smoke_test: "$([ "$SMOKE_TEST" == "true" ] && echo "true" || echo "false")"
 EOF
 
 # Create/update ServiceAccount with Workload Identity annotation
@@ -416,7 +461,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: pqc-bench-sa
-  namespace: default
+  namespace: $NAMESPACE
   annotations:
     iam.gke.io/gcp-service-account: "$SA_EMAIL"
 EOF
@@ -424,7 +469,9 @@ EOF
 # Apply worker job (with image placeholder replaced)
 log_info "Deploying worker Job..."
 sed "s|PLACEHOLDER_IMAGE|$IMAGE_NAME|g" "$K8S_GCP_DIR/worker-job.yaml" | \
+    sed "s|namespace: default|namespace: $NAMESPACE|g" | \
     sed "s|cloud.google.com/gke-nodepool: pqc-bench-pool|cloud.google.com/gke-nodepool: pqc-bench-pool|g" | \
+    sed "s|ttlSecondsAfterFinished: 7200|ttlSecondsAfterFinished: $([ "$SMOKE_TEST" == "true" ] && echo "300" || echo "7200")|g" | \
     kubectl apply -f -
 
 log_success "Kubernetes resources deployed"
@@ -440,7 +487,7 @@ log_info "Waiting for Job to complete (timeout: $JOB_TIMEOUT)..."
 sleep 10
 
 # Get pod name
-POD_NAME=$(kubectl get pods -l job-name="$JOB_NAME" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+POD_NAME=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
 
 if [[ -n "$POD_NAME" ]]; then
     log_info "Pod: $POD_NAME"
@@ -456,14 +503,14 @@ if [[ -n "$POD_NAME" ]]; then
 fi
 
 # Wait for completion
-if ! kubectl wait --for=condition=complete job/"$JOB_NAME" --timeout="$JOB_TIMEOUT"; then
+if ! kubectl wait --for=condition=complete job/"$JOB_NAME" -n "$NAMESPACE" --timeout="$JOB_TIMEOUT"; then
     # Check if failed
-    JOB_STATUS=$(kubectl get job "$JOB_NAME" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "")
+    JOB_STATUS=$(kubectl get job "$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "")
     
     if [[ "$JOB_STATUS" == "True" ]]; then
         log_error "Job failed!"
-        kubectl describe job "$JOB_NAME"
-        kubectl logs -l job-name="$JOB_NAME" -c pqc-bench --tail=100
+        kubectl describe job "$JOB_NAME" -n "$NAMESPACE"
+        kubectl logs -l job-name="$JOB_NAME" -n "$NAMESPACE" -c pqc-bench --tail=100
         exit 1
     fi
     
@@ -492,7 +539,7 @@ ARTIFACTS=$(gsutil ls "gs://${BUCKET}/experiments/${EXP_ID}/" 2>/dev/null || ech
 if [[ -z "$ARTIFACTS" ]]; then
     log_error "No artifacts found in GCS!"
     log_info "Checking upload container logs..."
-    kubectl logs -l job-name="$JOB_NAME" -c upload-results --tail=50
+    kubectl logs -l job-name="$JOB_NAME" -n "$NAMESPACE" -c upload-results --tail=50
     exit 1
 fi
 

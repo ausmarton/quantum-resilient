@@ -9,7 +9,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: pqc-bench-worker
-  namespace: default
+  namespace: default  # Will be replaced by deploy_gcp.sh for smoke-test mode
   labels:
     app: pqc-bench
     component: worker
@@ -152,6 +152,12 @@ spec:
               value: "info"
             - name: QR_MODE
               value: "gcp"
+            - name: PQC_SMOKE_TEST
+              valueFrom:
+                configMapKeyRef:
+                  name: pqc-gcp-config
+                  key: smoke_test
+                  optional: true
             - name: GCS_BUCKET
               valueFrom:
                 configMapKeyRef:

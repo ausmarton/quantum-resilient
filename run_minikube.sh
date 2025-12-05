@@ -41,6 +41,7 @@ SKIP_BUILD=false
 SKIP_ANALYSIS=false
 SKIP_AGGREGATION=false
 KEEP_JOB=false
+SMOKE_TEST=false
 
 # Colors
 RED='\033[0;31m'
@@ -98,6 +99,7 @@ OPTIONS:
     --skip-aggregation  Skip aggregation across runs
     --keep-job          Don't delete Job after completion
     --timeout SEC       Job timeout in seconds (default: 600)
+    --smoke-test        Enable smoke-test mode (reduced duration/scale)
     -h, --help          Show this help message
 
 EXAMPLES:
@@ -184,6 +186,10 @@ while [[ $# -gt 0 ]]; do
             JOB_TIMEOUT="${2}s"
             shift 2
             ;;
+        --smoke-test)
+            SMOKE_TEST=true
+            shift
+            ;;
         -h|--help)
             usage
             ;;
@@ -236,14 +242,22 @@ log_info "Scenario: $SCENARIO"
 log_info "Output: $OUT_DIR"
 log_info "Runs: $RUNS"
 log_info "Replicas: $REPLICAS"
+[[ "$SMOKE_TEST" == "true" ]] && log_info "Mode: SMOKE-TEST (reduced scale)"
 [[ -n "$SEED" ]] && log_info "Base RNG seed: $SEED"
 log_info "Started: $START_ISO"
 
 # Determine if we're doing a scaling test
 SCALING_MODE=false
-if [[ $REPLICAS -gt 1 ]]; then
+if [[ $REPLICAS -gt 1 ]] && [[ "$SMOKE_TEST" != "true" ]]; then
     SCALING_MODE=true
     log_info "Mode: Scaling test (parallel job with $REPLICAS pods)"
+fi
+
+# Override for smoke-test mode
+if [[ "$SMOKE_TEST" == "true" ]]; then
+    RUNS=1
+    REPLICAS=1
+    log_info "Smoke-test mode: forcing runs=1, replicas=1"
 fi
 
 # =============================================================================
@@ -403,6 +417,11 @@ else
     else
         echo -e "\nmetrics:\n  jsonl_out: \"/results/raw/run.jsonl\"" >> "$TEMP_SCENARIO"
     fi
+fi
+
+# Override duration for smoke-test mode
+if [[ "$SMOKE_TEST" == "true" ]]; then
+    sed -i "s/duration_sec:.*/duration_sec: 5/" "$TEMP_SCENARIO"
 fi
 
 # Set seed for this run if specified

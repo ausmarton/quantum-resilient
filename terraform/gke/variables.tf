@@ -72,3 +72,9 @@ variable "kubernetes_version" {
   default     = "latest"
 }
 
+variable "smoke_test" {
+  description = "Enable smoke-test mode (minimal infrastructure, reduced cost)"
+  type        = bool
+  default     = false
+}
+

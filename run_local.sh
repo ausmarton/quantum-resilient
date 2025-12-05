@@ -33,6 +33,7 @@ RUNS=1
 TIMEOUT=3600
 SKIP_ANALYSIS=false
 SKIP_AGGREGATION=false
+SMOKE_TEST=false
 
 # Color output helpers
 RED='\033[0;31m'
@@ -77,6 +78,7 @@ OPTIONS:
     --timeout SEC       Timeout per run (default: 3600)
     --skip-analysis     Skip Python analysis step
     --skip-aggregation  Skip aggregation across runs
+    --smoke-test        Enable smoke-test mode (reduced duration/scale)
     -h, --help          Show this help message
 
 EXAMPLES:
@@ -127,8 +129,10 @@ run_single_benchmark() {
         fi
     fi
     
-    # Override duration if specified
-    if [[ -n "$DURATION" ]]; then
+    # Override duration if specified or in smoke-test mode
+    if [[ "$SMOKE_TEST" == "true" ]]; then
+        sed -i "s/duration_sec:.*/duration_sec: 5/" "$TEMP_SCENARIO"
+    elif [[ -n "$DURATION" ]]; then
         sed -i "s/duration_sec:.*/duration_sec: $DURATION/" "$TEMP_SCENARIO"
     fi
     
@@ -250,6 +254,10 @@ while [[ $# -gt 0 ]]; do
             SKIP_AGGREGATION=true
             shift
             ;;
+        --smoke-test)
+            SMOKE_TEST=true
+            shift
+            ;;
         -h|--help)
             usage
             ;;
@@ -286,6 +294,7 @@ log_info "Scenario: $SCENARIO"
 log_info "Output: $OUT_DIR"
 log_info "Experiment ID: $EXP_ID"
 log_info "Runs: $RUNS"
+[[ "$SMOKE_TEST" == "true" ]] && log_info "Mode: SMOKE-TEST (reduced scale)"
 [[ -n "$DURATION" ]] && log_info "Duration override: ${DURATION}s"
 [[ -n "$SEED" ]] && log_info "Base RNG seed: $SEED"
 log_info ""
@@ -322,7 +331,12 @@ mkdir -p "$OUT_DIR"
 log_success "Base directory created"
 
 # Step 3: Run experiments
-log_info "Step 3: Running $RUNS experiment(s)..."
+if [[ "$SMOKE_TEST" == "true" ]]; then
+    RUNS=1
+    log_info "Step 3: Running smoke-test (1 run, 5 seconds)..."
+else
+    log_info "Step 3: Running $RUNS experiment(s)..."
+fi
 TOTAL_START=$(date +%s)
 
 COMPLETED_RUNS=0

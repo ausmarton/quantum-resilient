@@ -48,13 +48,16 @@ def compute_scenario_hash(algorithm: str, payload: int, rate: int, run: int) -> 
     return hashlib.sha256(seed_str.encode()).hexdigest()[:8]
 
 
-def generate_scenario_id(algorithm: str, payload: int, rate: int, run: int) -> str:
+def generate_scenario_id(algorithm: str, payload: int, rate: int, run: int, smoke_test: bool = False) -> str:
     """
     Generate globally unique scenario ID.
     
     Format: <algorithm>_p<payload>_r<rate>_run<N>_<hash>
+    In smoke-test mode: <algorithm>-smoketest-p<payload>-r<rate>
     """
     hash_suffix = compute_scenario_hash(algorithm, payload, rate, run)
+    if smoke_test:
+        return f"{algorithm}-smoketest-p{payload}-r{rate}"
     return f"{algorithm}_p{payload}_r{rate}_run{run}_{hash_suffix}"
 
 
@@ -65,6 +68,7 @@ def generate_scenario_yaml(
     run_index: int,
     defaults: dict,
     generation_timestamp: str,
+    smoke_test: bool = False,
 ) -> dict:
     """
     Generate a single scenario YAML configuration.
@@ -77,7 +81,7 @@ def generate_scenario_yaml(
     rng_seed = compute_rng_seed(algorithm, payload_size, rate, run_index)
     
     # Generate globally unique ID
-    scenario_id = generate_scenario_id(algorithm, payload_size, rate, run_index)
+    scenario_id = generate_scenario_id(algorithm, payload_size, rate, run_index, smoke_test)
     
     # Build scenario
     scenario = {
@@ -89,7 +93,7 @@ def generate_scenario_yaml(
         'workload': {
             'msgs_per_sec': rate,
             'msg_size_bytes': payload_size,
-            'duration_sec': defaults.get('duration_sec', 30),
+            'duration_sec': 5 if smoke_test else defaults.get('duration_sec', 30),
             'pattern': 'constant',
         },
         
@@ -122,11 +126,12 @@ def generate_scenario_yaml(
             'msgs_per_sec': rate,
             'duration_sec': defaults.get('duration_sec', 30),
             'run_index': run_index,
-            'total_runs': experiment.get('runs', defaults.get('runs', 5)),
+            'total_runs': 1 if smoke_test else experiment.get('runs', defaults.get('runs', 5)),
             'seed': rng_seed,
             'seed_hash': compute_scenario_hash(algorithm, payload_size, rate, run_index),
             'generated_at': generation_timestamp,
             'generator_version': '2.0.0',
+            'mode': 'smoke-test' if smoke_test else 'full',
         },
     }
     
@@ -181,7 +186,7 @@ def validate_scenario(scenario: dict) -> tuple[bool, Optional[str]]:
     return True, None
 
 
-def generate_all_scenarios(matrix: dict, output_dir: Path) -> tuple[list[dict], list[str]]:
+def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = False) -> tuple[list[dict], list[str]]:
     """
     Generate all scenarios from experiment matrix.
     
@@ -195,11 +200,25 @@ def generate_all_scenarios(matrix: dict, output_dir: Path) -> tuple[list[dict], 
     errors = []
     seen_ids = set()
     
+    # Smoke-test mode: restrict to subset of algorithms
+    smoke_test_algorithms = ['rsa2048', 'kyber512', 'dilithium2', 'hybrid_kyber_dilithium']
+    
     for experiment in experiments:
         algorithm = experiment['algorithm']
-        payload_sizes = experiment.get('payload_sizes', [1024])
-        rates = experiment.get('rates', [500])
-        runs = experiment.get('runs', defaults.get('runs', 5))
+        
+        # In smoke-test mode, only generate scenarios for specific algorithms
+        if smoke_test and algorithm not in smoke_test_algorithms:
+            continue
+        
+        # In smoke-test mode, use reduced parameters
+        if smoke_test:
+            payload_sizes = [256]
+            rates = [100]
+            runs = 1
+        else:
+            payload_sizes = experiment.get('payload_sizes', [1024])
+            rates = experiment.get('rates', [500])
+            runs = experiment.get('runs', defaults.get('runs', 5))
         
         for payload_size in payload_sizes:
             for rate in rates:
@@ -207,7 +226,7 @@ def generate_all_scenarios(matrix: dict, output_dir: Path) -> tuple[list[dict], 
                     # Generate scenario
                     scenario = generate_scenario_yaml(
                         experiment, payload_size, rate, run_index, 
-                        defaults, generation_timestamp
+                        defaults, generation_timestamp, smoke_test
                     )
                     
                     # Validate scenario
@@ -356,6 +375,11 @@ Output structure:
         action='store_true',
         help='Minimal output'
     )
+    parser.add_argument(
+        '--smoke-test',
+        action='store_true',
+        help='Generate smoke-test scenarios (reduced scale, minimal cost)'
+    )
     
     args = parser.parse_args()
     
@@ -423,8 +447,10 @@ Output structure:
     # Generate scenarios
     if not args.quiet:
         print("\nGenerating scenarios...")
+        if args.smoke_test:
+            print("Smoke-test mode: reduced scale, minimal cost")
     
-    generated, errors = generate_all_scenarios(matrix, args.output)
+    generated, errors = generate_all_scenarios(matrix, args.output, args.smoke_test)
     
     # Report errors
     if errors:

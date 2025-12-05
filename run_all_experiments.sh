@@ -27,7 +27,6 @@ set -euo pipefail
 # -----------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GENERATED_SCENARIOS_DIR="$SCRIPT_DIR/generated-scenarios"
-FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results"
 RESULTS_BASE="$SCRIPT_DIR/results"
 
 # Default values
@@ -47,6 +46,7 @@ SKIP_SCALING=false
 DRY_RUN=false
 CONTINUE_ON_ERROR=true
 MAX_RETRIES=2
+SMOKE_TEST=false
 
 # Colors
 RED='\033[0;31m'
@@ -117,6 +117,7 @@ OPTIONS:
     --dry-run               Show what would be executed
     --continue-on-error     Continue if individual experiments fail (default: true)
     --max-retries N         Max retries per failed experiment (default: 2)
+    --smoke-test            Enable smoke-test mode (reduced scale, minimal cost)
     -h, --help              Show this help message
 
 EXAMPLE:
@@ -163,14 +164,16 @@ run_experiment() {
                 "$SCRIPT_DIR/run_local.sh" \
                     --scenario "$scenario_path" \
                     --out "$output_dir" \
-                    --duration 30 2>&1 || exit_code=$?
+                    --duration 30 \
+                    $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 || exit_code=$?
                 ;;
             minikube)
                 "$SCRIPT_DIR/run_minikube.sh" \
                     --scenario "$scenario_path" \
                     --out "$output_dir" \
                     --replicas "$replicas" \
-                    --exp-id "$scenario_id" 2>&1 || exit_code=$?
+                    --exp-id "$scenario_id" \
+                    $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 || exit_code=$?
                 ;;
             gcp)
                 "$SCRIPT_DIR/deploy_gcp.sh" \
@@ -179,7 +182,8 @@ run_experiment() {
                     --project "$PROJECT" \
                     --bucket "$BUCKET" \
                     --region "$REGION" \
-                    --replicas "$replicas" 2>&1 || exit_code=$?
+                    --replicas "$replicas" \
+                    $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 || exit_code=$?
                 
                 if [[ $exit_code -eq 0 ]]; then
                     "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
@@ -287,6 +291,10 @@ while [[ $# -gt 0 ]]; do
             MAX_RETRIES="$2"
             shift 2
             ;;
+        --smoke-test)
+            SMOKE_TEST=true
+            shift
+            ;;
         -h|--help)
             usage
             ;;
@@ -330,6 +338,7 @@ echo -e "${NC}"
 log_info "Matrix: $MATRIX"
 log_info "Environments: $ENVS"
 log_info "Replicas: $REPLICAS"
+[[ "$SMOKE_TEST" == "true" ]] && log_info "Mode: SMOKE-TEST (reduced scale, minimal cost)"
 log_info "Started: $START_ISO"
 
 # Parse replicas into array
@@ -353,11 +362,13 @@ else
         python3 "$SCRIPT_DIR/orchestration/generate_scenarios.py" \
             --matrix "$MATRIX" \
             --output "$GENERATED_SCENARIOS_DIR" \
-            --dry-run
+            --dry-run \
+            $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "")
     else
         python3 "$SCRIPT_DIR/orchestration/generate_scenarios.py" \
             --matrix "$MATRIX" \
-            --output "$GENERATED_SCENARIOS_DIR"
+            --output "$GENERATED_SCENARIOS_DIR" \
+            $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "")
     fi
     
     log_success "Scenarios generated"
@@ -387,6 +398,14 @@ log_success "Output directories created"
 # Phase 3: Execute Experiments
 # =============================================================================
 log_phase "3. Execute Experiments"
+
+# Set final results directory based on smoke-test mode
+if [[ "$SMOKE_TEST" == "true" ]]; then
+    FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results-smoke"
+    REPLICAS="1"  # Force replicas to 1 in smoke-test mode
+else
+    FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results"
+fi
 
 # Parse environments
 IFS=',' read -ra ENV_ARRAY <<< "$ENVS"
@@ -434,6 +453,11 @@ for s in manifest['scenarios']:
         for replica_count in "${REPLICA_ARRAY[@]}"; do
             # For native, only run with 1 replica
             if [[ "$env" == "native" ]] && [[ "$replica_count" -gt 1 ]]; then
+                continue
+            fi
+            
+            # In smoke-test mode, only run with 1 replica
+            if [[ "$SMOKE_TEST" == "true" ]] && [[ "$replica_count" -gt 1 ]]; then
                 continue
             fi
             
