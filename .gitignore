@@ -22,3 +22,84 @@ Thumbs.db
 
 # Container build artifacts
 *.tar
+
+# Terraform files
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Results and generated data
+results/
+generated-scenarios/
+final-results/
+final-results-smoke/
+*.jsonl
+*.parquet
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+*.log
+
+# Local configuration
+*.local
+local/
+
+# Documentation and research files (user-specific)
+*.docx
+*.doc
+dissertation/
+research-drafts/
+
+# Log files and downloaded data
+*.csv
+downloaded-logs-*.csv
+*.log
+logs/
+
+# Large data files
+*.jsonl
+*.parquet
+*.h5
+*.hdf5
+
+# Container images
+*.tar.gz
+*.tar
+*.img

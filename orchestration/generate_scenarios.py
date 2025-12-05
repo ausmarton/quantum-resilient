@@ -111,8 +111,10 @@ def generate_scenario_yaml(
         }),
         
         # Metrics configuration
+        # Use absolute path for containerized environments (GCP, Minikube)
+        # Relative paths fail with readOnlyRootFilesystem: true
         'metrics': {
-            'jsonl_out': './results/raw/run.jsonl',
+            'jsonl_out': '/results/raw/run.jsonl',
         },
         
         # Full metadata section
@@ -210,10 +212,11 @@ def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = Fa
         if smoke_test and algorithm not in smoke_test_algorithms:
             continue
         
-        # In smoke-test mode, use reduced parameters
+        # In smoke-test mode, use reduced parameters (horizontal scaling only)
+        # CRITICAL: Hardware (machine_type, CPU, memory, disk) MUST stay identical
         if smoke_test:
             payload_sizes = [256]
-            rates = [100]
+            rates = [50]  # Reduced rate for smoke test
             runs = 1
         else:
             payload_sizes = experiment.get('payload_sizes', [1024])

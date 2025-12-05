@@ -237,14 +237,17 @@ fi
 SCENARIO="$(cd "$(dirname "$SCENARIO")" && pwd)/$(basename "$SCENARIO")"
 
 # Derived values
+# CRITICAL: Hardware MUST remain identical between smoke-test and full runs
+# Only horizontal scaling (node_count, replicas) may change
 if [[ "$SMOKE_TEST" == "true" ]]; then
     CLUSTER_NAME="pqc-smoke-test"
-    MACHINE_TYPE="e2-micro"
+    # DO NOT change MACHINE_TYPE - must stay identical to full runs
+    # Only reduce node_count (horizontal scaling)
     NODE_COUNT=1
     RUNS=1
     REPLICAS=1
     JOB_TIMEOUT="300s"  # 5 minutes
-    log_info "Smoke-test mode: using minimal infrastructure"
+    log_info "Smoke-test mode: reduced duration, runs, replicas (hardware identical)"
 else
     CLUSTER_NAME="pqc-bench-gke"
 fi
@@ -331,8 +334,28 @@ else
     log_info "Initializing Terraform..."
     terraform init -input=false
     
+    # Try to import existing bucket if it exists (non-fatal if it doesn't)
+    log_info "Checking for existing GCS bucket..."
+    if gsutil ls -b "gs://${BUCKET}" &>/dev/null; then
+        log_info "Bucket exists, importing into Terraform state..."
+        terraform import \
+            -var="project_id=$PROJECT" \
+            -var="region=$REGION" \
+            -var="bucket_name=$BUCKET" \
+            -var="machine_type=$MACHINE_TYPE" \
+            -var="node_count=$NODE_COUNT" \
+            -var="cluster_name=$CLUSTER_NAME" \
+            -var="smoke_test=$SMOKE_TEST" \
+            -var="disk_size_gb=$([ "$SMOKE_TEST" == "true" ] && echo "10" || echo "50")" \
+            google_storage_bucket.results "$BUCKET" 2>/dev/null || log_warn "Bucket import failed (may already be in state or will be created)"
+    fi
+    
     log_info "Applying Terraform configuration..."
-    terraform apply -auto-approve \
+    # CRITICAL: machine_type, disk_size_gb, disk_type MUST stay identical
+    # Only node_count may differ (horizontal scaling only)
+    # Use consistent disk_size_gb for both smoke-test and full runs
+    DISK_SIZE_GB="${DISK_SIZE_GB:-50}"
+    if terraform apply -auto-approve \
         -var="project_id=$PROJECT" \
         -var="region=$REGION" \
         -var="bucket_name=$BUCKET" \
@@ -340,9 +363,31 @@ else
         -var="node_count=$NODE_COUNT" \
         -var="cluster_name=$CLUSTER_NAME" \
         -var="smoke_test=$SMOKE_TEST" \
-        -var="disk_size_gb=$([ "$SMOKE_TEST" == "true" ] && echo "10" || echo "50")"
-    
-    log_success "Infrastructure deployed"
+        -var="disk_size_gb=$DISK_SIZE_GB"; then
+        log_success "Infrastructure deployed"
+    else
+        log_error "Terraform apply failed. Checking node pool status..."
+        
+        # Try to get the actual error from GCP
+        if command -v gcloud &> /dev/null; then
+            log_info "Fetching node pool status from GCP..."
+            gcloud container node-pools describe pqc-bench-pool \
+                --cluster "$CLUSTER_NAME" \
+                --region "$REGION" \
+                --project "$PROJECT" 2>&1 | head -50 || true
+            
+            log_info "Checking cluster operations..."
+            gcloud container operations list \
+                --cluster "$CLUSTER_NAME" \
+                --region "$REGION" \
+                --project "$PROJECT" \
+                --limit 5 \
+                --format="table(name,status,operationType)" || true
+        fi
+        
+        log_error "See terraform/gke/DEBUG_NODE_POOL.md for troubleshooting steps"
+        exit 1
+    fi
     
     # Get outputs
     AR_REPO=$(terraform output -raw artifact_registry_repository)
@@ -356,18 +401,65 @@ fi
 # =============================================================================
 log_step "Step 3/8: Configuring kubectl"
 
+# Check for gke-gcloud-auth-plugin (required for GKE authentication)
+log_info "Checking for gke-gcloud-auth-plugin..."
+if ! command -v gke-gcloud-auth-plugin &> /dev/null; then
+    log_warn "gke-gcloud-auth-plugin not found. Installing..."
+    
+    # Try to install via gcloud components
+    if gcloud components install gke-gcloud-auth-plugin --quiet 2>/dev/null; then
+        log_success "gke-gcloud-auth-plugin installed"
+    else
+        log_error "Failed to install gke-gcloud-auth-plugin automatically"
+        log_info "Please install manually:"
+        echo "  gcloud components install gke-gcloud-auth-plugin"
+        echo ""
+        echo "Or on Fedora/RHEL:"
+        echo "  sudo dnf install google-cloud-sdk-gke-gcloud-auth-plugin"
+        echo ""
+        echo "Or on Ubuntu/Debian:"
+        echo "  sudo apt-get install google-cloud-sdk-gke-gcloud-auth-plugin"
+        echo ""
+        exit 1
+    fi
+else
+    log_success "gke-gcloud-auth-plugin found"
+fi
+
 log_info "Getting cluster credentials..."
 gcloud container clusters get-credentials "$CLUSTER_NAME" \
     --region "$REGION" \
     --project "$PROJECT"
 
-# Verify connection
-if ! kubectl cluster-info &> /dev/null; then
-    log_error "Failed to connect to GKE cluster"
-    exit 1
-fi
-
-log_success "kubectl configured for $CLUSTER_NAME"
+# Verify connection (with retry)
+log_info "Verifying cluster connection..."
+RETRY_COUNT=0
+MAX_RETRIES=3
+while [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; do
+    if kubectl cluster-info &> /dev/null; then
+        log_success "kubectl configured for $CLUSTER_NAME"
+        break
+    fi
+    
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; then
+        log_warn "Connection failed, retrying ($RETRY_COUNT/$MAX_RETRIES)..."
+        sleep 5
+    else
+        log_error "Failed to connect to GKE cluster after $MAX_RETRIES attempts"
+        log_info "Troubleshooting steps:"
+        echo "  1. Verify cluster exists:"
+        echo "     gcloud container clusters describe $CLUSTER_NAME --region $REGION --project $PROJECT"
+        echo ""
+        echo "  2. Check gke-gcloud-auth-plugin:"
+        echo "     which gke-gcloud-auth-plugin"
+        echo ""
+        echo "  3. Try manual credential refresh:"
+        echo "     gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $PROJECT"
+        echo ""
+        exit 1
+    fi
+done
 
 # Get service account email from Terraform if not already set
 if [[ -z "${SA_EMAIL:-}" ]]; then
@@ -419,22 +511,65 @@ cleanup_job "$NAMESPACE"
 
 # Create scenario ConfigMap (with smoke-test overrides if needed)
 log_info "Creating scenario ConfigMap..."
-if [[ "$SMOKE_TEST" == "true" ]]; then
-    # Create temporary scenario with smoke-test overrides
-    TEMP_SCENARIO=$(mktemp)
-    cp "$SCENARIO" "$TEMP_SCENARIO"
-    sed -i "s/duration_sec:.*/duration_sec: 5/" "$TEMP_SCENARIO"
-    kubectl create configmap pqc-scenario \
-        --from-file=scenario.yaml="$TEMP_SCENARIO" \
-        --namespace="$NAMESPACE" \
-        --dry-run=client -o yaml | kubectl apply -f -
-    rm -f "$TEMP_SCENARIO"
+TEMP_SCENARIO=$(mktemp)
+cp "$SCENARIO" "$TEMP_SCENARIO"
+
+# CRITICAL: Ensure jsonl_out is always set to /results/raw/run.jsonl
+# This is required for the upload sidecar to find the results
+# Use Python for reliable YAML modification
+if command -v python3 &> /dev/null && python3 -c "import yaml" 2>/dev/null; then
+    python3 <<PYTHON_EOF
+import yaml
+import sys
+
+with open('$TEMP_SCENARIO', 'r') as f:
+    scenario = yaml.safe_load(f) or {}
+
+# Ensure metrics section exists
+if 'metrics' not in scenario:
+    scenario['metrics'] = {}
+
+# Always set jsonl_out to the correct path
+scenario['metrics']['jsonl_out'] = '/results/raw/run.jsonl'
+
+# Smoke-test duration override
+if '$SMOKE_TEST' == 'true' and 'workload' in scenario:
+    scenario['workload']['duration_sec'] = 5
+
+# Write back
+with open('$TEMP_SCENARIO', 'w') as f:
+    yaml.dump(scenario, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+PYTHON_EOF
 else
-    kubectl create configmap pqc-scenario \
-        --from-file=scenario.yaml="$SCENARIO" \
-        --namespace="$NAMESPACE" \
-        --dry-run=client -o yaml | kubectl apply -f -
+    # Fallback to sed if Python/YAML not available
+    log_warn "Python3/PyYAML not available, using sed fallback"
+    # Update existing jsonl_out
+    sed -i 's|jsonl_out:.*|jsonl_out: /results/raw/run.jsonl|g' "$TEMP_SCENARIO"
+    # If no jsonl_out found, add it after metrics: (or create metrics section)
+    if ! grep -q "jsonl_out:" "$TEMP_SCENARIO"; then
+        if grep -q "^metrics:" "$TEMP_SCENARIO"; then
+            sed -i '/^metrics:/a\  jsonl_out: /results/raw/run.jsonl' "$TEMP_SCENARIO"
+        else
+            # Add metrics section before execution or at end
+            if grep -q "^execution:" "$TEMP_SCENARIO"; then
+                sed -i '/^execution:/i\metrics:\n  jsonl_out: /results/raw/run.jsonl\n' "$TEMP_SCENARIO"
+            else
+                echo "metrics:" >> "$TEMP_SCENARIO"
+                echo "  jsonl_out: /results/raw/run.jsonl" >> "$TEMP_SCENARIO"
+            fi
+        fi
+    fi
+    
+    if [[ "$SMOKE_TEST" == "true" ]]; then
+        sed -i "s/duration_sec:.*/duration_sec: 5/" "$TEMP_SCENARIO"
+    fi
 fi
+
+kubectl create configmap pqc-scenario \
+    --from-file=scenario.yaml="$TEMP_SCENARIO" \
+    --namespace="$NAMESPACE" \
+    --dry-run=client -o yaml | kubectl apply -f -
+rm -f "$TEMP_SCENARIO"
 
 # Create GCP config ConfigMap
 log_info "Creating GCP config ConfigMap..."
@@ -466,13 +601,69 @@ metadata:
     iam.gke.io/gcp-service-account: "$SA_EMAIL"
 EOF
 
+# CRITICAL: Create IAM binding for Workload Identity
+# The Terraform binding only covers 'default' namespace, so we need to create
+# bindings for other namespaces (like 'pqc-smoke-test') dynamically
+log_info "Creating Workload Identity IAM binding for namespace '$NAMESPACE'..."
+K8S_SA="${PROJECT}.svc.id.goog[${NAMESPACE}/pqc-bench-sa]"
+
+# Check if binding already exists
+if gcloud iam service-accounts get-iam-policy "$SA_EMAIL" \
+    --project="$PROJECT" \
+    --format="json" 2>/dev/null | grep -q "$K8S_SA"; then
+    log_success "Workload Identity binding already exists for $K8S_SA"
+else
+    log_info "Creating new Workload Identity binding..."
+    if gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
+        --project="$PROJECT" \
+        --role="roles/iam.workloadIdentityUser" \
+        --member="serviceAccount:${K8S_SA}"; then
+        log_success "Workload Identity binding created for $K8S_SA"
+    else
+        log_error "Failed to create Workload Identity binding"
+        log_info "This may be because:"
+        log_info "  1. The GCP service account doesn't exist"
+        log_info "  2. You don't have permission to modify IAM policies"
+        log_info "  3. The namespace '$NAMESPACE' is not recognized by GKE"
+        exit 1
+    fi
+fi
+
+# CRITICAL: Ensure service account has GCS permissions on the bucket
+# This is needed even if the bucket exists and isn't managed by Terraform
+log_info "Ensuring service account has GCS permissions on bucket..."
+if gcloud storage buckets get-iam-policy "gs://${BUCKET}" \
+    --project="$PROJECT" \
+    --format="json" 2>/dev/null | grep -q "$SA_EMAIL"; then
+    log_success "Service account already has permissions on bucket"
+else
+    log_info "Granting storage.objectAdmin role to service account on bucket..."
+    if gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
+        --project="$PROJECT" \
+        --member="serviceAccount:${SA_EMAIL}" \
+        --role="roles/storage.objectAdmin" 2>/dev/null; then
+        log_success "GCS permissions granted"
+    else
+        log_warn "Failed to grant GCS permissions via gcloud (Terraform should handle this)"
+        log_info "If uploads fail, manually grant permissions with:"
+        echo "  gcloud storage buckets add-iam-policy-binding gs://${BUCKET} \\"
+        echo "    --member=serviceAccount:${SA_EMAIL} \\"
+        echo "    --role=roles/storage.objectAdmin"
+    fi
+fi
+
 # Apply worker job (with image placeholder replaced)
+# CRITICAL: Resource requests/limits MUST stay identical between smoke-test and full runs
+# Only ttlSecondsAfterFinished and namespace may differ
 log_info "Deploying worker Job..."
+TEMP_JOB=$(mktemp)
 sed "s|PLACEHOLDER_IMAGE|$IMAGE_NAME|g" "$K8S_GCP_DIR/worker-job.yaml" | \
     sed "s|namespace: default|namespace: $NAMESPACE|g" | \
     sed "s|cloud.google.com/gke-nodepool: pqc-bench-pool|cloud.google.com/gke-nodepool: pqc-bench-pool|g" | \
-    sed "s|ttlSecondsAfterFinished: 7200|ttlSecondsAfterFinished: $([ "$SMOKE_TEST" == "true" ] && echo "300" || echo "7200")|g" | \
-    kubectl apply -f -
+    sed "s|ttlSecondsAfterFinished: 7200|ttlSecondsAfterFinished: $([ "$SMOKE_TEST" == "true" ] && echo "300" || echo "7200")|g" > "$TEMP_JOB"
+
+kubectl apply -f "$TEMP_JOB"
+rm -f "$TEMP_JOB"
 
 log_success "Kubernetes resources deployed"
 
@@ -530,16 +721,41 @@ log_step "Step 7/8: Verifying GCS artifacts"
 
 log_info "Checking GCS bucket for results..."
 
-# Wait for upload to complete
-sleep 15
+# Wait for upload to complete (give it more time)
+log_info "Waiting for upload sidecar to complete..."
+sleep 30
+
+# Check upload container status
+UPLOAD_POD=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+if [[ -n "$UPLOAD_POD" ]]; then
+    UPLOAD_STATUS=$(kubectl get pod "$UPLOAD_POD" -n "$NAMESPACE" -o jsonpath='{.status.containerStatuses[?(@.name=="upload-results")].state.terminated.exitCode}' 2>/dev/null || echo "")
+    if [[ "$UPLOAD_STATUS" == "1" ]] || [[ "$UPLOAD_STATUS" == "2" ]]; then
+        log_error "Upload container exited with error code: $UPLOAD_STATUS"
+        log_info "Upload container logs:"
+        kubectl logs "$UPLOAD_POD" -n "$NAMESPACE" -c upload-results --tail=100
+        exit 1
+    fi
+fi
 
 # List artifacts
+log_info "Listing artifacts in gs://${BUCKET}/experiments/${EXP_ID}/"
 ARTIFACTS=$(gsutil ls "gs://${BUCKET}/experiments/${EXP_ID}/" 2>/dev/null || echo "")
 
 if [[ -z "$ARTIFACTS" ]]; then
     log_error "No artifacts found in GCS!"
     log_info "Checking upload container logs..."
-    kubectl logs -l job-name="$JOB_NAME" -n "$NAMESPACE" -c upload-results --tail=50
+    if [[ -n "$UPLOAD_POD" ]]; then
+        kubectl logs "$UPLOAD_POD" -n "$NAMESPACE" -c upload-results --tail=100
+    else
+        kubectl logs -l job-name="$JOB_NAME" -n "$NAMESPACE" -c upload-results --tail=100
+    fi
+    log_info "Checking if bucket exists and is accessible..."
+    if gsutil ls "gs://${BUCKET}/" >/dev/null 2>&1; then
+        log_info "Bucket exists. Listing contents:"
+        gsutil ls "gs://${BUCKET}/" | head -20
+    else
+        log_error "Cannot access bucket gs://${BUCKET}/"
+    fi
     exit 1
 fi
 
@@ -554,6 +770,39 @@ for file in "${REQUIRED_FILES[@]}"; do
         log_warn "Missing: $file"
     fi
 done
+
+# =============================================================================
+# Step 8: Download results locally (optional but recommended)
+# =============================================================================
+log_step "Step 8/8: Downloading results locally"
+
+LOCAL_OUTPUT_DIR="$SCRIPT_DIR/results/gcp/${EXP_ID}"
+log_info "Downloading results to: $LOCAL_OUTPUT_DIR"
+
+# Create output directory
+mkdir -p "$LOCAL_OUTPUT_DIR/raw"
+mkdir -p "$LOCAL_OUTPUT_DIR/merged"
+mkdir -p "$LOCAL_OUTPUT_DIR/stats"
+mkdir -p "$LOCAL_OUTPUT_DIR/figures"
+
+# Download merged JSONL
+if gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/merged.jsonl" "$LOCAL_OUTPUT_DIR/merged/merged.jsonl" 2>/dev/null; then
+    log_success "Downloaded merged.jsonl"
+else
+    log_warn "merged.jsonl not found, trying raw data..."
+    gsutil -m cp -r "gs://${BUCKET}/experiments/${EXP_ID}/raw/*" "$LOCAL_OUTPUT_DIR/raw/" 2>/dev/null || true
+fi
+
+# Download manifest and metadata
+gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/manifest.json" "$LOCAL_OUTPUT_DIR/manifest.json" 2>/dev/null || log_warn "manifest.json not found"
+gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/provenance.json" "$LOCAL_OUTPUT_DIR/provenance.json" 2>/dev/null || log_warn "provenance.json not found"
+gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/cloud_metadata.json" "$LOCAL_OUTPUT_DIR/cloud_metadata.json" 2>/dev/null || log_warn "cloud_metadata.json not found"
+gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/summary.json" "$LOCAL_OUTPUT_DIR/stats/summary.json" 2>/dev/null || log_warn "summary.json not found"
+
+# Download raw data if available
+gsutil -m cp -r "gs://${BUCKET}/experiments/${EXP_ID}/raw/*" "$LOCAL_OUTPUT_DIR/raw/" 2>/dev/null || true
+
+log_success "Results downloaded to: $LOCAL_OUTPUT_DIR"
 
 # =============================================================================
 # Step 8: Summary
@@ -573,15 +822,26 @@ log_info "Experiment ID: $EXP_ID"
 log_info "Duration: ${ELAPSED}s"
 echo ""
 
-log_info "GCS artifacts location:"
-echo "  gs://${BUCKET}/experiments/${EXP_ID}/"
+log_info "Results location:"
+echo "  Local:  $LOCAL_OUTPUT_DIR"
+echo "  GCS:    gs://${BUCKET}/experiments/${EXP_ID}/"
 echo ""
 
-log_info "To fetch and analyze results locally:"
+log_info "To analyze results:"
+echo "  python3 analysis/scripts/compute_statistics.py \\"
+echo "    --input $LOCAL_OUTPUT_DIR/merged/merged.jsonl \\"
+echo "    --output $LOCAL_OUTPUT_DIR/stats"
+echo ""
+echo "  python3 analysis/scripts/plot_latency.py \\"
+echo "    --input $LOCAL_OUTPUT_DIR/merged/merged.jsonl \\"
+echo "    --output $LOCAL_OUTPUT_DIR/figures"
+echo ""
+
+log_info "To re-download results (if needed):"
 echo "  ./fetch_and_analyse_from_gcs.sh \\"
 echo "    --exp-id $EXP_ID \\"
 echo "    --bucket $BUCKET \\"
-echo "    --out results/$EXP_ID"
+echo "    --out $LOCAL_OUTPUT_DIR"
 echo ""
 
 log_info "To compare with other environments:"

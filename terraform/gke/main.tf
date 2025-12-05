@@ -82,11 +82,15 @@ resource "google_storage_bucket_iam_member" "gcs_admin" {
 }
 
 # Allow Kubernetes SA to use this GCP SA (Workload Identity)
+# Note: This requires the cluster to be created first (workload identity pool must exist)
 resource "google_service_account_iam_member" "workload_identity" {
   count              = var.enable_workload_identity ? 1 : 0
   service_account_id = google_service_account.pqc_bench.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "serviceAccount:${local.workload_identity_pool}[default/pqc-bench-sa]"
+  member             = "serviceAccount:${var.project_id}.svc.id.goog[default/pqc-bench-sa]"
+  
+  # Ensure cluster is created first so workload identity pool exists
+  depends_on = [google_container_cluster.primary]
 }
 
 # -----------------------------------------------------------------------------
@@ -112,10 +116,7 @@ resource "google_container_cluster" "primary" {
   location = var.region
   project  = var.project_id
 
-  # Disable Autopilot for raw benchmarking control
-  enable_autopilot = false
-
-  # We'll manage the default node pool separately
+  # We'll manage the default node pool separately (Autopilot is disabled by default)
   remove_default_node_pool = true
   initial_node_count       = 1
 
@@ -123,9 +124,9 @@ resource "google_container_cluster" "primary" {
   network    = "default"
   subnetwork = "default"
 
-  # Workload Identity
+  # Workload Identity (must be enabled for Workload Identity to work)
   workload_identity_config {
-    workload_pool = var.enable_workload_identity ? local.workload_identity_pool : null
+    workload_pool = var.enable_workload_identity ? "${var.project_id}.svc.id.goog" : null
   }
 
   # Release channel for stable K8s versions
@@ -186,9 +187,13 @@ resource "google_container_node_pool" "primary" {
   node_count = var.smoke_test ? 1 : var.node_count
 
   # Node configuration
+  # CRITICAL: Hardware MUST remain identical between smoke-test and full runs
+  # Only node_count (horizontal scaling) may change, NOT machine_type, disk_type, etc.
   node_config {
-    machine_type = var.smoke_test ? "e2-micro" : var.machine_type
-    disk_size_gb = var.smoke_test ? 10 : var.disk_size_gb
+    # Machine type MUST stay the same - no conditional changes allowed
+    machine_type = var.machine_type
+    # Disk size and type MUST stay the same
+    disk_size_gb = var.disk_size_gb
     disk_type    = "pd-standard"
 
     # Service account for nodes
@@ -197,7 +202,7 @@ resource "google_container_node_pool" "primary" {
       "https://www.googleapis.com/auth/cloud-platform"
     ]
 
-    # Workload Identity
+    # Workload Identity (same for both modes)
     workload_metadata_config {
       mode = var.enable_workload_identity ? "GKE_METADATA" : "MODE_UNSPECIFIED"
     }
@@ -208,19 +213,12 @@ resource "google_container_node_pool" "primary" {
       environment = "benchmark"
     }
 
-    # Taints (optional - can be used to isolate benchmark workloads)
-    # taint {
-    #   key    = "benchmark"
-    #   value  = "true"
-    #   effect = "NO_SCHEDULE"
-    # }
-
     # Metadata
     metadata = {
       disable-legacy-endpoints = "true"
     }
 
-    # Shielded instance config
+    # Shielded instance config (same for both modes)
     shielded_instance_config {
       enable_secure_boot          = true
       enable_integrity_monitoring = true
@@ -230,7 +228,7 @@ resource "google_container_node_pool" "primary" {
   # Management
   management {
     auto_repair  = true
-    auto_upgrade = false  # Manual control for reproducibility
+    auto_upgrade = true  # Required when using release_channel
   }
 
   # Upgrade settings
@@ -244,7 +242,7 @@ resource "google_container_node_pool" "primary" {
 # Kubernetes Service Account (for Workload Identity)
 # -----------------------------------------------------------------------------
 
-resource "kubernetes_service_account" "pqc_bench" {
+resource "kubernetes_service_account_v1" "pqc_bench" {
   count = var.enable_workload_identity ? 1 : 0
 
   metadata {

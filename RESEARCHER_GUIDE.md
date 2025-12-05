@@ -184,7 +184,7 @@ MINIKUBE_ROOTLESS=true minikube start --driver=podman --rootless \
 ```
 
 **What happens:**
-- Creates minimal GKE cluster (1 node, e2-micro, 10GB disk)
+- Creates minimal GKE cluster (1 node, same machine_type as full runs, same disk size)
 - Runs 5-second benchmark
 - Uploads results to GCS
 - Downloads results locally

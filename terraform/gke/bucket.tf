@@ -2,6 +2,7 @@
 # bucket.tf - GCS bucket for experiment artifacts
 # =============================================================================
 
+# Create bucket (or import existing one with: terraform import google_storage_bucket.results <bucket-name>)
 resource "google_storage_bucket" "results" {
   name          = var.bucket_name
   location      = var.region

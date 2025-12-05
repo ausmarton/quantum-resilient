@@ -112,6 +112,8 @@ spec:
               cat /results/cloud_metadata.json
               
               # Create results subdirectories
+              # Directories will be owned by fsGroup (65532) automatically
+              # Both init and main containers run as user 65532, so permissions are correct
               mkdir -p /results/raw /results/merged /results/stats /results/figures
               
               echo "=== Metadata collection complete ==="
@@ -183,8 +185,11 @@ spec:
             - name: results
               mountPath: /results
           resources:
+            # Adjusted to fit reliably on n2-standard-2 (2 vCPUs, ~1.5 available after system reservations)
+            # Total pod requests: 100m (init) + 800m (main) + 100m (sidecar) = 1000m = 1 CPU
+            # This ensures consistent resource profile for both smoke-test and full runs
             requests:
-              cpu: "1"
+              cpu: "800m"
               memory: "1Gi"
             limits:
               cpu: "4"
@@ -205,22 +210,52 @@ spec:
             - /bin/sh
             - -c
             - |
-              set -e
+              # Don't use set -e here - we want to catch and report errors explicitly
+              set -u  # Only fail on undefined variables
               
               echo "=== Waiting for benchmark to complete ==="
               
-              # Wait for run.jsonl to appear and stabilize
-              while [ ! -f /results/raw/run.jsonl ]; do
-                echo "Waiting for results..."
+              # Find the JSONL output file (may be in different locations)
+              JSONL_FILE=""
+              MAX_WAIT=300  # 5 minutes max wait
+              WAIT_COUNT=0
+              
+              while [ -z "$JSONL_FILE" ] && [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+                # Check expected location first
+                if [ -f /results/raw/run.jsonl ]; then
+                  JSONL_FILE="/results/raw/run.jsonl"
+                  break
+                fi
+                # Check for any .jsonl file in /results/
+                FOUND=$(find /results -name "*.jsonl" -type f 2>/dev/null | head -1)
+                if [ -n "$FOUND" ]; then
+                  JSONL_FILE="$FOUND"
+                  echo "Found JSONL file at: $JSONL_FILE (moving to expected location)"
+                  mkdir -p /results/raw
+                  cp "$JSONL_FILE" /results/raw/run.jsonl
+                  JSONL_FILE="/results/raw/run.jsonl"
+                  break
+                fi
+                echo "Waiting for results... ($WAIT_COUNT/$MAX_WAIT seconds)"
                 sleep 5
+                WAIT_COUNT=$((WAIT_COUNT + 5))
               done
+              
+              if [ -z "$JSONL_FILE" ] || [ ! -f "$JSONL_FILE" ]; then
+                echo "ERROR: No JSONL file found after $MAX_WAIT seconds"
+                echo "Contents of /results:"
+                ls -laR /results/ 2>/dev/null || true
+                exit 1
+              fi
+              
+              echo "Found JSONL file: $JSONL_FILE"
               
               # Wait for file to stop growing (benchmark complete)
               prev_size=0
               stable_count=0
               while [ $stable_count -lt 3 ]; do
                 sleep 10
-                curr_size=$(stat -f%z /results/raw/run.jsonl 2>/dev/null || stat -c%s /results/raw/run.jsonl 2>/dev/null || echo 0)
+                curr_size=$(stat -f%z "$JSONL_FILE" 2>/dev/null || stat -c%s "$JSONL_FILE" 2>/dev/null || echo 0)
                 if [ "$curr_size" = "$prev_size" ] && [ "$curr_size" != "0" ]; then
                   stable_count=$((stable_count + 1))
                   echo "File stable check $stable_count/3 (size: $curr_size)"
@@ -231,6 +266,65 @@ spec:
               done
               
               echo "=== Benchmark complete, uploading results ==="
+              
+              # Ensure gcloud/gsutil config directories exist and are writable
+              # CLOUDSDK_CONFIG and BOTO_CONFIG point to writable locations
+              mkdir -p "${CLOUDSDK_CONFIG:-/tmp/.config/gcloud}"
+              mkdir -p "$(dirname ${BOTO_CONFIG:-/tmp/.boto})"
+              
+              # Create minimal boto config to prevent gsutil from trying to write to /.gsutil
+              if [ ! -f "${BOTO_CONFIG:-/tmp/.boto}" ]; then
+                echo "[GSUtil]" > "${BOTO_CONFIG:-/tmp/.boto}"
+                echo "use_magicfile = False" >> "${BOTO_CONFIG:-/tmp/.boto}"
+                echo "[Boto]" >> "${BOTO_CONFIG:-/tmp/.boto}"
+                echo "https_validate_certificates = True" >> "${BOTO_CONFIG:-/tmp/.boto}"
+              fi
+              
+              # Configure gcloud/gsutil to use Workload Identity (Application Default Credentials)
+              # With Workload Identity, ADC is automatically available via metadata server
+              echo "Configuring gcloud/gsutil to use Workload Identity (ADC)..."
+              
+              # Ensure we're not using file-based credentials (use metadata server instead)
+              unset GOOGLE_APPLICATION_CREDENTIALS 2>/dev/null || true
+              
+              # Configure gsutil to use Application Default Credentials
+              # This prevents it from trying to use GCE credentials
+              export CLOUDSDK_AUTH_USE_APPLICATION_DEFAULT_CREDENTIALS=true
+              
+              # Verify Workload Identity is working by checking metadata server
+              echo "Checking Workload Identity metadata..."
+              METADATA_SERVER="http://metadata.google.internal"
+              if curl -s -f -H "Metadata-Flavor: Google" \
+                  "${METADATA_SERVER}/computeMetadata/v1/instance/service-accounts/default/email" >/dev/null 2>&1; then
+                SA_EMAIL=$(curl -s -H "Metadata-Flavor: Google" \
+                    "${METADATA_SERVER}/computeMetadata/v1/instance/service-accounts/default/email")
+                echo "Service account from metadata: $SA_EMAIL"
+              else
+                echo "WARNING: Could not retrieve service account from metadata server"
+                echo "This may indicate Workload Identity is not properly configured"
+              fi
+              
+              # Test GCS access with gcloud storage (will use ADC from metadata server automatically)
+              # Note: This is a best-effort test - if it fails, we'll still try to upload
+              echo "Testing GCS access with gcloud storage..."
+              if gcloud storage ls "gs://${GCS_BUCKET}/" >/dev/null 2>&1; then
+                echo "GCS access verified successfully"
+              else
+                echo "WARNING: Initial GCS access test failed, but continuing..."
+                echo "This may be due to:"
+                echo "  - Bucket permissions not yet propagated"
+                echo "  - Service account needs roles/storage.objectAdmin on the bucket"
+                echo "Attempting to get access token from metadata server..."
+                TOKEN=$(curl -s -H "Metadata-Flavor: Google" \
+                    "${METADATA_SERVER}/computeMetadata/v1/instance/service-accounts/default/token" 2>/dev/null || echo "FAILED")
+                if [ "$TOKEN" != "FAILED" ]; then
+                  echo "Token retrieved successfully (Workload Identity is working)"
+                  echo "Will attempt uploads - errors will be reported per-file"
+                else
+                  echo "ERROR: Failed to get token - Workload Identity may not be configured"
+                  exit 1
+                fi
+              fi
               
               BUCKET="${GCS_BUCKET}"
               EXP="${EXP_ID}"
@@ -271,26 +365,97 @@ spec:
               # Upload to GCS
               echo "Uploading to gs://${BUCKET}/experiments/${EXP}/"
               
-              gsutil -m cp /results/merged/merged.jsonl "gs://${BUCKET}/experiments/${EXP}/merged.jsonl"
-              gsutil -m cp /results/manifest.json "gs://${BUCKET}/experiments/${EXP}/manifest.json"
-              gsutil -m cp /results/provenance.json "gs://${BUCKET}/experiments/${EXP}/provenance.json"
-              gsutil -m cp /results/cloud_metadata.json "gs://${BUCKET}/experiments/${EXP}/cloud_metadata.json"
+              # Track upload success
+              UPLOAD_ERRORS=0
+              
+              # Upload each file with error checking
+              # Use gcloud storage instead of gsutil to avoid /.gsutil permission issues
+              # gcloud storage handles ADC better and doesn't require boto config
+              if ! gcloud storage cp /results/merged/merged.jsonl "gs://${BUCKET}/experiments/${EXP}/merged.jsonl" 2>&1; then
+                echo "ERROR: Failed to upload merged.jsonl"
+                UPLOAD_ERRORS=$((UPLOAD_ERRORS + 1))
+              else
+                echo "✓ Uploaded merged.jsonl"
+              fi
+              
+              if ! gcloud storage cp /results/manifest.json "gs://${BUCKET}/experiments/${EXP}/manifest.json" 2>&1; then
+                echo "ERROR: Failed to upload manifest.json"
+                UPLOAD_ERRORS=$((UPLOAD_ERRORS + 1))
+              else
+                echo "✓ Uploaded manifest.json"
+              fi
+              
+              if ! gcloud storage cp /results/provenance.json "gs://${BUCKET}/experiments/${EXP}/provenance.json" 2>&1; then
+                echo "ERROR: Failed to upload provenance.json"
+                UPLOAD_ERRORS=$((UPLOAD_ERRORS + 1))
+              else
+                echo "✓ Uploaded provenance.json"
+              fi
+              
+              if ! gcloud storage cp /results/cloud_metadata.json "gs://${BUCKET}/experiments/${EXP}/cloud_metadata.json" 2>&1; then
+                echo "ERROR: Failed to upload cloud_metadata.json"
+                UPLOAD_ERRORS=$((UPLOAD_ERRORS + 1))
+              else
+                echo "✓ Uploaded cloud_metadata.json"
+              fi
               
               # Upload raw data
-              gsutil -m cp -r /results/raw/* "gs://${BUCKET}/experiments/${EXP}/raw/"
+              if ! gcloud storage cp /results/raw/run.jsonl "gs://${BUCKET}/experiments/${EXP}/raw/run.jsonl" 2>&1; then
+                echo "ERROR: Failed to upload raw data"
+                UPLOAD_ERRORS=$((UPLOAD_ERRORS + 1))
+              else
+                echo "✓ Uploaded raw data"
+              fi
               
               # Upload stats if generated
               if [ -f /results/stats/summary.json ]; then
-                gsutil -m cp /results/stats/summary.json "gs://${BUCKET}/experiments/${EXP}/summary.json"
+                if ! gcloud storage cp /results/stats/summary.json "gs://${BUCKET}/experiments/${EXP}/summary.json" 2>&1; then
+                  echo "WARNING: Failed to upload summary.json (optional)"
+                else
+                  echo "✓ Uploaded summary.json"
+                fi
+              fi
+              
+              # Verify uploads
+              echo "=== Verifying uploads ==="
+              if ! gcloud storage ls "gs://${BUCKET}/experiments/${EXP}/" 2>&1; then
+                echo "ERROR: Cannot list uploaded files"
+                UPLOAD_ERRORS=$((UPLOAD_ERRORS + 1))
+              fi
+              
+              # Check for required files (POSIX-compliant, no arrays)
+              for file in merged.jsonl manifest.json provenance.json cloud_metadata.json; do
+                if ! gcloud storage stat "gs://${BUCKET}/experiments/${EXP}/${file}" >/dev/null 2>&1; then
+                  echo "ERROR: Required file ${file} not found in GCS after upload"
+                  UPLOAD_ERRORS=$((UPLOAD_ERRORS + 1))
+                fi
+              done
+              
+              if [ $UPLOAD_ERRORS -gt 0 ]; then
+                echo "ERROR: Upload completed with $UPLOAD_ERRORS errors"
+                echo "Diagnostics:"
+                echo "  Bucket: gs://${BUCKET}/"
+                echo "  Experiment path: gs://${BUCKET}/experiments/${EXP}/"
+                echo "  Service account: $(curl -s -H 'Metadata-Flavor: Google' http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email 2>/dev/null || echo 'unknown')"
+                echo ""
+                echo "Listing files in bucket (if accessible):"
+                gsutil ls -r "gs://${BUCKET}/experiments/${EXP}/" 2>&1 || echo "Cannot list bucket contents"
+                echo ""
+                echo "Checking bucket permissions:"
+                gsutil iam get "gs://${BUCKET}/" 2>&1 | head -20 || echo "Cannot check bucket IAM"
+                echo ""
+                echo "Attempting to create test file:"
+                echo "test" | gsutil cp - "gs://${BUCKET}/experiments/${EXP}/.test-upload" 2>&1 || echo "Cannot write to bucket"
+                exit 1
               fi
               
               echo "=== Upload complete ==="
-              gsutil ls -l "gs://${BUCKET}/experiments/${EXP}/"
+              gcloud storage ls -l "gs://${BUCKET}/experiments/${EXP}/"
               
               # Signal completion
               touch /results/.upload_complete
               
-              echo "=== GCS upload finished ==="
+              echo "=== GCS upload finished successfully ==="
           env:
             - name: GCS_BUCKET
               valueFrom:
@@ -314,6 +479,12 @@ spec:
                   name: pqc-gcp-config
                   key: container_image
                   optional: true
+            # CRITICAL: Set gcloud/gsutil config to writable location (readOnlyRootFilesystem prevents /.config and /.gsutil)
+            - name: CLOUDSDK_CONFIG
+              value: "/tmp/.config/gcloud"
+            - name: BOTO_CONFIG
+              value: "/tmp/.boto"
+            # Don't set GOOGLE_APPLICATION_CREDENTIALS - let it use ADC from metadata server (Workload Identity)
           volumeMounts:
             - name: scenario-config
               mountPath: /config
