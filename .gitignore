@@ -63,13 +63,17 @@ dist/
 build/
 *.whl
 
-# Results and generated data
-results/
+# Generated scenarios (can be regenerated from experiment_matrix.yaml)
 generated-scenarios/
+**/generated-scenarios/
+
+# Analysis outputs (can be regenerated from raw data)
 final-results/
 final-results-smoke/
-*.jsonl
+**/figures/
+**/stats/
 *.parquet
+# Note: Keep raw JSONL files - they are benchmark data that cannot be easily regenerated
 
 # Temporary files
 *.tmp
@@ -87,15 +91,12 @@ local/
 dissertation/
 research-drafts/
 
-# Log files and downloaded data
+# Log files and downloaded data (temporary)
 *.csv
 downloaded-logs-*.csv
-*.log
 logs/
 
-# Large data files
-*.jsonl
-*.parquet
+# Large binary data files (but keep JSONL which is text-based)
 *.h5
 *.hdf5
 
