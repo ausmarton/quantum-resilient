@@ -452,12 +452,142 @@ If analysis fails, you can re-run just the analysis:
 tar -czf "full-scale-results-$(date +%Y%m%d).tar.gz" results/ final-results/
 ```
 
-## Next Steps
+## Complete Workflow: From Data Collection to Dissertation
 
-After data collection:
-1. Verify all data was collected (use verification script)
-2. Archive the `results/` directory
-3. Run analysis when ready
-4. Generate dissertation figures and tables
-5. Write up results chapter
+This section provides a step-by-step workflow for collecting all data and generating dissertation-ready analysis.
+
+### Phase 1: Data Collection (You Are Here)
+
+**Status**: ✅ Native complete (225 experiments)
+
+**Next Steps**:
+
+1. **Run Minikube Data Collection**
+   ```bash
+   ./run_full_scale_data_collection.sh --env minikube
+   ```
+   ⏱️ **Time**: ~4-5 hours | 📊 **Scenarios**: 225
+   
+   After completion, verify:
+   ```bash
+   ./scripts/validate_data_collection.sh --envs minikube
+   ```
+
+2. **Run GCP Data Collection**
+   ```bash
+   ./run_full_scale_data_collection.sh \
+     --env gcp \
+     --project <your-gcp-project> \
+     --bucket <your-gcs-bucket> \
+     --region us-central1
+   ```
+   ⏱️ **Time**: ~5-6 hours | 📊 **Scenarios**: 225
+   
+   After completion, verify:
+   ```bash
+   ./scripts/validate_data_collection.sh --envs gcp
+   ```
+
+3. **Final Validation (All Environments)**
+   ```bash
+   ./scripts/validate_data_collection.sh --envs native,minikube,gcp --strict
+   ```
+   
+   This should show:
+   ```
+   NATIVE: Checking 225 expected experiments...
+     ✓ All 225 experiments complete
+   
+   MINIKUBE: Checking 225 expected experiments...
+     ✓ All 225 experiments complete
+   
+   GCP: Checking 225 expected experiments...
+     ✓ All 225 experiments complete
+   
+   ✓ All required data is present - ready for analysis!
+   ```
+
+### Phase 2: Prepare for Analysis
+
+4. **Regenerate Combined Index**
+   
+   Since you ran environments separately, regenerate the combined index:
+   ```bash
+   ./scripts/regenerate_index_from_results.sh \
+     --matrix orchestration/experiment_matrix.yaml \
+     --output final-results/
+   ```
+   
+   This creates `final-results/index.json` with all 675 experiments (225 × 3 environments).
+
+### Phase 3: Run Complete Analysis
+
+5. **Generate All Analysis Artifacts**
+   
+   This single command generates everything needed for your dissertation:
+   ```bash
+   ./run_all_experiments.sh \
+     --skip-generation \
+     --skip-native --skip-minikube --skip-gcp \
+     --matrix orchestration/experiment_matrix.yaml
+   ```
+   
+   **What this generates:**
+   - `final-results/index.json` - Master experiment index
+   - `final-results/aggregated_stats.json` - Aggregated statistics across all experiments
+   - `final-results/aggregated_stats.csv` - CSV version for spreadsheets
+   - `final-results/hypothesis_tests.json` - Statistical test results (KS, Mann-Whitney, Welch's t-test)
+   - `final-results/hypothesis_table.csv` - Hypothesis tests in tabular format
+   - `final-results/hypothesis_interpretation.txt` - Human-readable interpretation
+   - `final-results/figures/` - All visualizations:
+     - `combined_ecdf.png` - ECDF across all algorithms/environments
+     - `classical_vs_pqc.png` - PQC vs classical comparison
+     - `scaling_curves.png` - Throughput/latency scaling
+     - `ecdf_by_payload.png` - ECDF by payload size
+     - `ecdf_*.png` - Per-algorithm ECDFs
+     - `scaling/` - Replica scaling plots (if applicable)
+   - `final-results/stats/` - Additional statistics:
+     - `effect_sizes.json` - Cohen's d effect sizes
+     - `environment_deltas.json` - Environment comparisons
+   - `final-results/report.pdf` - Complete dissertation-ready PDF report
+
+### Phase 4: Use Results for Dissertation
+
+6. **Access Your Results**
+   
+   All dissertation-ready outputs are in `final-results/`:
+   ```bash
+   cd final-results/
+   ls -lh figures/    # All charts and graphs
+   ls -lh stats/      # Statistical summaries
+   cat hypothesis_interpretation.txt  # Statistical test interpretations
+   ```
+
+7. **Key Files for Dissertation**:
+   - **Figures**: `final-results/figures/*.png` - Use these in your dissertation
+   - **Tables**: `final-results/aggregated_stats.csv` - Import into your document
+   - **Statistical Tests**: `final-results/hypothesis_table.csv` - Statistical significance results
+   - **Interpretations**: `final-results/hypothesis_interpretation.txt` - Pre-written interpretations
+   - **Complete Report**: `final-results/report.pdf` - Full analysis report
+
+### Summary Checklist
+
+- [x] ✅ Native data collection complete (225 experiments)
+- [ ] ⏳ Minikube data collection (~4-5 hours)
+- [ ] ⏳ GCP data collection (~5-6 hours)
+- [ ] ⏳ Validate all environments
+- [ ] ⏳ Regenerate combined index
+- [ ] ⏳ Run complete analysis
+- [ ] ⏳ Review generated figures and statistics
+- [ ] ⏳ Use results in dissertation
+
+## Next Steps (After All Data Collected)
+
+After completing all three environments:
+1. Verify all data was collected (use validation script)
+2. Archive the `results/` directory (backup before analysis)
+3. Run analysis (generates all figures and statistics)
+4. Review generated visualizations and interpretations
+5. Use figures and tables in dissertation
+6. Write up results chapter using the statistical interpretations
 
