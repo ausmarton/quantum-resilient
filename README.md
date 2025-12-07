@@ -1873,6 +1873,7 @@ Reports Cohen's d with interpretations:
 
 - **[RESEARCHER_GUIDE.md](RESEARCHER_GUIDE.md)** - Complete guide for researchers running experiments
 - **[FULL_SCALE_DATA_COLLECTION_GUIDE.md](FULL_SCALE_DATA_COLLECTION_GUIDE.md)** - Complete guide for full-scale data collection (includes quick start, resume, and validation)
+- **[STOP_AND_RESUME_GUIDE.md](STOP_AND_RESUME_GUIDE.md)** - How to safely stop and resume long-running experiments
 
 ### Reference Guides
 
