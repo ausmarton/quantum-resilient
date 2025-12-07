@@ -926,13 +926,14 @@ Use `deploy_gcp.sh` for end-to-end deployment:
 gcloud auth login
 gcloud auth application-default login
 
-# Deploy and run experiment
+# Deploy and run experiment (RECOMMENDED: Use --ephemeral to auto-destroy resources)
 ./deploy_gcp.sh \
   --scenario scenarios/hybrid_kyber_dilithium.yaml \
   --exp-id gcp_exp1 \
   --project YOUR_PROJECT_ID \
   --region us-central1 \
-  --bucket pqc-bench-results
+  --bucket pqc-bench-results \
+  --ephemeral
 ```
 
 This single command:
@@ -941,6 +942,31 @@ This single command:
 3. Builds and pushes container image to Artifact Registry
 4. Runs benchmark Job in GKE
 5. Uploads results to GCS
+6. **Automatically destroys cluster and all resources (if `--ephemeral` is used)**
+7. **Verifies zero residual cost**
+
+**Ephemeral Mode (`--ephemeral`):**
+- Automatically creates cluster only when needed
+- Automatically destroys all resources after completion
+- Cleans up load balancers, IPs, disks, firewall rules
+- Verifies zero residual cost
+- **Recommended for all experiments to avoid ongoing charges**
+
+**Smoke Test Mode (`--smoke-test --ephemeral`):**
+```bash
+./deploy_gcp.sh \
+  --scenario scenarios/hybrid_kyber_dilithium.yaml \
+  --exp-id smoketest \
+  --smoke-test \
+  --ephemeral \
+  --project YOUR_PROJECT_ID \
+  --bucket pqc-bench-results \
+  --region us-central1
+```
+- Creates minimal cluster (1 node, same hardware as full runs)
+- Runs 5-second benchmark
+- Automatically destroys everything
+- **Cost: <£0.01, zero ongoing cost**
 
 ### Fetch and Analyze Results
 
@@ -1171,14 +1197,15 @@ All orchestrator scripts support multiple repeated runs for statistical rigor:
   --runs 5 \
   --seed 1234
 
-# GCP: 5 repeated runs
+# GCP: 5 repeated runs (with ephemeral mode for zero ongoing cost)
 ./deploy_gcp.sh \
   --scenario scenarios/hybrid_kyber_dilithium.yaml \
   --exp-id gcp_exp1 \
   --project my-project \
   --bucket pqc-results \
   --runs 5 \
-  --seed 1234
+  --seed 1234 \
+  --ephemeral
 ```
 
 ### Output Structure (Multiple Runs)

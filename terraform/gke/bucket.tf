@@ -9,6 +9,15 @@ resource "google_storage_bucket" "results" {
   project       = var.project_id
   force_destroy = true  # Allow deletion with objects (for easy cleanup)
 
+  # Allow importing existing buckets
+  lifecycle {
+    create_before_destroy = false
+    ignore_changes = [
+      # Ignore changes to lifecycle rules if bucket already exists with different rules
+      lifecycle_rule,
+    ]
+  }
+
   # Versioning for experiment reproducibility
   versioning {
     enabled = true

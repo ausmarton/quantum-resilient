@@ -1,0 +1,329 @@
+# Full-Scale Data Collection Guide
+
+This guide explains how to run full-scale benchmarks separately for each environment to collect all raw data needed for dissertation analysis.
+
+## Overview
+
+**Goal**: Collect all raw benchmark data from full-scale runs without running analysis, allowing you to:
+- Run each environment separately (avoid resource throttling)
+- Analyze data later offline
+- Ensure academic rigor (5 runs per configuration)
+- Preserve all raw data for reproducibility
+
+## What Gets Collected
+
+For each experiment scenario, the following data is captured:
+
+```
+results/<env>/<scenario-id>/
+├── raw/
+│   └── run.jsonl              # Raw telemetry events (one per line)
+├── merged/
+│   ├── merged.jsonl           # Sorted merged events
+│   └── merged.parquet         # Parquet format (if generated)
+├── stats/
+│   └── summary.json           # Statistical summary (p50, p95, p99, throughput)
+└── manifest.json              # Run metadata (git commit, timestamps, hardware)
+```
+
+**Each event in JSONL contains:**
+- `latency_us`: Operation latency in microseconds
+- `operation`: Operation type (sign, encrypt, etc.)
+- `algorithm`: Algorithm name
+- `timestamp_utc_iso`: Event timestamp
+- `cpu_user_time_us`: CPU usage
+- `memory_rss_bytes`: Memory usage
+- `queue_delay_us`: Queue delay (if applicable)
+- `ciphertext_size_bytes`: Ciphertext size
+- System metadata (CPU model, kernel version, etc.)
+
+## Full-Scale Run Parameters
+
+Based on `orchestration/experiment_matrix.yaml`:
+
+- **Algorithms**: 5 (RSA-2048, ECDSA P-256, Kyber-512, Dilithium-2, Hybrid)
+- **Payload sizes**: 3 (256B, 1KB, 4KB)
+- **Rates**: 3 (100, 500, 2000 msg/s)
+- **Runs per configuration**: 5
+- **Duration per run**: 30 seconds
+- **Total scenarios per environment**: 5 × 3 × 3 × 5 = **225 scenarios**
+
+**Estimated time per environment:**
+- Native: ~3-4 hours (depending on hardware)
+- Minikube: ~4-5 hours (container overhead)
+- GCP: ~5-6 hours (includes cluster setup/teardown)
+
+## Running Data Collection
+
+### Option 1: Run All Environments Sequentially
+
+```bash
+./run_full_scale_data_collection.sh \
+  --all \
+  --project <your-gcp-project> \
+  --bucket <your-gcs-bucket> \
+  --matrix orchestration/experiment_matrix.yaml
+```
+
+This will:
+1. Run native experiments
+2. Run minikube experiments
+3. Run GCP experiments
+4. Generate data collection manifest
+
+### Option 2: Run Environments Separately (Recommended)
+
+**Step 1: Run Native (Local Machine)**
+```bash
+./run_full_scale_data_collection.sh \
+  --env native \
+  --matrix orchestration/experiment_matrix.yaml
+```
+
+**Step 2: Run Minikube (Local Machine)**
+```bash
+./run_full_scale_data_collection.sh \
+  --env minikube \
+  --matrix orchestration/experiment_matrix.yaml
+```
+
+**Step 3: Run GCP (Cloud)**
+```bash
+./run_full_scale_data_collection.sh \
+  --env gcp \
+  --project <your-gcp-project> \
+  --bucket <your-gcs-bucket> \
+  --region us-central1 \
+  --matrix orchestration/experiment_matrix.yaml
+```
+
+### Option 3: Run Specific Environments Only
+
+```bash
+# Only native
+./run_full_scale_data_collection.sh --env native
+
+# Only minikube
+./run_full_scale_data_collection.sh --env minikube
+
+# Only GCP
+./run_full_scale_data_collection.sh --env gcp --project <project> --bucket <bucket>
+```
+
+## What Happens During Collection
+
+1. **Scenario Generation**: Scenarios are generated from the matrix (if not already done)
+2. **Experiment Execution**: Each scenario runs 5 times (for statistical rigor)
+3. **Data Collection**: Raw JSONL, merged data, and statistics are saved
+4. **Manifest Creation**: A manifest is created listing all collected experiments
+5. **Analysis Skipped**: No figures or hypothesis tests are generated (saves time)
+
+## Output Structure
+
+After running, you'll have:
+
+```
+quantum-resilient/
+├── results/
+│   ├── native/
+│   │   ├── rsa2048_p256_r100_run1_<hash>/
+│   │   ├── rsa2048_p256_r100_run2_<hash>/
+│   │   └── ... (225 scenarios)
+│   ├── minikube/
+│   │   └── ... (225 scenarios)
+│   └── gcp/
+│       └── ... (225 scenarios)
+│
+└── data-collection-<timestamp>/
+    ├── manifest.json           # Complete list of collected experiments
+    ├── summary.txt             # Human-readable summary
+    ├── native_run.log          # Native environment run log
+    ├── minikube_run.log        # Minikube environment run log
+    └── gcp_run.log             # GCP environment run log
+```
+
+## Verifying Data Collection
+
+After each environment completes, verify the data:
+
+```bash
+# Check what was collected
+./scripts/verify_experiments.sh results/
+
+# Or check specific environment
+ls -lh results/native/ | wc -l  # Should show ~225 directories
+ls -lh results/minikube/ | wc -l
+ls -lh results/gcp/ | wc -l
+```
+
+## Running Analysis Later
+
+Once all environments have collected data, you can run analysis:
+
+### Step 1: Regenerate Combined Index (If Needed)
+
+If you ran environments separately, regenerate the combined index:
+
+```bash
+./scripts/regenerate_index_from_results.sh \
+  --matrix orchestration/experiment_matrix.yaml \
+  --output final-results/
+```
+
+This creates a combined `index.json` from all existing results directories.
+
+### Step 2: Analyze All Environments Together
+
+```bash
+./run_all_experiments.sh \
+  --skip-generation \
+  --skip-native --skip-minikube --skip-gcp \
+  --matrix orchestration/experiment_matrix.yaml
+```
+
+This will:
+- Skip scenario generation (already done)
+- Skip experiment execution (data already collected)
+- Use existing index.json (or regenerated one)
+- Run analysis on all collected data
+- Generate figures, hypothesis tests, and reports
+
+### Option 2: Analyze Individual Environment
+
+```bash
+# Analyze only native
+./run_all_experiments.sh \
+  --skip-generation \
+  --envs native \
+  --skip-native false \
+  --skip-minikube true \
+  --skip-gcp true \
+  --matrix orchestration/experiment_matrix.yaml
+```
+
+### Option 3: Custom Analysis
+
+You can also run analysis scripts directly:
+
+```bash
+# Aggregate results
+python3 analysis/aggregate_results.py \
+  --index results/index.json \
+  --output final-results/
+
+# Generate figures
+python3 analysis/plot_combined_cdfs.py \
+  --index results/index.json \
+  --output final-results/figures/
+
+# Hypothesis tests
+python3 analysis/hypothesis_tests.py \
+  --index results/index.json \
+  --matrix orchestration/experiment_matrix.yaml \
+  --output final-results/
+```
+
+## Academic Rigor Checklist
+
+✅ **Multiple runs**: 5 runs per configuration (as per matrix)
+✅ **Statistical analysis**: p50, p95, p99 percentiles, confidence intervals
+✅ **Hypothesis testing**: Kolmogorov-Smirnov, Mann-Whitney U, Welch's t-test
+✅ **Effect sizes**: Cohen's d with 95% confidence intervals
+✅ **Multiple comparisons correction**: Holm-Bonferroni correction
+✅ **Reproducibility**: Deterministic RNG seeds, full metadata capture
+✅ **Raw data preservation**: All JSONL files preserved for re-analysis
+
+## Data Requirements for Dissertation
+
+The collected data supports answering:
+
+1. **Performance comparison**: PQC vs classical (latency, throughput)
+2. **Environment comparison**: Native vs Minikube vs GCP
+3. **Scaling behavior**: Performance at different rates and payload sizes
+4. **Statistical significance**: Which differences are significant?
+5. **Effect sizes**: How large are the practical differences?
+6. **Distribution analysis**: CDFs, ECDFs, distribution shapes
+
+All of this is captured in the raw JSONL files and can be re-analyzed as needed.
+
+## Troubleshooting
+
+### Experiments are being skipped
+
+The script checks if results already exist and skips them. To force re-run:
+```bash
+# Remove specific experiment
+rm -rf results/native/<scenario-id>/
+
+# Or remove all and start fresh (be careful!)
+rm -rf results/native/* results/minikube/* results/gcp/*
+```
+
+### Out of disk space
+
+Each experiment generates ~1-5 MB of data. For 225 scenarios × 3 environments = ~675 experiments = ~3-4 GB total.
+
+Check disk usage:
+```bash
+du -sh results/
+```
+
+### GCP costs
+
+Always use `--ephemeral` flag (automatically used by the script) to ensure clusters are destroyed after runs.
+
+### Analysis fails later
+
+If analysis fails, you can re-run just the analysis:
+```bash
+./run_all_experiments.sh \
+  --skip-generation \
+  --skip-native --skip-minikube --skip-gcp \
+  --matrix orchestration/experiment_matrix.yaml
+```
+
+## Best Practices
+
+1. **Run environments separately**: Avoids resource throttling
+2. **Verify after each environment**: Check that data was collected
+3. **Archive after collection**: Backup `results/` directory
+4. **Document collection timestamp**: Note when each environment was run
+5. **Keep collection manifest**: The manifest.json lists all collected experiments
+
+## Example Workflow
+
+```bash
+# Day 1: Collect native data
+./run_full_scale_data_collection.sh --env native
+# Verify
+./scripts/verify_experiments.sh results/native/
+
+# Day 2: Collect minikube data
+./run_full_scale_data_collection.sh --env minikube
+# Verify
+./scripts/verify_experiments.sh results/minikube/
+
+# Day 3: Collect GCP data
+./run_full_scale_data_collection.sh --env gcp --project <project> --bucket <bucket>
+# Verify
+./scripts/verify_experiments.sh results/gcp/
+
+# Day 4: Run analysis on all collected data
+./run_all_experiments.sh \
+  --skip-generation \
+  --skip-native --skip-minikube --skip-gcp \
+  --matrix orchestration/experiment_matrix.yaml
+
+# Archive results
+tar -czf "full-scale-results-$(date +%Y%m%d).tar.gz" results/ final-results/
+```
+
+## Next Steps
+
+After data collection:
+1. Verify all data was collected (use verification script)
+2. Archive the `results/` directory
+3. Run analysis when ready
+4. Generate dissertation figures and tables
+5. Write up results chapter
+

@@ -99,21 +99,21 @@ class TestResult:
             'tests': {
                 'kolmogorov_smirnov': {
                     'statistic': round(self.ks_statistic, 6),
-                    'p_value': self.ks_pvalue,
-                    'p_value_corrected': self.ks_pvalue_corrected,
-                    'significant': self.ks_significant,
+                    'p_value': float(self.ks_pvalue) if self.ks_pvalue is not None else None,
+                    'p_value_corrected': float(self.ks_pvalue_corrected) if self.ks_pvalue_corrected is not None else None,
+                    'significant': bool(self.ks_significant),
                 },
                 'mann_whitney_u': {
                     'statistic': round(self.mw_statistic, 4),
-                    'p_value': self.mw_pvalue,
-                    'p_value_corrected': self.mw_pvalue_corrected,
-                    'significant': self.mw_significant,
+                    'p_value': float(self.mw_pvalue) if self.mw_pvalue is not None else None,
+                    'p_value_corrected': float(self.mw_pvalue_corrected) if self.mw_pvalue_corrected is not None else None,
+                    'significant': bool(self.mw_significant),
                 },
                 'welch_t': {
                     'statistic': round(self.welch_statistic, 4),
-                    'p_value': self.welch_pvalue,
-                    'p_value_corrected': self.welch_pvalue_corrected,
-                    'significant': self.welch_significant,
+                    'p_value': float(self.welch_pvalue) if self.welch_pvalue is not None else None,
+                    'p_value_corrected': float(self.welch_pvalue_corrected) if self.welch_pvalue_corrected is not None else None,
+                    'significant': bool(self.welch_significant),
                 },
             },
             'effect_size': {
@@ -122,7 +122,7 @@ class TestResult:
                 'ci_95_high': round(self.cohens_d_ci_high, 4),
                 'interpretation': self.effect_interpretation,
             },
-            'any_significant': self.any_significant,
+            'any_significant': bool(self.any_significant),
         }
     
     def to_csv_row(self) -> dict:

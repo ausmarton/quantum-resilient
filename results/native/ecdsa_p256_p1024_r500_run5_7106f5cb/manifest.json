@@ -1,0 +1,14 @@
+{
+    "run_id": "ecdsa_p256_p1024_r500_run5_7106f5cb_run1",
+    "run_index": 1,
+    "scenario": "/home/ausmarton/scratchpad/quantum-resilient/generated-scenarios/ecdsa_p256/p1024/r500/run-5/scenario.yaml",
+    "git_commit": "8a6a2ec047f215f593f2c45a995dfcf859ca2e3f",
+    "rustc_version": "rustc 1.91.1 (ed61e7d7e 2025-11-07) (Fedora 1.91.1-1.fc43)",
+    "start_time_utc": "2025-12-07T11:32:32Z",
+    "end_time_utc": "2025-12-07T11:33:03Z",
+    "duration_sec": 31,
+    "events_count": 14970,
+    "seed": null,
+    "host": "zbook",
+    "platform": "Linux-x86_64"
+}

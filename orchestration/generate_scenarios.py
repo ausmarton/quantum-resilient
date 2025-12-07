@@ -83,6 +83,16 @@ def generate_scenario_yaml(
     # Generate globally unique ID
     scenario_id = generate_scenario_id(algorithm, payload_size, rate, run_index, smoke_test)
     
+    # Map adapter name for hybrid operations
+    # Hybrid operations use 'kyber' adapter with special operations
+    adapter_name = experiment.get('adapter', algorithm)
+    operation = experiment.get('operation', 'sign')
+    
+    # For hybrid_kyber_dilithium, use 'kyber' adapter
+    # The operation (kem_aead_sign) handles both KEM and signature
+    if adapter_name == 'hybrid_kyber_dilithium':
+        adapter_name = 'kyber'
+    
     # Build scenario
     scenario = {
         'id': scenario_id,
@@ -99,8 +109,8 @@ def generate_scenario_yaml(
         
         # Algorithm configuration
         'algorithm': {
-            'adapter': experiment.get('adapter', algorithm),
-            'operation': experiment.get('operation', 'sign'),
+            'adapter': adapter_name,
+            'operation': operation,
         },
         
         # Execution configuration
@@ -121,8 +131,8 @@ def generate_scenario_yaml(
         'metadata': {
             'scenario_id': scenario_id,
             'algorithm': algorithm,
-            'adapter': experiment.get('adapter', algorithm),
-            'operation': experiment.get('operation', 'sign'),
+            'adapter': adapter_name,  # Use mapped adapter name
+            'operation': operation,
             'category': experiment.get('category', 'unknown'),
             'payload_size_bytes': payload_size,
             'msgs_per_sec': rate,

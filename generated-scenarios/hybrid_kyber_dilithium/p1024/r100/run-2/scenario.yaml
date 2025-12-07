@@ -7,7 +7,7 @@ workload:
   duration_sec: 30
   pattern: constant
 algorithm:
-  adapter: hybrid_kyber_dilithium
+  adapter: kyber
   operation: kem_aead_sign
   kem:
     paramset: kyber512
@@ -18,11 +18,11 @@ execution:
   workers: 4
   queue_capacity: 4000
 metrics:
-  jsonl_out: ./results/raw/run.jsonl
+  jsonl_out: /results/raw/run.jsonl
 metadata:
   scenario_id: hybrid_kyber_dilithium_p1024_r100_run2_8410e23b
   algorithm: hybrid_kyber_dilithium
-  adapter: hybrid_kyber_dilithium
+  adapter: kyber
   operation: kem_aead_sign
   category: hybrid
   payload_size_bytes: 1024
@@ -32,7 +32,8 @@ metadata:
   total_runs: 5
   seed: 292982720434635868
   seed_hash: 8410e23b
-  generated_at: '2025-12-04T22:49:46.593477+00:00'
+  generated_at: '2025-12-07T08:41:33.836677+00:00'
   generator_version: 2.0.0
+  mode: full
   kem_paramset: kyber512
   sig_paramset: dilithium2

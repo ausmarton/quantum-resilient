@@ -98,14 +98,21 @@ def create_styles() -> dict:
         textColor=colors.HexColor('#2a2a4e'),
     ))
     
-    styles.add(ParagraphStyle(
-        name='BodyText',
-        parent=styles['Normal'],
-        fontSize=10,
-        spaceAfter=8,
-        alignment=TA_JUSTIFY,
-        leading=14,
-    ))
+    # Modify existing BodyText style (it's a default in reportlab)
+    if 'BodyText' in styles:
+        styles['BodyText'].fontSize = 10
+        styles['BodyText'].spaceAfter = 8
+        styles['BodyText'].alignment = TA_JUSTIFY
+        styles['BodyText'].leading = 14
+    else:
+        styles.add(ParagraphStyle(
+            name='BodyText',
+            parent=styles['Normal'],
+            fontSize=10,
+            spaceAfter=8,
+            alignment=TA_JUSTIFY,
+            leading=14,
+        ))
     
     styles.add(ParagraphStyle(
         name='TableHeader',

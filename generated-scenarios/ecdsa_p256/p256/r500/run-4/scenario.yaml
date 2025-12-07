@@ -14,7 +14,7 @@ execution:
   workers: 4
   queue_capacity: 4000
 metrics:
-  jsonl_out: ./results/raw/run.jsonl
+  jsonl_out: /results/raw/run.jsonl
 metadata:
   scenario_id: ecdsa_p256_p256_r500_run4_c408d6c4
   algorithm: ecdsa_p256
@@ -28,5 +28,6 @@ metadata:
   total_runs: 5
   seed: 4902404334915482510
   seed_hash: c408d6c4
-  generated_at: '2025-12-04T22:49:46.593477+00:00'
+  generated_at: '2025-12-07T08:41:33.836677+00:00'
   generator_version: 2.0.0
+  mode: full

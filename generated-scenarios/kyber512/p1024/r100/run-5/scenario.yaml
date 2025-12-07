@@ -16,7 +16,7 @@ execution:
   workers: 4
   queue_capacity: 4000
 metrics:
-  jsonl_out: ./results/raw/run.jsonl
+  jsonl_out: /results/raw/run.jsonl
 metadata:
   scenario_id: kyber512_p1024_r100_run5_20b5c01f
   algorithm: kyber512
@@ -30,6 +30,7 @@ metadata:
   total_runs: 5
   seed: 2357001222036190472
   seed_hash: 20b5c01f
-  generated_at: '2025-12-04T22:49:46.593477+00:00'
+  generated_at: '2025-12-07T08:41:33.836677+00:00'
   generator_version: 2.0.0
+  mode: full
   kem_paramset: kyber512

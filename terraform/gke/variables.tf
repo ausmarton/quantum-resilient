@@ -78,3 +78,9 @@ variable "smoke_test" {
   default     = false
 }
 
+variable "ephemeral" {
+  description = "Enable ephemeral mode (disable cost-generating features, allow quick destruction)"
+  type        = bool
+  default     = false
+}
+

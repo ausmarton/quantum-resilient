@@ -4,6 +4,31 @@
 
 **YES.** The smoke test runs **real cryptographic benchmarks** with the same code path as full experiments, just with reduced parameters.
 
+## Ephemeral Mode (Recommended)
+
+**Always use `--ephemeral` flag for smoke tests and full benchmarks** to ensure zero ongoing cost:
+
+```bash
+./deploy_gcp.sh \
+  --scenario scenarios/hybrid_kyber_dilithium.yaml \
+  --exp-id smoketest \
+  --smoke-test \
+  --ephemeral \
+  --project <project> \
+  --bucket <bucket> \
+  --region us-central1
+```
+
+**What ephemeral mode does:**
+1. Creates GKE cluster
+2. Runs benchmark
+3. Collects results
+4. **Automatically destroys cluster and all resources**
+5. **Cleans up load balancers, IPs, disks, firewall rules**
+6. **Verifies zero residual cost**
+
+**Without `--ephemeral`:** Cluster remains running and continues to incur costs until manually destroyed.
+
 ## Execution Flow
 
 ### 1. Scenario Preparation

@@ -176,14 +176,11 @@ run_experiment() {
                     $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 || exit_code=$?
                 ;;
             gcp)
-                "$SCRIPT_DIR/deploy_gcp.sh" \
-                    --scenario "$scenario_path" \
-                    --exp-id "$scenario_id" \
-                    --project "$PROJECT" \
-                    --bucket "$BUCKET" \
-                    --region "$REGION" \
-                    --replicas "$replicas" \
-                    $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 || exit_code=$?
+                GCP_ARGS="--scenario \"$scenario_path\" --exp-id \"$scenario_id\" --project \"$PROJECT\" --bucket \"$BUCKET\" --region \"$REGION\" --replicas \"$replicas\""
+                [ "$SMOKE_TEST" == "true" ] && GCP_ARGS="$GCP_ARGS --smoke-test"
+                # Always use ephemeral mode for GCP to avoid ongoing costs
+                GCP_ARGS="$GCP_ARGS --ephemeral"
+                "$SCRIPT_DIR/deploy_gcp.sh" $GCP_ARGS 2>&1 || exit_code=$?
                 
                 if [[ $exit_code -eq 0 ]]; then
                     "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
@@ -380,6 +377,14 @@ if [[ -f "$GENERATED_SCENARIOS_DIR/manifest.json" ]]; then
     log_info "Total scenarios: $TOTAL_SCENARIOS"
 fi
 
+# Set final results directory based on smoke-test mode
+if [[ "$SMOKE_TEST" == "true" ]]; then
+    FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results-smoke"
+    REPLICAS="1"  # Force replicas to 1 in smoke-test mode
+else
+    FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results"
+fi
+
 # =============================================================================
 # Phase 2: Create Output Directories
 # =============================================================================
@@ -398,14 +403,6 @@ log_success "Output directories created"
 # Phase 3: Execute Experiments
 # =============================================================================
 log_phase "3. Execute Experiments"
-
-# Set final results directory based on smoke-test mode
-if [[ "$SMOKE_TEST" == "true" ]]; then
-    FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results-smoke"
-    REPLICAS="1"  # Force replicas to 1 in smoke-test mode
-else
-    FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results"
-fi
 
 # Parse environments
 IFS=',' read -ra ENV_ARRAY <<< "$ENVS"
@@ -695,6 +692,9 @@ echo ""
 log_info "Final results location:"
 echo "  $FINAL_RESULTS_DIR/"
 echo ""
+log_info "📌 IMPORTANT: All dissertation-ready outputs are in the directory above!"
+log_info "   Individual experiment results are in: results/<env>/<scenario-id>/"
+echo ""
 
 log_info "Key outputs:"
 [[ -f "$FINAL_RESULTS_DIR/index.json" ]] && echo "  ├── index.json (master experiment index)"
@@ -703,12 +703,23 @@ log_info "Key outputs:"
 [[ -f "$FINAL_RESULTS_DIR/hypothesis_tests.json" ]] && echo "  ├── hypothesis_tests.json (statistical tests)"
 [[ -f "$FINAL_RESULTS_DIR/hypothesis_table.csv" ]] && echo "  ├── hypothesis_table.csv"
 [[ -f "$FINAL_RESULTS_DIR/hypothesis_interpretation.txt" ]] && echo "  ├── hypothesis_interpretation.txt"
-[[ -d "$FINAL_RESULTS_DIR/figures" ]] && echo "  ├── figures/"
+[[ -d "$FINAL_RESULTS_DIR/figures" ]] && echo "  ├── figures/ (✅ Use these for dissertation!)"
 [[ -d "$FINAL_RESULTS_DIR/figures/scaling" ]] && echo "  │   └── scaling/ (throughput, latency, efficiency)"
 [[ -d "$FINAL_RESULTS_DIR/stats" ]] && echo "  ├── stats/"
 [[ -d "$FINAL_RESULTS_DIR/tables" ]] && echo "  ├── tables/"
 [[ -f "$FINAL_RESULTS_DIR/report.pdf" ]] && echo "  └── report.pdf (dissertation-ready)"
 echo ""
+
+# Optionally copy figures to analysis/figures/dissertation for notebook compatibility
+if [[ -d "$FINAL_RESULTS_DIR/figures" ]] && [[ -d "$SCRIPT_DIR/analysis/figures/dissertation" ]]; then
+    FIGURE_COUNT=$(find "$FINAL_RESULTS_DIR/figures" -name "*.png" -type f 2>/dev/null | wc -l)
+    if [[ $FIGURE_COUNT -gt 0 ]]; then
+        log_info "Copying figures to analysis/figures/dissertation/ for notebook compatibility..."
+        cp -n "$FINAL_RESULTS_DIR/figures"/*.png "$SCRIPT_DIR/analysis/figures/dissertation/" 2>/dev/null || true
+        log_success "Figures also available in: analysis/figures/dissertation/"
+        echo ""
+    fi
+fi
 
 if [[ $FAILED_SCENARIOS -gt 0 ]]; then
     log_warn "$FAILED_SCENARIOS experiment(s) failed. Check logs for details."

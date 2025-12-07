@@ -16,7 +16,7 @@ metadata:
     environment: gcp
 spec:
   backoffLimit: 2
-  ttlSecondsAfterFinished: 7200  # Keep for 2 hours for debugging
+  ttlSecondsAfterFinished: 300  # Keep for 5 minutes (reduced for ephemeral mode)
 
   template:
     metadata:

@@ -47,6 +47,9 @@ SKIP_BUILD=false
 SKIP_AGGREGATION=false
 DESTROY_AFTER=false
 SMOKE_TEST=false
+EPHEMERAL=false
+CREATE_CLUSTER=false
+DESTROY_CLUSTER=false
 
 # Colors
 RED='\033[0;31m'
@@ -109,6 +112,9 @@ OPTIONS:
     --destroy-after       Destroy infrastructure after experiment
     --timeout SEC         Job timeout in seconds (default: 900)
     --smoke-test          Enable smoke-test mode (minimal infrastructure)
+    --ephemeral           Ephemeral mode: create cluster, run benchmark, destroy all resources
+    --create-cluster      Only create the cluster (skip benchmark execution)
+    --destroy-cluster     Only destroy the cluster and cleanup resources
     -h, --help            Show this help message
 
 EXAMPLES:
@@ -118,6 +124,29 @@ EXAMPLES:
        --project my-project \\
        --region us-central1 \\
        --bucket pqc-results-bucket
+    
+    # Ephemeral smoke test (creates, runs, destroys everything)
+    $0 --scenario scenarios/hybrid_kyber_dilithium.yaml \\
+       --exp-id smoketest \\
+       --project my-project \\
+       --region us-central1 \\
+       --bucket pqc-results-bucket \\
+       --smoke-test \\
+       --ephemeral
+    
+    # Create cluster only
+    $0 --create-cluster \\
+       --project my-project \\
+       --region us-central1 \\
+       --bucket pqc-results-bucket \\
+       --cluster-name my-cluster
+    
+    # Destroy cluster only
+    $0 --destroy-cluster \\
+       --project my-project \\
+       --region us-central1 \\
+       --bucket pqc-results-bucket \\
+       --cluster-name my-cluster
 EOF
     exit 1
 }
@@ -197,6 +226,18 @@ while [[ $# -gt 0 ]]; do
             SMOKE_TEST=true
             shift
             ;;
+        --ephemeral)
+            EPHEMERAL=true
+            shift
+            ;;
+        --create-cluster)
+            CREATE_CLUSTER=true
+            shift
+            ;;
+        --destroy-cluster)
+            DESTROY_CLUSTER=true
+            shift
+            ;;
         -h|--help)
             usage
             ;;
@@ -208,14 +249,22 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate required arguments
-if [[ -z "$SCENARIO" ]]; then
-    log_error "Missing required argument: --scenario"
-    usage
-fi
+# Skip scenario/exp-id validation for create-cluster and destroy-cluster modes
+if [[ "$CREATE_CLUSTER" != "true" && "$DESTROY_CLUSTER" != "true" ]]; then
+    if [[ -z "$SCENARIO" ]]; then
+        log_error "Missing required argument: --scenario"
+        usage
+    fi
 
-if [[ -z "$EXP_ID" ]]; then
-    log_error "Missing required argument: --exp-id"
-    usage
+    if [[ -z "$EXP_ID" ]]; then
+        log_error "Missing required argument: --exp-id"
+        usage
+    fi
+
+    if [[ ! -f "$SCENARIO" ]]; then
+        log_error "Scenario file not found: $SCENARIO"
+        exit 1
+    fi
 fi
 
 if [[ -z "$PROJECT" ]]; then
@@ -228,13 +277,10 @@ if [[ -z "$BUCKET" ]]; then
     usage
 fi
 
-if [[ ! -f "$SCENARIO" ]]; then
-    log_error "Scenario file not found: $SCENARIO"
-    exit 1
+# Make paths absolute (if scenario provided)
+if [[ -n "$SCENARIO" ]]; then
+    SCENARIO="$(cd "$(dirname "$SCENARIO")" && pwd)/$(basename "$SCENARIO")"
 fi
-
-# Make paths absolute
-SCENARIO="$(cd "$(dirname "$SCENARIO")" && pwd)/$(basename "$SCENARIO")"
 
 # Derived values
 # CRITICAL: Hardware MUST remain identical between smoke-test and full runs
@@ -250,6 +296,13 @@ if [[ "$SMOKE_TEST" == "true" ]]; then
     log_info "Smoke-test mode: reduced duration, runs, replicas (hardware identical)"
 else
     CLUSTER_NAME="pqc-bench-gke"
+fi
+
+# Ephemeral mode overrides
+if [[ "$EPHEMERAL" == "true" ]]; then
+    log_info "EPHEMERAL MODE: Will create cluster, run benchmark, and destroy all resources"
+    SKIP_TERRAFORM=false
+    DESTROY_AFTER=true
 fi
 IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/pqc"
 IMAGE_NAME="${IMAGE_REPO}/pqc-bench:latest"
@@ -267,17 +320,97 @@ echo "║           PQC Benchmark - GCP/GKE Deployment                 ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo -e "${NC}"
 
-log_info "Experiment ID: $EXP_ID"
+[[ -n "$EXP_ID" ]] && log_info "Experiment ID: $EXP_ID"
 log_info "Project: $PROJECT"
 log_info "Region: $REGION"
 log_info "Bucket: $BUCKET"
-log_info "Scenario: $SCENARIO"
-log_info "Runs: $RUNS"
-log_info "Replicas: $REPLICAS"
+[[ -n "$SCENARIO" ]] && log_info "Scenario: $SCENARIO"
+[[ -n "$EXP_ID" ]] && log_info "Runs: $RUNS"
+[[ -n "$EXP_ID" ]] && log_info "Replicas: $REPLICAS"
 [[ "$SMOKE_TEST" == "true" ]] && log_info "Mode: SMOKE-TEST (minimal infrastructure)"
+[[ "$EPHEMERAL" == "true" ]] && log_info "Mode: EPHEMERAL (will destroy all resources after completion)"
 [[ -n "$SEED" ]] && log_info "Base RNG seed: $SEED"
 log_info "Git Commit: ${GIT_COMMIT:0:8}"
 log_info "Started: $START_ISO"
+
+# =============================================================================
+# Handle create-cluster mode (early exit after creation)
+# =============================================================================
+if [[ "$CREATE_CLUSTER" == "true" ]]; then
+    log_step "Creating GKE cluster only (--create-cluster)"
+    
+    cd "$TERRAFORM_DIR"
+    log_info "Initializing Terraform..."
+    terraform init -input=false
+    
+    log_info "Applying Terraform configuration to create cluster..."
+    DISK_SIZE_GB="${DISK_SIZE_GB:-50}"
+    if terraform apply -auto-approve \
+        -var="project_id=$PROJECT" \
+        -var="region=$REGION" \
+        -var="bucket_name=$BUCKET" \
+        -var="machine_type=$MACHINE_TYPE" \
+        -var="node_count=$NODE_COUNT" \
+        -var="cluster_name=$CLUSTER_NAME" \
+        -var="smoke_test=$SMOKE_TEST" \
+        -var="disk_size_gb=$DISK_SIZE_GB" \
+        -var="ephemeral=$EPHEMERAL"; then
+        log_success "Cluster created successfully"
+    else
+        log_error "Cluster creation failed"
+        exit 1
+    fi
+    
+    cd "$SCRIPT_DIR"
+    log_success "Cluster creation complete. Use --destroy-cluster to remove it."
+    exit 0
+fi
+
+# =============================================================================
+# Handle destroy-cluster mode (early exit)
+# =============================================================================
+if [[ "$DESTROY_CLUSTER" == "true" ]]; then
+    log_step "Destroying GKE cluster and cleaning up resources"
+    
+    # First, try Terraform destroy (if Terraform state exists)
+    cd "$TERRAFORM_DIR"
+    if [[ -f terraform.tfstate ]] || [[ -f .terraform/terraform.tfstate ]]; then
+        log_info "Running Terraform destroy..."
+        if terraform destroy -auto-approve \
+            -var="project_id=$PROJECT" \
+            -var="region=$REGION" \
+            -var="bucket_name=$BUCKET" \
+            -var="machine_type=$MACHINE_TYPE" \
+            -var="node_count=$NODE_COUNT" \
+            -var="cluster_name=$CLUSTER_NAME" \
+            -var="smoke_test=$SMOKE_TEST" \
+            -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
+            -var="ephemeral=true" 2>&1; then
+            log_success "Terraform destroy completed"
+        else
+            log_warn "Terraform destroy had errors (cluster may not be in Terraform state)"
+        fi
+    else
+        log_info "No Terraform state found, will use gcloud directly"
+    fi
+    
+    cd "$SCRIPT_DIR"
+    
+    # Run cleanup script to ensure cluster is deleted (even if Terraform didn't work)
+    log_info "Running cleanup script to ensure cluster is deleted..."
+    if "$SCRIPT_DIR/scripts/cleanup_gcp_resources.sh" \
+        --project "$PROJECT" \
+        --region "$REGION" \
+        --cluster-name "$CLUSTER_NAME"; then
+        log_success "Cluster destruction and cleanup complete"
+    else
+        log_warn "Cleanup script had errors, but cluster deletion may still be in progress"
+        log_info "Cluster deletion can take 5-10 minutes. Check status with:"
+        echo "  gcloud container clusters list --project $PROJECT --region $REGION"
+    fi
+    
+    exit 0
+fi
 
 # =============================================================================
 # Step 1: Verify prerequisites
@@ -334,8 +467,10 @@ else
     log_info "Initializing Terraform..."
     terraform init -input=false
     
-    # Try to import existing bucket if it exists (non-fatal if it doesn't)
-    log_info "Checking for existing GCS bucket..."
+    # Import existing resources into Terraform state (needed for ephemeral mode)
+    log_info "Checking for existing resources to import into Terraform state..."
+    
+    # Import bucket if it exists
     if gsutil ls -b "gs://${BUCKET}" &>/dev/null; then
         log_info "Bucket exists, importing into Terraform state..."
         terraform import \
@@ -346,8 +481,47 @@ else
             -var="node_count=$NODE_COUNT" \
             -var="cluster_name=$CLUSTER_NAME" \
             -var="smoke_test=$SMOKE_TEST" \
-            -var="disk_size_gb=$([ "$SMOKE_TEST" == "true" ] && echo "10" || echo "50")" \
-            google_storage_bucket.results "$BUCKET" 2>/dev/null || log_warn "Bucket import failed (may already be in state or will be created)"
+            -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
+            -var="ephemeral=$EPHEMERAL" \
+            google_storage_bucket.results "$BUCKET" 2>/dev/null || log_warn "Bucket import failed (may already be in state)"
+    fi
+    
+    # Import service account if it exists
+    SA_EMAIL="pqc-bench-worker@${PROJECT}.iam.gserviceaccount.com"
+    if gcloud iam service-accounts describe "$SA_EMAIL" \
+        --project "$PROJECT" >/dev/null 2>&1; then
+        log_info "Service account exists, importing into Terraform state..."
+        terraform import \
+            -var="project_id=$PROJECT" \
+            -var="region=$REGION" \
+            -var="bucket_name=$BUCKET" \
+            -var="machine_type=$MACHINE_TYPE" \
+            -var="node_count=$NODE_COUNT" \
+            -var="cluster_name=$CLUSTER_NAME" \
+            -var="smoke_test=$SMOKE_TEST" \
+            -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
+            -var="ephemeral=$EPHEMERAL" \
+            google_service_account.pqc_bench "projects/${PROJECT}/serviceAccounts/${SA_EMAIL}" 2>/dev/null || log_warn "Service account import failed (may already be in state)"
+    fi
+    
+    # Import Artifact Registry repository if it exists
+    AR_LOCATION="${REGION}"
+    AR_REPO="pqc"
+    if gcloud artifacts repositories describe "$AR_REPO" \
+        --location "$AR_LOCATION" \
+        --project "$PROJECT" >/dev/null 2>&1; then
+        log_info "Artifact Registry repository exists, importing into Terraform state..."
+        terraform import \
+            -var="project_id=$PROJECT" \
+            -var="region=$REGION" \
+            -var="bucket_name=$BUCKET" \
+            -var="machine_type=$MACHINE_TYPE" \
+            -var="node_count=$NODE_COUNT" \
+            -var="cluster_name=$CLUSTER_NAME" \
+            -var="smoke_test=$SMOKE_TEST" \
+            -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
+            -var="ephemeral=$EPHEMERAL" \
+            google_artifact_registry_repository.pqc "${AR_LOCATION}/${AR_REPO}" 2>/dev/null || log_warn "Artifact Registry import failed (may already be in state)"
     fi
     
     log_info "Applying Terraform configuration..."
@@ -363,7 +537,8 @@ else
         -var="node_count=$NODE_COUNT" \
         -var="cluster_name=$CLUSTER_NAME" \
         -var="smoke_test=$SMOKE_TEST" \
-        -var="disk_size_gb=$DISK_SIZE_GB"; then
+        -var="disk_size_gb=$DISK_SIZE_GB" \
+        -var="ephemeral=$EPHEMERAL"; then
         log_success "Infrastructure deployed"
     else
         log_error "Terraform apply failed. Checking node pool status..."
@@ -378,8 +553,7 @@ else
             
             log_info "Checking cluster operations..."
             gcloud container operations list \
-                --cluster "$CLUSTER_NAME" \
-                --region "$REGION" \
+                --filter="clusterName=$CLUSTER_NAME AND location=$REGION" \
                 --project "$PROJECT" \
                 --limit 5 \
                 --format="table(name,status,operationType)" || true
@@ -693,19 +867,143 @@ if [[ -n "$POD_NAME" ]]; then
     LOG_PID=$!
 fi
 
-# Wait for completion
-if ! kubectl wait --for=condition=complete job/"$JOB_NAME" -n "$NAMESPACE" --timeout="$JOB_TIMEOUT"; then
-    # Check if failed
-    JOB_STATUS=$(kubectl get job "$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "")
+# Wait for completion or failure
+# Use a loop to check both conditions since kubectl wait only checks one at a time
+log_info "Monitoring job status..."
+START_TIME=$(date +%s)
+TIMEOUT_SECONDS=$(echo "$JOB_TIMEOUT" | sed 's/s$//' || echo "300")
+JOB_COMPLETE=false
+JOB_FAILED=false
+
+# Check if jq is available for JSON parsing
+HAS_JQ=false
+if command -v jq &> /dev/null; then
+    HAS_JQ=true
+fi
+
+while true; do
+    ELAPSED=$(($(date +%s) - START_TIME))
     
-    if [[ "$JOB_STATUS" == "True" ]]; then
-        log_error "Job failed!"
-        kubectl describe job "$JOB_NAME" -n "$NAMESPACE"
-        kubectl logs -l job-name="$JOB_NAME" -n "$NAMESPACE" -c pqc-bench --tail=100
-        exit 1
+    if [[ $ELAPSED -gt $TIMEOUT_SECONDS ]]; then
+        log_error "Job timed out after ${TIMEOUT_SECONDS}s"
+        JOB_FAILED=true
+        break
     fi
     
-    log_error "Job timed out"
+    # Check job status
+    if [[ "$HAS_JQ" == "true" ]]; then
+        # Use jq for more reliable JSON parsing
+        JOB_JSON=$(kubectl get job "$JOB_NAME" -n "$NAMESPACE" -o json 2>/dev/null || echo "{}")
+        
+        # Check for Failed condition
+        FAILED_STATUS=$(echo "$JOB_JSON" | jq -r '.status.conditions[]? | select(.type=="Failed") | .status' 2>/dev/null || echo "")
+        if [[ "$FAILED_STATUS" == "True" ]]; then
+            log_error "Job has failed!"
+            JOB_FAILED=true
+            break
+        fi
+        
+        # Check for Complete condition
+        COMPLETE_STATUS=$(echo "$JOB_JSON" | jq -r '.status.conditions[]? | select(.type=="Complete") | .status' 2>/dev/null || echo "")
+        if [[ "$COMPLETE_STATUS" == "True" ]]; then
+            log_success "Job completed successfully"
+            JOB_COMPLETE=true
+            break
+        fi
+        
+        # Check if backoff limit is exceeded
+        FAILED_COUNT=$(echo "$JOB_JSON" | jq -r '.status.failed // 0' 2>/dev/null || echo "0")
+        BACKOFF_LIMIT=$(echo "$JOB_JSON" | jq -r '.spec.backoffLimit // 0' 2>/dev/null || echo "0")
+        if [[ "$FAILED_COUNT" -gt 0 ]] && [[ "$FAILED_COUNT" -gt "$BACKOFF_LIMIT" ]]; then
+            log_error "Job has exceeded backoff limit (failed: $FAILED_COUNT, limit: $BACKOFF_LIMIT)"
+            JOB_FAILED=true
+            break
+        fi
+        
+        # Show progress every 30 seconds
+        if [[ $((ELAPSED % 30)) -eq 0 ]] && [[ $ELAPSED -gt 0 ]]; then
+            log_info "Still waiting... (${ELAPSED}s elapsed)"
+            # Show pod status
+            PODS=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o json 2>/dev/null || echo "{}")
+            POD_COUNT=$(echo "$PODS" | jq -r '.items | length' 2>/dev/null || echo "0")
+            if [[ "$POD_COUNT" -gt 0 ]]; then
+                POD_NAME=$(echo "$PODS" | jq -r '.items[0].metadata.name' 2>/dev/null || echo "")
+                POD_PHASE=$(echo "$PODS" | jq -r '.items[0].status.phase' 2>/dev/null || echo "Unknown")
+                log_info "Pod status: $POD_NAME - $POD_PHASE"
+            fi
+        fi
+    else
+        # Fallback: use kubectl wait and jsonpath
+        # Check for failed condition
+        FAILED_STATUS=$(kubectl get job "$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "")
+        if [[ "$FAILED_STATUS" == "True" ]]; then
+            log_error "Job has failed!"
+            JOB_FAILED=true
+            break
+        fi
+        
+        # Check for complete condition
+        COMPLETE_STATUS=$(kubectl get job "$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "")
+        if [[ "$COMPLETE_STATUS" == "True" ]]; then
+            log_success "Job completed successfully"
+            JOB_COMPLETE=true
+            break
+        fi
+        
+        # Show progress every 30 seconds
+        if [[ $((ELAPSED % 30)) -eq 0 ]] && [[ $ELAPSED -gt 0 ]]; then
+            log_info "Still waiting... (${ELAPSED}s elapsed)"
+            POD_NAME=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            POD_PHASE=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "Unknown")
+            if [[ -n "$POD_NAME" ]]; then
+                log_info "Pod status: $POD_NAME - $POD_PHASE"
+            fi
+        fi
+    fi
+    
+    sleep 5
+done
+
+# Kill log streaming
+kill $LOG_PID 2>/dev/null || true
+
+# Handle failure
+if [[ "$JOB_FAILED" == "true" ]]; then
+    log_error "Job failed! Gathering diagnostics..."
+    
+    # Show job description
+    log_info "=== Job Description ==="
+    kubectl describe job "$JOB_NAME" -n "$NAMESPACE" || true
+    
+    # Show all pods for this job
+    log_info "=== Pod Status ==="
+    kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" || true
+    
+    # Get the most recent pod
+    RECENT_POD=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null || echo "")
+    
+    if [[ -n "$RECENT_POD" ]]; then
+        log_info "=== Pod Description: $RECENT_POD ==="
+        kubectl describe pod "$RECENT_POD" -n "$NAMESPACE" || true
+        
+        log_info "=== Main Container Logs (pqc-bench): $RECENT_POD ==="
+        kubectl logs "$RECENT_POD" -n "$NAMESPACE" -c pqc-bench --tail=200 || true
+        
+        log_info "=== Upload Container Logs (upload-results): $RECENT_POD ==="
+        kubectl logs "$RECENT_POD" -n "$NAMESPACE" -c upload-results --tail=200 || true
+        
+        log_info "=== Init Container Logs (gather-metadata): $RECENT_POD ==="
+        kubectl logs "$RECENT_POD" -n "$NAMESPACE" -c gather-metadata --tail=100 || true
+    else
+        log_warn "No pods found for job"
+        kubectl logs -l job-name="$JOB_NAME" -n "$NAMESPACE" --tail=200 || true
+    fi
+    
+    exit 1
+fi
+
+if [[ "$JOB_COMPLETE" != "true" ]]; then
+    log_error "Job did not complete successfully"
     exit 1
 fi
 
@@ -851,15 +1149,73 @@ echo "    --minikube results/exp2/stats/summary.json \\"
 echo "    --gcp results/$EXP_ID/stats/summary.json"
 echo ""
 
-# Cleanup if requested
-if [[ "$DESTROY_AFTER" == "true" ]]; then
-    log_warn "Destroying infrastructure (--destroy-after)..."
+# =============================================================================
+# Step 9: Cleanup (if requested)
+# =============================================================================
+if [[ "$DESTROY_AFTER" == "true" || "$EPHEMERAL" == "true" ]]; then
+    log_step "Step 9/9: Destroying infrastructure and cleaning up resources"
+    
+    # Run Terraform destroy
     cd "$TERRAFORM_DIR"
-    terraform destroy -auto-approve \
+    log_info "Running Terraform destroy..."
+    if terraform destroy -auto-approve \
         -var="project_id=$PROJECT" \
         -var="region=$REGION" \
-        -var="bucket_name=$BUCKET"
+        -var="bucket_name=$BUCKET" \
+        -var="machine_type=$MACHINE_TYPE" \
+        -var="node_count=$NODE_COUNT" \
+        -var="cluster_name=$CLUSTER_NAME" \
+        -var="smoke_test=$SMOKE_TEST" \
+        -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
+        -var="ephemeral=$EPHEMERAL"; then
+        log_success "Terraform destroy completed"
+    else
+        log_warn "Terraform destroy had errors (some resources may already be deleted or not in state)"
+    fi
+    
     cd "$SCRIPT_DIR"
+    
+    # Run cleanup script to catch any orphaned resources
+    log_info "Running cleanup script to remove any orphaned resources..."
+    if "$SCRIPT_DIR/scripts/cleanup_gcp_resources.sh" \
+        --project "$PROJECT" \
+        --region "$REGION" \
+        --cluster-name "$CLUSTER_NAME"; then
+        log_success "Cleanup completed successfully"
+    else
+        log_warn "Cleanup script had errors (some resources may still be cleaning up)"
+    fi
+    
+    # Verify cleanup (only for ephemeral mode)
+    if [[ "$EPHEMERAL" == "true" ]]; then
+        log_info "Verifying zero residual cost..."
+        sleep 10  # Give resources time to be cleaned up
+        
+        REMAINING_CLUSTERS=$(gcloud container clusters list \
+            --project "$PROJECT" \
+            --region "$REGION" \
+            --format="value(name)" 2>/dev/null | grep -E "pqc-(bench-gke|smoke-test)" || true)
+        
+        REMAINING_DISKS=$(gcloud compute disks list \
+            --project "$PROJECT" \
+            --filter="zone:${REGION}* AND name~'pqc|bench'" \
+            --format="value(name)" 2>/dev/null || true)
+        
+        REMAINING_FORWARDING_RULES=$(gcloud compute forwarding-rules list \
+            --project "$PROJECT" \
+            --regions "$REGION" \
+            --format="value(name)" 2>/dev/null || true)
+        
+        if [[ -z "$REMAINING_CLUSTERS" && -z "$REMAINING_DISKS" && -z "$REMAINING_FORWARDING_RULES" ]]; then
+            log_success "Ephemeral run completed with zero residual cost ✓"
+        else
+            log_warn "Some resources may still be cleaning up:"
+            [[ -n "$REMAINING_CLUSTERS" ]] && echo "  Clusters: $REMAINING_CLUSTERS"
+            [[ -n "$REMAINING_DISKS" ]] && echo "  Disks: $REMAINING_DISKS"
+            [[ -n "$REMAINING_FORWARDING_RULES" ]] && echo "  Forwarding rules: $REMAINING_FORWARDING_RULES"
+            log_info "Note: GKE cluster deletion can take 5-15 minutes. Resources will be automatically cleaned up."
+        fi
+    fi
 fi
 
 log_success "Done!"

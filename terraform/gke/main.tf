@@ -65,6 +65,11 @@ resource "google_service_account" "pqc_bench" {
   account_id   = "pqc-bench-worker"
   display_name = "PQC Benchmark Worker Service Account"
   project      = var.project_id
+
+  # Allow importing existing service accounts
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 # Grant Artifact Registry Reader permission
@@ -103,6 +108,11 @@ resource "google_artifact_registry_repository" "pqc" {
   description   = "Container images for PQC benchmark framework"
   format        = "DOCKER"
   project       = var.project_id
+
+  # Allow importing existing repositories
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -135,6 +145,7 @@ resource "google_container_cluster" "primary" {
   }
 
   # Monitoring and logging
+  # Always enable full logging so logs are visible in Cloud Logging
   logging_config {
     enable_components = ["SYSTEM_COMPONENTS", "WORKLOADS"]
   }
@@ -171,8 +182,13 @@ resource "google_container_cluster" "primary" {
     evaluation_mode = "DISABLED"
   }
 
-  # Deletion protection (disabled for easy teardown)
+  # Deletion protection (disabled for easy teardown, especially in ephemeral mode)
   deletion_protection = false
+
+  # Lifecycle: allow destruction in ephemeral mode
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -184,7 +200,14 @@ resource "google_container_node_pool" "primary" {
   location   = var.region
   cluster    = google_container_cluster.primary.name
   project    = var.project_id
-  node_count = var.smoke_test ? 1 : var.node_count
+  # In ephemeral mode or smoke test, use minimal node count
+  node_count = (var.ephemeral || var.smoke_test) ? 1 : var.node_count
+
+  # Lifecycle: allow destruction in ephemeral mode
+  lifecycle {
+    prevent_destroy = false
+    create_before_destroy = false
+  }
 
   # Node configuration
   # CRITICAL: Hardware MUST remain identical between smoke-test and full runs

@@ -16,7 +16,7 @@ execution:
   workers: 4
   queue_capacity: 4000
 metrics:
-  jsonl_out: ./results/raw/run.jsonl
+  jsonl_out: /results/raw/run.jsonl
 metadata:
   scenario_id: dilithium2_p4096_r500_run1_310d8b47
   algorithm: dilithium2
@@ -30,6 +30,7 @@ metadata:
   total_runs: 5
   seed: 3534634421297731716
   seed_hash: 310d8b47
-  generated_at: '2025-12-04T22:49:46.593477+00:00'
+  generated_at: '2025-12-07T08:41:33.836677+00:00'
   generator_version: 2.0.0
+  mode: full
   sig_paramset: dilithium2
