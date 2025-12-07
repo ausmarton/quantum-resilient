@@ -1703,6 +1703,18 @@ reproducibility/output/batch_001/
 | p99 CV | < 15% | 15-30% | > 30% |
 | KS p-value | > 0.05 | 0.01-0.05 | < 0.01 |
 
+## Utility Scripts
+
+The framework includes several utility scripts in the `scripts/` directory:
+
+- **`scripts/validate_data_collection.sh`** - Validate that all required data has been collected
+- **`scripts/complete_incomplete_experiments.sh`** - Complete analysis for experiments with raw data but missing merged/stats
+- **`scripts/regenerate_index_from_results.sh`** - Regenerate combined index from existing results
+- **`scripts/verify_experiments.sh`** - Verify experiment results and check for issues
+- **`scripts/check_system_load.sh`** - Check system load before running experiments
+
+See the [Resume and Validation Guide](RESUME_AND_VALIDATION_GUIDE.md) for details on using these scripts.
+
 ## Complete Experiment Orchestration
 
 The framework includes a master orchestration system that can execute all experiments across all environments with a single command.
@@ -1859,15 +1871,12 @@ Reports Cohen's d with interpretations:
 ### User Guides
 
 - **[RESEARCHER_GUIDE.md](RESEARCHER_GUIDE.md)** - Complete guide for researchers running experiments
-- **[FULL_SCALE_DATA_COLLECTION_GUIDE.md](FULL_SCALE_DATA_COLLECTION_GUIDE.md)** - Guide for full-scale data collection
-- **[QUICK_START_FULL_SCALE.md](QUICK_START_FULL_SCALE.md)** - Quick reference for full-scale runs
+- **[FULL_SCALE_DATA_COLLECTION_GUIDE.md](FULL_SCALE_DATA_COLLECTION_GUIDE.md)** - Complete guide for full-scale data collection (includes quick start, resume, and validation)
 
-### System and Workflow
+### Reference Guides
 
+- **[STORAGE_AND_OUTPUT_GUIDE.md](STORAGE_AND_OUTPUT_GUIDE.md)** - Complete guide to storage locations, directory structure, and overwrite behavior
 - **[SYSTEM_LOAD_AND_VARIABILITY.md](SYSTEM_LOAD_AND_VARIABILITY.md)** - System load requirements and how variability is handled
-- **[RESUME_AND_VALIDATION_GUIDE.md](RESUME_AND_VALIDATION_GUIDE.md)** - Resuming failed runs and validating data collection
-- **[STORAGE_AND_OVERWRITE_BEHAVIOR.md](STORAGE_AND_OVERWRITE_BEHAVIOR.md)** - How results are stored and whether runs overwrite each other
-- **[OUTPUT_STRUCTURE.md](OUTPUT_STRUCTURE.md)** - Directory structure and where outputs are located
 
 ### Reference
 

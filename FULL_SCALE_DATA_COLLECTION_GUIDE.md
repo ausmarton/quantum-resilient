@@ -2,6 +2,62 @@
 
 This guide explains how to run full-scale benchmarks separately for each environment to collect all raw data needed for dissertation analysis.
 
+> **Related**: [STORAGE_AND_OUTPUT_GUIDE.md](STORAGE_AND_OUTPUT_GUIDE.md) - Where results are stored and overwrite behavior
+
+## Quick Start
+
+**Goal**: Collect raw data from full-scale runs separately to avoid resource throttling.
+
+### Step-by-Step
+
+1. **Run Native** (Local Machine)
+   ```bash
+   ./run_full_scale_data_collection.sh --env native
+   ```
+   ⏱️ **Time**: ~3-4 hours | 📊 **Scenarios**: 225
+
+2. **Run Minikube** (Local Machine)
+   ```bash
+   ./run_full_scale_data_collection.sh --env minikube
+   ```
+   ⏱️ **Time**: ~4-5 hours | 📊 **Scenarios**: 225
+
+3. **Run GCP** (Cloud)
+   ```bash
+   ./run_full_scale_data_collection.sh \
+     --env gcp \
+     --project <your-gcp-project> \
+     --bucket <your-gcs-bucket>
+   ```
+   ⏱️ **Time**: ~5-6 hours | 📊 **Scenarios**: 225
+
+4. **Verify Data Collection**
+   ```bash
+   ./scripts/validate_data_collection.sh --envs native,minikube,gcp
+   ```
+
+5. **Regenerate Combined Index** (If Needed)
+   ```bash
+   ./scripts/regenerate_index_from_results.sh \
+     --matrix orchestration/experiment_matrix.yaml \
+     --output final-results/
+   ```
+
+6. **Run Analysis** (Later, When Ready)
+   ```bash
+   ./run_all_experiments.sh \
+     --skip-generation \
+     --skip-native --skip-minikube --skip-gcp \
+     --matrix orchestration/experiment_matrix.yaml
+   ```
+
+**Key Points:**
+- ✅ No analysis during collection - Saves time, focus on data
+- ✅ Run environments separately - Avoids resource throttling
+- ✅ All raw data preserved - Can re-analyze anytime
+- ✅ Academic rigor - 5 runs per configuration
+- ✅ Reproducible - Deterministic seeds, full metadata
+
 ## Overview
 
 **Goal**: Collect all raw benchmark data from full-scale runs without running analysis, allowing you to:
@@ -142,6 +198,54 @@ quantum-resilient/
     └── gcp_run.log             # GCP environment run log
 ```
 
+## Resume Capability
+
+The data collection scripts **automatically resume** from where they left off. If a run fails partway through, simply re-run the same command:
+
+```bash
+# First run - fails after 2 hours
+./run_full_scale_data_collection.sh --env native
+# ... runs 100 experiments, then fails ...
+
+# Fix the error, then re-run - automatically resumes
+./run_full_scale_data_collection.sh --env native
+# ... skips 100 completed experiments, continues with remaining 125 ...
+```
+
+**How it works**: The script checks for `stats/summary.json` or `merged/merged.jsonl`. If either exists and is non-empty, the experiment is skipped.
+
+**Incomplete Results**: If experiments have raw data (`raw/run.jsonl`) but are missing merged/stats files, complete them without re-running:
+```bash
+./scripts/complete_incomplete_experiments.sh --env native
+```
+
+## Validation
+
+Before running analysis, validate that all required data is present:
+
+### Quick Validation
+```bash
+./scripts/validate_data_collection.sh --envs native,minikube,gcp
+```
+
+This shows:
+- Per-environment status (expected vs found)
+- Completion rates
+- Missing experiments
+- Incomplete experiments
+
+### Strict Validation
+```bash
+./scripts/validate_data_collection.sh --envs native,minikube,gcp --strict
+```
+
+Exits with error if data is incomplete (useful for scripts/CI).
+
+### Save Validation Report
+```bash
+./scripts/validate_data_collection.sh --output validation-report.json
+```
+
 ## Verifying Data Collection
 
 After each environment completes, verify the data:
@@ -258,6 +362,36 @@ rm -rf results/native/<scenario-id>/
 # Or remove all and start fresh (be careful!)
 rm -rf results/native/* results/minikube/* results/gcp/*
 ```
+
+### Validation shows incomplete experiments
+
+If validation reports experiments as "incomplete" (have raw data but missing merged/stats files), you can complete them without re-running:
+
+```bash
+# Complete analysis for all incomplete experiments (fast)
+./scripts/complete_incomplete_experiments.sh --env native
+
+# Check what would be processed (dry run)
+./scripts/complete_incomplete_experiments.sh --env native --dry-run
+```
+
+This is much faster than re-running the experiments since it only processes existing raw data.
+
+### Experiments not being skipped
+
+If experiments are being re-run when they should be skipped:
+
+1. **Check if files exist**:
+   ```bash
+   ls -lh results/native/<scenario-id>/stats/summary.json
+   ls -lh results/native/<scenario-id>/merged/merged.jsonl
+   ```
+
+2. **Check file sizes** (empty files are considered incomplete):
+   ```bash
+   find results/native -name "summary.json" -size 0
+   find results/native -name "merged.jsonl" -size 0
+   ```
 
 ### Out of disk space
 
