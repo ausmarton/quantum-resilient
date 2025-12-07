@@ -150,11 +150,9 @@ expected_scenarios = defaultdict(lambda: defaultdict(set))  # env -> algorithm -
 
 # Scenario ID generation functions (matching generate_scenarios.py exactly)
 def compute_scenario_hash(algorithm, payload, rate, run, pattern="constant", duration=None, is_scaling=False):
-    """Match generate_scenarios.py logic exactly - backward compatible"""
-    # IMPORTANT: Only include pattern if NOT "constant" for backward compatibility
-    seed_parts = [algorithm, str(payload), str(rate), str(run)]
-    if pattern and pattern != "constant":
-        seed_parts.append(pattern)
+    """Match generate_scenarios.py logic exactly"""
+    # Always include pattern, duration, and scaling flag in hash
+    seed_parts = [algorithm, str(payload), str(rate), str(run), pattern]
     if duration and duration != 30:
         seed_parts.append(str(duration))
     if is_scaling:

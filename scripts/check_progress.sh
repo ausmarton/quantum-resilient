@@ -82,42 +82,8 @@ echo -e "${CYAN}═════════════════════�
 echo ""
 
 # Calculate expected scenarios from matrix
-python3 <<EOF
-import yaml
-import sys
-from pathlib import Path
-
-matrix_file = Path("$MATRIX")
-if not matrix_file.exists():
-    print("Error: Matrix file not found: $MATRIX")
-    sys.exit(1)
-
-with open(matrix_file) as f:
-    matrix = yaml.safe_load(f)
-
-experiments = matrix.get('experiments', [])
-total_scenarios = 0
-
-for exp in experiments:
-    algorithms = exp.get('algorithm', [])
-    if isinstance(algorithms, str):
-        algorithms = [algorithms]
-    
-    payload_sizes = exp.get('payload_sizes', [])
-    rates = exp.get('rates', [])
-    runs = exp.get('runs', 1)
-    
-    total_scenarios += len(algorithms) * len(payload_sizes) * len(rates) * runs
-
-print(f"Expected scenarios per environment: {total_scenarios}")
-sys.exit(0)
-EOF
-
-EXPECTED_PER_ENV=$?
-if [[ $EXPECTED_PER_ENV -ne 0 ]]; then
-    EXPECTED_PER_ENV=468  # Default fallback (includes baseline 300 + quick wins 159 + scaling baseline 9)
-else
-    EXPECTED_PER_ENV=$(python3 <<EOF
+# Note: Native has 468 scenarios (no scaling), Minikube/GCP have 495 (468 baseline + 27 scaling)
+BASELINE_EXPECTED=$(python3 <<EOF
 import yaml
 from pathlib import Path
 
@@ -125,25 +91,62 @@ with open(Path("$MATRIX")) as f:
     matrix = yaml.safe_load(f)
 
 experiments = matrix.get('experiments', [])
-total = 0
+defaults = matrix.get('defaults', {})
 
+total = 0
 for exp in experiments:
-    algorithms = exp.get('algorithm', [])
-    if isinstance(algorithms, str):
-        algorithms = [algorithms]
-    
-    payload_sizes = exp.get('payload_sizes', [])
-    rates = exp.get('rates', [])
-    runs = exp.get('runs', 1)
-    
-    total += len(algorithms) * len(payload_sizes) * len(rates) * runs
+    payload_sizes = exp.get('payload_sizes', [1024])
+    rates = exp.get('rates', [500])
+    runs = exp.get('runs', defaults.get('runs', 5))
+    total += len(payload_sizes) * len(rates) * runs
 
 print(total)
 EOF
 )
-fi
 
-TOTAL_EXPECTED=$((EXPECTED_PER_ENV * ${#ENVS[@]}))
+# Calculate scaling experiments (replicas 2,4,8)
+SCALING_EXPECTED=$(python3 <<EOF
+import yaml
+from pathlib import Path
+
+with open(Path("$MATRIX")) as f:
+    matrix = yaml.safe_load(f)
+
+experiments = matrix.get('experiments', [])
+defaults = matrix.get('defaults', {})
+scaling_config = matrix.get('scaling', {})
+replicas = scaling_config.get('replicas', [1, 2, 4, 8])
+scaling_replicas = [r for r in replicas if r > 1]  # [2, 4, 8]
+
+# Count scaling experiments (those with scaling_experiment: true)
+scaling_count = 0
+for exp in experiments:
+    if exp.get('scaling_experiment', False):
+        payload_sizes = exp.get('payload_sizes', [1024])
+        rates = exp.get('rates', [500])
+        runs = exp.get('runs', defaults.get('runs', 5))
+        scaling_count += len(payload_sizes) * len(rates) * runs
+
+# Scaling experiments run with replicas 2, 4, 8 (3 replica counts)
+total_scaling = scaling_count * len(scaling_replicas)
+print(total_scaling)
+EOF
+)
+
+# Expected counts per environment
+NATIVE_EXPECTED=$BASELINE_EXPECTED  # 468 (no scaling)
+MINIKUBE_EXPECTED=$((BASELINE_EXPECTED + SCALING_EXPECTED))  # 495 (468 + 27)
+GCP_EXPECTED=$((BASELINE_EXPECTED + SCALING_EXPECTED))  # 495 (468 + 27)
+
+# Calculate total expected across all environments
+TOTAL_EXPECTED=0
+for env in "${ENVS[@]}"; do
+    if [[ "$env" == "native" ]]; then
+        TOTAL_EXPECTED=$((TOTAL_EXPECTED + NATIVE_EXPECTED))
+    else
+        TOTAL_EXPECTED=$((TOTAL_EXPECTED + MINIKUBE_EXPECTED))
+    fi
+done
 TOTAL_COMPLETED=0
 TOTAL_INCOMPLETE=0
 TOTAL_MISSING=0
@@ -155,16 +158,24 @@ echo ""
 for env in "${ENVS[@]}"; do
     ENV_RESULTS_DIR="$RESULTS_BASE/$env"
     
+    # Determine expected count for this environment
+    if [[ "$env" == "native" ]]; then
+        ENV_EXPECTED=$NATIVE_EXPECTED
+    else
+        ENV_EXPECTED=$MINIKUBE_EXPECTED
+    fi
+    
     if [[ ! -d "$ENV_RESULTS_DIR" ]]; then
         echo -e "${YELLOW}${env^^}:${NC} No results directory found"
         echo "  Status: Not started"
-        echo "  Completed: 0/$EXPECTED_PER_ENV (0%)"
+        echo "  Completed: 0/$ENV_EXPECTED (0%)"
         echo ""
-        TOTAL_MISSING=$((TOTAL_MISSING + EXPECTED_PER_ENV))
+        TOTAL_MISSING=$((TOTAL_MISSING + ENV_EXPECTED))
         continue
     fi
     
     # Generate expected scenario IDs from matrix (matching generate_scenarios.py logic exactly)
+    # Also include scaling experiments with _r2, _r4, _r8 suffixes for Minikube/GCP
     read -r COMPLETED INCOMPLETE MISSING TOTAL_FOUND PERCENTAGE EXTRA_COUNT <<< $(python3 <<EOF
 import yaml
 import hashlib
@@ -172,6 +183,7 @@ from pathlib import Path
 
 matrix_file = Path("$MATRIX")
 env_results_dir = Path("$ENV_RESULTS_DIR")
+env_name = "$env"
 
 # Load matrix
 with open(matrix_file) as f:
@@ -179,16 +191,17 @@ with open(matrix_file) as f:
 
 experiments = matrix.get('experiments', [])
 defaults = matrix.get('defaults', {})
+scaling_config = matrix.get('scaling', {})
+replicas = scaling_config.get('replicas', [1, 2, 4, 8])
+scaling_replicas = [r for r in replicas if r > 1]  # [2, 4, 8]
 
 # Generate expected scenario IDs (matching generate_scenarios.py exactly)
 expected_scenario_ids = set()
 
 def compute_scenario_hash(algorithm, payload, rate, run, pattern="constant", duration=None, is_scaling=False):
-    """Match generate_scenarios.py logic exactly - backward compatible"""
-    # IMPORTANT: Only include pattern if NOT "constant" for backward compatibility
-    seed_parts = [algorithm, str(payload), str(rate), str(run)]
-    if pattern and pattern != "constant":
-        seed_parts.append(pattern)
+    """Match generate_scenarios.py logic exactly"""
+    # Always include pattern, duration, and scaling flag in hash
+    seed_parts = [algorithm, str(payload), str(rate), str(run), pattern]
     if duration and duration != 30:
         seed_parts.append(str(duration))
     if is_scaling:
@@ -231,9 +244,15 @@ for exp in experiments:
     for payload in payload_sizes:
         for rate in rates:
             for run_index in range(1, runs + 1):
-                # Generate scenario ID using exact same logic as generate_scenarios.py
+                # Generate baseline scenario ID (replica=1)
                 scenario_id = generate_scenario_id(algorithm, payload, rate, run_index, pattern, duration, is_scaling)
                 expected_scenario_ids.add(scenario_id)
+                
+                # For Minikube/GCP, also expect scaling experiments (replicas 2,4,8)
+                if env_name != "native" and is_scaling:
+                    for replica_count in scaling_replicas:
+                        scaling_id = f"{scenario_id}_r{replica_count}"
+                        expected_scenario_ids.add(scaling_id)
 
 expected = len(expected_scenario_ids)
 
@@ -292,7 +311,7 @@ EOF
     fi
     
     echo -e "${STATUS_COLOR}${env^^}:${NC} ${STATUS}"
-    echo "  Completed: $COMPLETED/$EXPECTED_PER_ENV ($PERCENTAGE%)"
+    echo "  Completed: $COMPLETED/$ENV_EXPECTED ($PERCENTAGE%)"
     if [[ $INCOMPLETE -gt 0 ]]; then
         echo "  Incomplete: $INCOMPLETE"
     fi
@@ -317,7 +336,10 @@ else
     OVERALL_PCT=0
 fi
 
-echo "  Total Expected: $TOTAL_EXPECTED scenarios (${#ENVS[@]} environments × $EXPECTED_PER_ENV)"
+echo "  Total Expected: $TOTAL_EXPECTED scenarios"
+echo "    - Native: $NATIVE_EXPECTED (baseline only, no scaling)"
+echo "    - Minikube: $MINIKUBE_EXPECTED ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
+echo "    - GCP: $GCP_EXPECTED ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
 echo "  Total Completed: $TOTAL_COMPLETED ($OVERALL_PCT%)"
 if [[ $TOTAL_INCOMPLETE -gt 0 ]]; then
     echo "  Incomplete: $TOTAL_INCOMPLETE"
@@ -356,9 +378,16 @@ if [[ $TOTAL_COMPLETED -lt $TOTAL_EXPECTED ]]; then
             continue
         fi
         
+        # Determine expected count for this environment
+        if [[ "$env" == "native" ]]; then
+            ENV_EXPECTED_CHECK=$NATIVE_EXPECTED
+        else
+            ENV_EXPECTED_CHECK=$MINIKUBE_EXPECTED
+        fi
+        
         # Quick check for this env
         ENV_COMPLETED=$(find "$ENV_RESULTS_DIR" -name "summary.json" -o -name "merged.jsonl" 2>/dev/null | wc -l)
-        if [[ $ENV_COMPLETED -lt $EXPECTED_PER_ENV ]]; then
+        if [[ $ENV_COMPLETED -lt $ENV_EXPECTED_CHECK ]]; then
             echo "  - Continue: ./run_full_scale_data_collection.sh --env $env"
         fi
     done

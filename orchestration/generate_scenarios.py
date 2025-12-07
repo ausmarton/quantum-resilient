@@ -44,11 +44,8 @@ def compute_rng_seed(algorithm: str, payload: int, rate: int, run: int) -> int:
 
 def compute_scenario_hash(algorithm: str, payload: int, rate: int, run: int, pattern: str = "constant", duration: int = None, is_scaling: bool = False) -> str:
     """Compute short hash for globally unique scenario ID."""
-    # IMPORTANT: For backward compatibility, only include pattern if it's NOT "constant"
-    # This ensures existing baseline experiments (pattern="constant") keep the same hash
-    seed_parts = [algorithm, str(payload), str(rate), str(run)]
-    if pattern and pattern != "constant":
-        seed_parts.append(pattern)
+    # Always include pattern, duration, and scaling flag in hash for uniqueness
+    seed_parts = [algorithm, str(payload), str(rate), str(run), pattern]
     if duration and duration != 30:
         seed_parts.append(str(duration))
     if is_scaling:
