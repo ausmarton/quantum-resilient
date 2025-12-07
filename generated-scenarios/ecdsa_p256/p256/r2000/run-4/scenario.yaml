@@ -1,4 +1,4 @@
-id: ecdsa_p256_p256_r2000_run4_886fb34f
+id: ecdsa_p256_p256_r2000_run4_029e954f
 description: ECDSA P-256 signature baseline - 256B @ 2000 msg/s (run 4)
 rng_seed: 607901627614157652
 workload:
@@ -16,7 +16,7 @@ execution:
 metrics:
   jsonl_out: /results/raw/run.jsonl
 metadata:
-  scenario_id: ecdsa_p256_p256_r2000_run4_886fb34f
+  scenario_id: ecdsa_p256_p256_r2000_run4_029e954f
   algorithm: ecdsa_p256
   adapter: ecdsa_p256
   operation: sign
@@ -24,10 +24,11 @@ metadata:
   payload_size_bytes: 256
   msgs_per_sec: 2000
   duration_sec: 30
+  workload_pattern: constant
   run_index: 4
   total_runs: 5
   seed: 607901627614157652
-  seed_hash: 886fb34f
-  generated_at: '2025-12-07T16:24:49.502844+00:00'
+  seed_hash: 029e954f
+  generated_at: '2025-12-07T23:24:35.902401+00:00'
   generator_version: 2.0.0
   mode: full

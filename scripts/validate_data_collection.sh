@@ -258,10 +258,14 @@ for env in envs:
                 has_stats = stats_file.exists()
                 has_raw = raw_file.exists() and raw_file.stat().st_size > 0
                 
-                if has_merged or (has_stats and has_raw):
+                # Consider experiment complete if:
+                # 1. Has merged data (analysis complete)
+                # 2. Has stats (analysis complete)
+                # 3. Has raw data (data collection complete, even if analysis skipped)
+                if has_merged or has_stats or has_raw:
                     env_found += 1
                     total_found += 1
-                elif exp_dir.exists() and (has_raw or has_stats):
+                elif exp_dir.exists():
                     # Partially complete
                     env_incomplete += 1
                     total_incomplete += 1

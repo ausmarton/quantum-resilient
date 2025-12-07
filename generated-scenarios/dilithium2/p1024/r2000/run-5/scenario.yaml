@@ -1,11 +1,15 @@
-id: dilithium2_p1024_r2000_run5_629340c1
-description: Dilithium-2 digital signature - 1024B @ 2000 msg/s (run 5)
+id: dilithium2_p1024_r2000_burst_run5_c7a861eb
+description: Dilithium-2 with burst pattern (enterprise workload) - 1024B @ 2000 msg/s (run 5)
 rng_seed: 7103092236974043408
 workload:
   msgs_per_sec: 2000
   msg_size_bytes: 1024
   duration_sec: 30
-  pattern: constant
+  pattern: burst
+  burst:
+    factor: 5
+    duration_ms: 5000
+    interval_ms: 30000
 algorithm:
   adapter: dilithium
   operation: sign
@@ -18,7 +22,7 @@ execution:
 metrics:
   jsonl_out: /results/raw/run.jsonl
 metadata:
-  scenario_id: dilithium2_p1024_r2000_run5_629340c1
+  scenario_id: dilithium2_p1024_r2000_burst_run5_c7a861eb
   algorithm: dilithium2
   adapter: dilithium
   operation: sign
@@ -26,11 +30,12 @@ metadata:
   payload_size_bytes: 1024
   msgs_per_sec: 2000
   duration_sec: 30
+  workload_pattern: burst
   run_index: 5
   total_runs: 5
   seed: 7103092236974043408
-  seed_hash: 629340c1
-  generated_at: '2025-12-07T16:24:49.502844+00:00'
+  seed_hash: b54e13a0
+  generated_at: '2025-12-07T23:24:35.902401+00:00'
   generator_version: 2.0.0
   mode: full
   sig_paramset: dilithium2

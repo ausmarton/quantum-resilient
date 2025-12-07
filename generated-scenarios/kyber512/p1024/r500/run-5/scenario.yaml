@@ -1,4 +1,4 @@
-id: kyber512_p1024_r500_run5_111b67f6
+id: kyber512_p1024_r500_run5_fe053552
 description: Kyber-512 KEM + AES-GCM encryption - 1024B @ 500 msg/s (run 5)
 rng_seed: 1232693233016115385
 workload:
@@ -18,7 +18,7 @@ execution:
 metrics:
   jsonl_out: /results/raw/run.jsonl
 metadata:
-  scenario_id: kyber512_p1024_r500_run5_111b67f6
+  scenario_id: kyber512_p1024_r500_run5_fe053552
   algorithm: kyber512
   adapter: kyber
   operation: kem_aead_encrypt
@@ -26,11 +26,12 @@ metadata:
   payload_size_bytes: 1024
   msgs_per_sec: 500
   duration_sec: 30
+  workload_pattern: constant
   run_index: 5
   total_runs: 5
   seed: 1232693233016115385
-  seed_hash: 111b67f6
-  generated_at: '2025-12-07T16:24:49.502844+00:00'
+  seed_hash: fe053552
+  generated_at: '2025-12-07T23:24:35.902401+00:00'
   generator_version: 2.0.0
   mode: full
   kem_paramset: kyber512

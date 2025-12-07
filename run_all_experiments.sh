@@ -161,7 +161,8 @@ update_progress() {
             local eta_hours=$((eta_minutes / 60))
             
             if [[ $eta_hours -gt 0 ]]; then
-                ETA_STR="${eta_hours}h ${((eta_minutes % 60))}m"
+                local eta_remaining_minutes=$((eta_minutes % 60))
+                ETA_STR="${eta_hours}h ${eta_remaining_minutes}m"
             elif [[ $eta_minutes -gt 0 ]]; then
                 ETA_STR="${eta_minutes}m"
             else

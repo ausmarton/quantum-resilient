@@ -1,4 +1,4 @@
-id: rsa2048_p4096_r500_run3_051f96d9
+id: rsa2048_p4096_r500_run3_b9192540
 description: RSA-2048 signature baseline - 4096B @ 500 msg/s (run 3)
 rng_seed: 369179556467263317
 workload:
@@ -16,7 +16,7 @@ execution:
 metrics:
   jsonl_out: /results/raw/run.jsonl
 metadata:
-  scenario_id: rsa2048_p4096_r500_run3_051f96d9
+  scenario_id: rsa2048_p4096_r500_run3_b9192540
   algorithm: rsa2048
   adapter: rsa2048
   operation: sign
@@ -24,10 +24,11 @@ metadata:
   payload_size_bytes: 4096
   msgs_per_sec: 500
   duration_sec: 30
+  workload_pattern: constant
   run_index: 3
   total_runs: 5
   seed: 369179556467263317
-  seed_hash: 051f96d9
-  generated_at: '2025-12-07T16:24:49.502844+00:00'
+  seed_hash: b9192540
+  generated_at: '2025-12-07T23:24:35.902401+00:00'
   generator_version: 2.0.0
   mode: full

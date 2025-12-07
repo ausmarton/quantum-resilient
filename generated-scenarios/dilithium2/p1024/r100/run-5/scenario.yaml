@@ -1,4 +1,4 @@
-id: dilithium2_p1024_r100_run5_68e42971
+id: dilithium2_p1024_r100_run5_0ba88e7e
 description: Dilithium-2 digital signature - 1024B @ 100 msg/s (run 5)
 rng_seed: 7558211641777386229
 workload:
@@ -18,7 +18,7 @@ execution:
 metrics:
   jsonl_out: /results/raw/run.jsonl
 metadata:
-  scenario_id: dilithium2_p1024_r100_run5_68e42971
+  scenario_id: dilithium2_p1024_r100_run5_0ba88e7e
   algorithm: dilithium2
   adapter: dilithium
   operation: sign
@@ -26,11 +26,12 @@ metadata:
   payload_size_bytes: 1024
   msgs_per_sec: 100
   duration_sec: 30
+  workload_pattern: constant
   run_index: 5
   total_runs: 5
   seed: 7558211641777386229
-  seed_hash: 68e42971
-  generated_at: '2025-12-07T16:24:49.502844+00:00'
+  seed_hash: 0ba88e7e
+  generated_at: '2025-12-07T23:24:35.902401+00:00'
   generator_version: 2.0.0
   mode: full
   sig_paramset: dilithium2

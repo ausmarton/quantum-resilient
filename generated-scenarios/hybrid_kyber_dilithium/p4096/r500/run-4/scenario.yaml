@@ -1,4 +1,4 @@
-id: hybrid_kyber_dilithium_p4096_r500_run4_c4c1d859
+id: hybrid_kyber_dilithium_p4096_r500_run4_a62a45a4
 description: 'Hybrid: Kyber-512 KEM → AES-GCM → Dilithium-2 sign - 4096B @ 500 msg/s (run 4)'
 rng_seed: 4954478943991080775
 workload:
@@ -20,7 +20,7 @@ execution:
 metrics:
   jsonl_out: /results/raw/run.jsonl
 metadata:
-  scenario_id: hybrid_kyber_dilithium_p4096_r500_run4_c4c1d859
+  scenario_id: hybrid_kyber_dilithium_p4096_r500_run4_a62a45a4
   algorithm: hybrid_kyber_dilithium
   adapter: kyber
   operation: kem_aead_sign
@@ -28,11 +28,12 @@ metadata:
   payload_size_bytes: 4096
   msgs_per_sec: 500
   duration_sec: 30
+  workload_pattern: constant
   run_index: 4
   total_runs: 5
   seed: 4954478943991080775
-  seed_hash: c4c1d859
-  generated_at: '2025-12-07T16:24:49.502844+00:00'
+  seed_hash: a62a45a4
+  generated_at: '2025-12-07T23:24:35.902401+00:00'
   generator_version: 2.0.0
   mode: full
   kem_paramset: kyber512

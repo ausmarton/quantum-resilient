@@ -1,11 +1,15 @@
-id: kyber512_p1024_r2000_run4_a87815b3
-description: Kyber-512 KEM + AES-GCM encryption - 1024B @ 2000 msg/s (run 4)
+id: kyber512_p1024_r2000_burst_run4_e3e9451b
+description: Kyber-512 with burst pattern (enterprise workload) - 1024B @ 2000 msg/s (run 4)
 rng_seed: 2916104619942753195
 workload:
   msgs_per_sec: 2000
   msg_size_bytes: 1024
   duration_sec: 30
-  pattern: constant
+  pattern: burst
+  burst:
+    factor: 5
+    duration_ms: 5000
+    interval_ms: 30000
 algorithm:
   adapter: kyber
   operation: kem_aead_encrypt
@@ -18,7 +22,7 @@ execution:
 metrics:
   jsonl_out: /results/raw/run.jsonl
 metadata:
-  scenario_id: kyber512_p1024_r2000_run4_a87815b3
+  scenario_id: kyber512_p1024_r2000_burst_run4_e3e9451b
   algorithm: kyber512
   adapter: kyber
   operation: kem_aead_encrypt
@@ -26,11 +30,12 @@ metadata:
   payload_size_bytes: 1024
   msgs_per_sec: 2000
   duration_sec: 30
+  workload_pattern: burst
   run_index: 4
   total_runs: 5
   seed: 2916104619942753195
-  seed_hash: a87815b3
-  generated_at: '2025-12-07T16:24:49.502844+00:00'
+  seed_hash: ead2f847
+  generated_at: '2025-12-07T23:24:35.902401+00:00'
   generator_version: 2.0.0
   mode: full
   kem_paramset: kyber512

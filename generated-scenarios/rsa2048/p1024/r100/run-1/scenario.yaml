@@ -1,4 +1,4 @@
-id: rsa2048_p1024_r100_run1_47275499
+id: rsa2048_p1024_r100_run1_bb4a239d
 description: RSA-2048 signature baseline - 1024B @ 100 msg/s (run 1)
 rng_seed: 5127159719739307269
 workload:
@@ -16,7 +16,7 @@ execution:
 metrics:
   jsonl_out: /results/raw/run.jsonl
 metadata:
-  scenario_id: rsa2048_p1024_r100_run1_47275499
+  scenario_id: rsa2048_p1024_r100_run1_bb4a239d
   algorithm: rsa2048
   adapter: rsa2048
   operation: sign
@@ -24,10 +24,11 @@ metadata:
   payload_size_bytes: 1024
   msgs_per_sec: 100
   duration_sec: 30
+  workload_pattern: constant
   run_index: 1
   total_runs: 5
   seed: 5127159719739307269
-  seed_hash: '47275499'
-  generated_at: '2025-12-07T16:24:49.502844+00:00'
+  seed_hash: bb4a239d
+  generated_at: '2025-12-07T23:24:35.902401+00:00'
   generator_version: 2.0.0
   mode: full
