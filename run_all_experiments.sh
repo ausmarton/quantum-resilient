@@ -136,15 +136,78 @@ EOF
     exit 1
 }
 
-# Progress tracking
+# Progress tracking with time estimates
+START_TIME=$(date +%s)
+LAST_PROGRESS_UPDATE=$(date +%s)
+
 update_progress() {
     local current=$1
     local total=$2
     local env=$3
     local scenario=$4
+    
     local pct=$((current * 100 / total))
-    echo -e "${CYAN}[${pct}%]${NC} [${env}] ${scenario}"
+    local now=$(date +%s)
+    local elapsed=$((now - START_TIME))
+    
+    # Calculate ETA
+    local ETA_STR="calculating..."
+    if [[ $current -gt 0 ]] && [[ $elapsed -gt 0 ]]; then
+        local rate=$((current * 100 / elapsed))  # scenarios per 100 seconds
+        if [[ $rate -gt 0 ]]; then
+            local remaining=$((total - current))
+            local eta_seconds=$((remaining * 100 / rate))
+            local eta_minutes=$((eta_seconds / 60))
+            local eta_hours=$((eta_minutes / 60))
+            
+            if [[ $eta_hours -gt 0 ]]; then
+                ETA_STR="${eta_hours}h ${((eta_minutes % 60))}m"
+            elif [[ $eta_minutes -gt 0 ]]; then
+                ETA_STR="${eta_minutes}m"
+            else
+                ETA_STR="${eta_seconds}s"
+            fi
+        fi
+    fi
+    
+    # Format elapsed time
+    local elapsed_hours=$((elapsed / 3600))
+    local elapsed_minutes=$(((elapsed % 3600) / 60))
+    local elapsed_seconds=$((elapsed % 60))
+    
+    local ELAPSED_STR
+    if [[ $elapsed_hours -gt 0 ]]; then
+        ELAPSED_STR="${elapsed_hours}h ${elapsed_minutes}m"
+    elif [[ $elapsed_minutes -gt 0 ]]; then
+        ELAPSED_STR="${elapsed_minutes}m ${elapsed_seconds}s"
+    else
+        ELAPSED_STR="${elapsed_seconds}s"
+    fi
+    
+    # Update every 5 seconds or on every scenario
+    if [[ $((now - LAST_PROGRESS_UPDATE)) -ge 5 ]] || [[ $current -eq $total ]]; then
+        printf "\r${CYAN}[%3d%%]${NC} [%s] %s | Elapsed: %s | ETA: %s | %d/%d" \
+            "$pct" "$env" "$scenario" "$ELAPSED_STR" "$ETA_STR" "$current" "$total"
+        LAST_PROGRESS_UPDATE=$now
+        
+        if [[ $current -eq $total ]]; then
+            echo ""  # New line when complete
+        fi
+    fi
 }
+
+# Signal handler for graceful stop
+cleanup_on_exit() {
+    echo ""
+    log_warn "Received interrupt signal. Saving progress..."
+    log_info "Completed experiments are saved and will be skipped on resume."
+    log_info "To resume, simply re-run the same command:"
+    echo "  $0 ${ORIGINAL_ARGS[*]}"
+    exit 130  # Exit code 130 = terminated by SIGINT
+}
+
+trap cleanup_on_exit INT TERM
+ORIGINAL_ARGS=("$@")
 
 # Run single experiment with retries
 run_experiment() {
@@ -429,10 +492,28 @@ for env in "${ENV_ARRAY[@]}"; do
         exit 1
     fi
     
+    # Initialize progress tracking for this environment
+    START_TIME=$(date +%s)
+    LAST_PROGRESS_UPDATE=$(date +%s)
+    
+    # Count total scenarios for this environment
+    ENV_TOTAL_SCENARIOS=$(python3 -c "
+import json
+with open('$GENERATED_SCENARIOS_DIR/manifest.json') as f:
+    manifest = json.load(f)
+count = sum(1 for s in manifest['scenarios'])
+print(count)
+")
+    
+    log_info "Total scenarios for ${env}: $ENV_TOTAL_SCENARIOS"
+    log_info "Progress will be shown every 5 seconds"
+    echo ""
+    
     # Process scenarios
     scenario_count=0
     env_completed=0
     env_failed=0
+    env_skipped=0
     
     # Extract scenarios using Python for reliable JSON parsing
     scenarios=$(python3 -c "
@@ -480,14 +561,16 @@ for s in manifest['scenarios']:
             if [[ -f "$output_dir/stats/summary.json" ]] || [[ -f "$output_dir/merged/merged.jsonl" ]]; then
                 # Verify the file is not empty
                 if [[ -f "$output_dir/stats/summary.json" ]] && [[ -s "$output_dir/stats/summary.json" ]]; then
-                    log_info "  ✓ Skipping (already completed): $run_scenario_id"
+                    update_progress $scenario_count $ENV_TOTAL_SCENARIOS "$env" "$run_scenario_id (cached)"
                     add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
                     env_completed=$((env_completed + 1))
+                    env_skipped=$((env_skipped + 1))
                     continue
                 elif [[ -f "$output_dir/merged/merged.jsonl" ]] && [[ -s "$output_dir/merged/merged.jsonl" ]]; then
-                    log_info "  ✓ Skipping (already completed): $run_scenario_id"
+                    update_progress $scenario_count $ENV_TOTAL_SCENARIOS "$env" "$run_scenario_id (cached)"
                     add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
                     env_completed=$((env_completed + 1))
+                    env_skipped=$((env_skipped + 1))
                     continue
                 else
                     log_warn "  Found incomplete results for $run_scenario_id, will re-run"
@@ -517,7 +600,12 @@ for s in manifest['scenarios']:
         
     done <<< "$scenarios"
     
-    log_info "Environment $env: $env_completed completed, $env_failed failed"
+    echo ""
+    log_info "Environment $env summary:"
+    log_info "  Completed: $env_completed (skipped: $env_skipped, new: $((env_completed - env_skipped)))"
+    log_info "  Failed: $env_failed"
+    log_info "  Progress: $((env_completed * 100 / ENV_TOTAL_SCENARIOS))%"
+    echo ""
 done
 
 # =============================================================================

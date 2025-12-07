@@ -1707,13 +1707,14 @@ reproducibility/output/batch_001/
 
 The framework includes several utility scripts in the `scripts/` directory:
 
+- **`scripts/check_progress.sh`** - Check real-time progress of data collection across all environments
 - **`scripts/validate_data_collection.sh`** - Validate that all required data has been collected
 - **`scripts/complete_incomplete_experiments.sh`** - Complete analysis for experiments with raw data but missing merged/stats
 - **`scripts/regenerate_index_from_results.sh`** - Regenerate combined index from existing results
 - **`scripts/verify_experiments.sh`** - Verify experiment results and check for issues
 - **`scripts/check_system_load.sh`** - Check system load before running experiments
 
-See the [Resume and Validation Guide](RESUME_AND_VALIDATION_GUIDE.md) for details on using these scripts.
+See the [Full-Scale Data Collection Guide](FULL_SCALE_DATA_COLLECTION_GUIDE.md) for details on using these scripts.
 
 ## Complete Experiment Orchestration
 

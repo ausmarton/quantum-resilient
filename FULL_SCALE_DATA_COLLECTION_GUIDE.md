@@ -14,13 +14,13 @@ This guide explains how to run full-scale benchmarks separately for each environ
    ```bash
    ./run_full_scale_data_collection.sh --env native
    ```
-   ⏱️ **Time**: ~3-4 hours | 📊 **Scenarios**: 225
+   ⏱️ **Time**: ~4-5 hours | 📊 **Scenarios**: 300 (5 algorithms × 4 payloads × 3 rates × 5 runs)
 
 2. **Run Minikube** (Local Machine)
    ```bash
    ./run_full_scale_data_collection.sh --env minikube
    ```
-   ⏱️ **Time**: ~4-5 hours | 📊 **Scenarios**: 225
+   ⏱️ **Time**: ~5-6 hours | 📊 **Scenarios**: 300
 
 3. **Run GCP** (Cloud)
    ```bash
@@ -29,7 +29,7 @@ This guide explains how to run full-scale benchmarks separately for each environ
      --project <your-gcp-project> \
      --bucket <your-gcs-bucket>
    ```
-   ⏱️ **Time**: ~5-6 hours | 📊 **Scenarios**: 225
+   ⏱️ **Time**: ~6-7 hours | 📊 **Scenarios**: 300
 
 4. **Verify Data Collection**
    ```bash
@@ -98,16 +98,16 @@ results/<env>/<scenario-id>/
 Based on `orchestration/experiment_matrix.yaml`:
 
 - **Algorithms**: 5 (RSA-2048, ECDSA P-256, Kyber-512, Dilithium-2, Hybrid)
-- **Payload sizes**: 3 (256B, 1KB, 4KB)
+- **Payload sizes**: 4 (256B, 1KB, 4KB, 16KB)
 - **Rates**: 3 (100, 500, 2000 msg/s)
 - **Runs per configuration**: 5
 - **Duration per run**: 30 seconds
-- **Total scenarios per environment**: 5 × 3 × 3 × 5 = **225 scenarios**
+- **Total scenarios per environment**: 5 × 4 × 3 × 5 = **300 scenarios**
 
 **Estimated time per environment:**
-- Native: ~3-4 hours (depending on hardware)
-- Minikube: ~4-5 hours (container overhead)
-- GCP: ~5-6 hours (includes cluster setup/teardown)
+- Native: ~4-5 hours (depending on hardware)
+- Minikube: ~5-6 hours (container overhead)
+- GCP: ~6-7 hours (includes cluster setup/teardown)
 
 ## Running Data Collection
 
@@ -184,11 +184,11 @@ quantum-resilient/
 │   ├── native/
 │   │   ├── rsa2048_p256_r100_run1_<hash>/
 │   │   ├── rsa2048_p256_r100_run2_<hash>/
-│   │   └── ... (225 scenarios)
+│   │   └── ... (300 scenarios)
 │   ├── minikube/
-│   │   └── ... (225 scenarios)
+│   │   └── ... (300 scenarios)
 │   └── gcp/
-│       └── ... (225 scenarios)
+│       └── ... (300 scenarios)
 │
 └── data-collection-<timestamp>/
     ├── manifest.json           # Complete list of collected experiments
@@ -198,16 +198,60 @@ quantum-resilient/
     └── gcp_run.log             # GCP environment run log
 ```
 
-## Resume Capability
+## Progress Tracking and Resume
 
-The data collection scripts **automatically resume** from where they left off. If a run fails partway through, simply re-run the same command:
+### Real-Time Progress Indicators
+
+During data collection, you'll see real-time progress updates:
+
+```
+[ 45%] [native] rsa2048_p256_r100_run3_abc123 | Elapsed: 2h 15m | ETA: 2h 45m | 135/300
+```
+
+This shows:
+- **Percentage complete** for the current environment
+- **Current scenario** being processed
+- **Elapsed time** since start
+- **Estimated time remaining** (ETA)
+- **Progress count** (completed/total)
+
+Progress updates appear:
+- Every 5 seconds automatically
+- On every scenario completion
+- When experiments are skipped (cached)
+
+### Check Progress Anytime
+
+You can check progress at any time, even while a run is in progress:
 
 ```bash
-# First run - fails after 2 hours
-./run_full_scale_data_collection.sh --env native
-# ... runs 100 experiments, then fails ...
+# Check all environments
+./scripts/check_progress.sh
 
-# Fix the error, then re-run - automatically resumes
+# Check specific environment
+./scripts/check_progress.sh --env native
+```
+
+This shows:
+- Per-environment status (completed, in progress, not started)
+- Overall progress across all environments
+- Visual progress bar
+- What's remaining and next steps
+
+### Graceful Stop and Resume
+
+**Stop a run safely** (Ctrl+C):
+- The script saves all completed experiments
+- You can safely stop at any time
+- Completed experiments are preserved
+
+**Resume from where you stopped**:
+```bash
+# First run - stopped after 2 hours (Ctrl+C)
+./run_full_scale_data_collection.sh --env native
+# ... runs 100 experiments, then you stop it ...
+
+# Later, re-run the same command - automatically resumes
 ./run_full_scale_data_collection.sh --env native
 # ... skips 100 completed experiments, continues with remaining 125 ...
 ```
@@ -217,6 +261,59 @@ The data collection scripts **automatically resume** from where they left off. I
 **Incomplete Results**: If experiments have raw data (`raw/run.jsonl`) but are missing merged/stats files, complete them without re-running:
 ```bash
 ./scripts/complete_incomplete_experiments.sh --env native
+```
+
+### Cross-Environment Progress
+
+When running multiple environments separately, track overall progress:
+
+```bash
+# After native is complete, check overall status
+./scripts/check_progress.sh
+
+# Output shows:
+# NATIVE: ✓ Complete (300/300, 100%)
+# MINIKUBE: ⏳ Not Started (0/300, 0%)
+# GCP: ⏳ Not Started (0/300, 0%)
+# 
+# Overall Progress: 33% (300/900)
+```
+
+This helps you understand:
+- Which environments are complete
+- How much work remains
+- What to run next
+
+## Monitoring Long-Running Tests
+
+### During Execution
+
+While tests are running (which can take many hours), you can:
+
+1. **Check progress in real-time**:
+   ```bash
+   # In another terminal
+   ./scripts/check_progress.sh --env native
+   ```
+
+2. **View current scenario**:
+   - Progress updates appear every 5 seconds in the main terminal
+   - Shows percentage, elapsed time, and ETA
+
+3. **Stop and resume safely**:
+   - Press Ctrl+C to stop gracefully
+   - All completed experiments are saved
+   - Re-run the same command to resume
+
+### After Each Environment
+
+After each environment completes, verify progress:
+
+```bash
+# Check what was collected
+./scripts/check_progress.sh --env native
+
+# Should show: ✓ Complete (300/300, 100%)
 ```
 
 ## Validation
@@ -255,7 +352,7 @@ After each environment completes, verify the data:
 ./scripts/verify_experiments.sh results/
 
 # Or check specific environment
-ls -lh results/native/ | wc -l  # Should show ~225 directories
+ls -lh results/native/ | wc -l  # Should show ~300 directories
 ls -lh results/minikube/ | wc -l
 ls -lh results/gcp/ | wc -l
 ```
@@ -395,7 +492,7 @@ If experiments are being re-run when they should be skipped:
 
 ### Out of disk space
 
-Each experiment generates ~1-5 MB of data. For 225 scenarios × 3 environments = ~675 experiments = ~3-4 GB total.
+Each experiment generates ~1-5 MB of data. For 300 scenarios × 3 environments = ~900 experiments = ~4-5 GB total.
 
 Check disk usage:
 ```bash
@@ -458,7 +555,7 @@ This section provides a step-by-step workflow for collecting all data and genera
 
 ### Phase 1: Data Collection (You Are Here)
 
-**Status**: ✅ Native complete (225 experiments)
+**Status**: ✅ Native complete (300 experiments)
 
 **Next Steps**:
 
@@ -466,7 +563,7 @@ This section provides a step-by-step workflow for collecting all data and genera
    ```bash
    ./run_full_scale_data_collection.sh --env minikube
    ```
-   ⏱️ **Time**: ~4-5 hours | 📊 **Scenarios**: 225
+   ⏱️ **Time**: ~5-6 hours | 📊 **Scenarios**: 300
    
    After completion, verify:
    ```bash
@@ -481,7 +578,7 @@ This section provides a step-by-step workflow for collecting all data and genera
      --bucket <your-gcs-bucket> \
      --region us-central1
    ```
-   ⏱️ **Time**: ~5-6 hours | 📊 **Scenarios**: 225
+   ⏱️ **Time**: ~6-7 hours | 📊 **Scenarios**: 300
    
    After completion, verify:
    ```bash
@@ -495,14 +592,14 @@ This section provides a step-by-step workflow for collecting all data and genera
    
    This should show:
    ```
-   NATIVE: Checking 225 expected experiments...
-     ✓ All 225 experiments complete
+   NATIVE: Checking 300 expected experiments...
+     ✓ All 300 experiments complete
    
-   MINIKUBE: Checking 225 expected experiments...
-     ✓ All 225 experiments complete
+   MINIKUBE: Checking 300 expected experiments...
+     ✓ All 300 experiments complete
    
-   GCP: Checking 225 expected experiments...
-     ✓ All 225 experiments complete
+   GCP: Checking 300 expected experiments...
+     ✓ All 300 experiments complete
    
    ✓ All required data is present - ready for analysis!
    ```
@@ -518,7 +615,7 @@ This section provides a step-by-step workflow for collecting all data and genera
      --output final-results/
    ```
    
-   This creates `final-results/index.json` with all 675 experiments (225 × 3 environments).
+   This creates `final-results/index.json` with all 900 experiments (300 × 3 environments).
 
 ### Phase 3: Run Complete Analysis
 
@@ -572,9 +669,9 @@ This section provides a step-by-step workflow for collecting all data and genera
 
 ### Summary Checklist
 
-- [x] ✅ Native data collection complete (225 experiments)
-- [ ] ⏳ Minikube data collection (~4-5 hours)
-- [ ] ⏳ GCP data collection (~5-6 hours)
+- [x] ✅ Native data collection complete (300 experiments)
+- [ ] ⏳ Minikube data collection (~5-6 hours)
+- [ ] ⏳ GCP data collection (~6-7 hours)
 - [ ] ⏳ Validate all environments
 - [ ] ⏳ Regenerate combined index
 - [ ] ⏳ Run complete analysis

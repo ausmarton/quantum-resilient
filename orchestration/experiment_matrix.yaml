@@ -3,7 +3,7 @@
 #
 # Defines all scenarios for the dissertation benchmarking study:
 # - Algorithms: RSA, ECDSA, Kyber, Dilithium, Hybrid
-# - Payload sizes: 256B, 1KB, 4KB
+# - Payload sizes: 256B, 1KB, 4KB, 16KB
 # - Workload rates: 100, 500, 2000 msg/s
 # - Repeats: 5 runs per configuration for statistical rigor
 # =============================================================================
@@ -66,7 +66,7 @@ experiments:
     description: "RSA-2048 signature baseline"
     adapter: rsa2048
     operation: sign
-    payload_sizes: [256, 1024, 4096]
+    payload_sizes: [256, 1024, 4096, 16384]
     rates: [100, 500, 2000]
     runs: 5
     category: classical
@@ -75,7 +75,7 @@ experiments:
     description: "ECDSA P-256 signature baseline"
     adapter: ecdsa_p256
     operation: sign
-    payload_sizes: [256, 1024, 4096]
+    payload_sizes: [256, 1024, 4096, 16384]
     rates: [100, 500, 2000]
     runs: 5
     category: classical
@@ -88,7 +88,7 @@ experiments:
     description: "Kyber-512 KEM + AES-GCM encryption"
     adapter: kyber
     operation: kem_aead_encrypt
-    payload_sizes: [256, 1024, 4096]
+    payload_sizes: [256, 1024, 4096, 16384]
     rates: [100, 500, 2000]
     runs: 5
     category: pqc
@@ -99,7 +99,7 @@ experiments:
     description: "Dilithium-2 digital signature"
     adapter: dilithium
     operation: sign
-    payload_sizes: [256, 1024, 4096]
+    payload_sizes: [256, 1024, 4096, 16384]
     rates: [100, 500, 2000]
     runs: 5
     category: pqc
@@ -114,7 +114,7 @@ experiments:
     description: "Hybrid: Kyber-512 KEM → AES-GCM → Dilithium-2 sign"
     adapter: hybrid_kyber_dilithium
     operation: kem_aead_sign
-    payload_sizes: [256, 1024, 4096]
+    payload_sizes: [256, 1024, 4096, 16384]
     rates: [100, 500, 2000]
     runs: 5
     category: hybrid
