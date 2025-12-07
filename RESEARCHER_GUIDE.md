@@ -97,6 +97,22 @@ All experiments follow this pattern:
 - Baseline performance measurements
 - Validating scenarios before cloud deployment
 
+### ⚠️ System Load Considerations
+
+**Before running native experiments:**
+- Close heavy applications (browser with many tabs, IDE) to minimize system load impact
+- The script automatically checks system load before native/minikube runs
+- You can skip the check with `--no-check-load` if needed
+
+**Why this matters:**
+- Native runs are directly affected by system load (CPU, memory contention)
+- Multiple runs (5 per configuration) account for variability
+- System metrics are captured with each event for post-hoc analysis
+
+**For GCP runs:** No local restrictions needed (runs in isolated cloud VMs).
+
+**See [SYSTEM_LOAD_AND_VARIABILITY.md](SYSTEM_LOAD_AND_VARIABILITY.md) for detailed guidance on handling system load and variability.**
+
 ### Smoke test:
 ```bash
 ./run_local.sh \
@@ -130,6 +146,8 @@ All experiments follow this pattern:
 - Validating Kubernetes manifests
 - Comparing containerized vs native performance
 - Testing before GCP deployment
+
+**Note:** Minikube runs have less system load sensitivity than native runs, but closing heavy applications is still recommended for best results.
 
 ### Prerequisites:
 ```bash

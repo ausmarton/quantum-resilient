@@ -166,6 +166,19 @@ quantum-resilient/
 - Make
 - Podman (optional, for containerized builds)
 
+### System Load Requirements
+
+**For Native and Minikube runs:**
+- Close heavy applications (browser, IDE) to minimize system load impact
+- System load is automatically checked before native/minikube runs
+- Multiple runs (5 per configuration) account for residual variability
+- System metrics (CPU, memory) are captured with each event for post-hoc analysis
+
+**For GCP runs:**
+- No local system restrictions needed (runs in isolated cloud VMs)
+
+**See [SYSTEM_LOAD_AND_VARIABILITY.md](SYSTEM_LOAD_AND_VARIABILITY.md) for detailed guidance.**
+
 ## Quick Start
 
 ### Local Build and Run
@@ -1840,6 +1853,25 @@ Reports Cohen's d with interpretations:
 | Feature | Description | Default |
 |---------|-------------|---------|
 | `pqcrypto_fallback` | Use pure-Rust pqcrypto-kyber | ✓ |
+
+## Documentation
+
+### User Guides
+
+- **[RESEARCHER_GUIDE.md](RESEARCHER_GUIDE.md)** - Complete guide for researchers running experiments
+- **[FULL_SCALE_DATA_COLLECTION_GUIDE.md](FULL_SCALE_DATA_COLLECTION_GUIDE.md)** - Guide for full-scale data collection
+- **[QUICK_START_FULL_SCALE.md](QUICK_START_FULL_SCALE.md)** - Quick reference for full-scale runs
+
+### System and Workflow
+
+- **[SYSTEM_LOAD_AND_VARIABILITY.md](SYSTEM_LOAD_AND_VARIABILITY.md)** - System load requirements and how variability is handled
+- **[RESUME_AND_VALIDATION_GUIDE.md](RESUME_AND_VALIDATION_GUIDE.md)** - Resuming failed runs and validating data collection
+- **[STORAGE_AND_OVERWRITE_BEHAVIOR.md](STORAGE_AND_OVERWRITE_BEHAVIOR.md)** - How results are stored and whether runs overwrite each other
+- **[OUTPUT_STRUCTURE.md](OUTPUT_STRUCTURE.md)** - Directory structure and where outputs are located
+
+### Reference
+
+- **[SMOKE_TEST_DATA_FLOW.md](SMOKE_TEST_DATA_FLOW.md)** - Smoke test execution flow and data collection
 
 ## License
 

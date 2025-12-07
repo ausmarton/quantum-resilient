@@ -475,12 +475,25 @@ for s in manifest['scenarios']:
                 continue
             fi
             
-            # Check if already completed
+            # Check if already completed (resume capability)
+            # Check for both merged data and stats to ensure experiment is truly complete
             if [[ -f "$output_dir/stats/summary.json" ]] || [[ -f "$output_dir/merged/merged.jsonl" ]]; then
-                log_info "  Skipping (already completed): $run_scenario_id"
-                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
-                env_completed=$((env_completed + 1))
-                continue
+                # Verify the file is not empty
+                if [[ -f "$output_dir/stats/summary.json" ]] && [[ -s "$output_dir/stats/summary.json" ]]; then
+                    log_info "  ✓ Skipping (already completed): $run_scenario_id"
+                    add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
+                    env_completed=$((env_completed + 1))
+                    continue
+                elif [[ -f "$output_dir/merged/merged.jsonl" ]] && [[ -s "$output_dir/merged/merged.jsonl" ]]; then
+                    log_info "  ✓ Skipping (already completed): $run_scenario_id"
+                    add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
+                    env_completed=$((env_completed + 1))
+                    continue
+                else
+                    log_warn "  Found incomplete results for $run_scenario_id, will re-run"
+                    # Remove incomplete results
+                    rm -rf "$output_dir"
+                fi
             fi
             
             # Run experiment with replica count

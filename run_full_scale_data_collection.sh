@@ -45,6 +45,7 @@ SKIP_MINIKUBE=false
 SKIP_GCP=false
 CONTINUE_ON_ERROR=true
 MAX_RETRIES=2
+CHECK_SYSTEM_LOAD=true  # Check system load before native/minikube runs
 
 # Colors
 RED='\033[0;31m'
@@ -171,6 +172,10 @@ while [[ $# -gt 0 ]]; do
             MAX_RETRIES="$2"
             shift 2
             ;;
+        --no-check-load)
+            CHECK_SYSTEM_LOAD=false
+            shift
+            ;;
         -h|--help)
             usage
             ;;
@@ -237,6 +242,16 @@ for env in "${ENV_ARRAY[@]}"; do
     esac
     
     log_step "Environment: ${env^^} - Data Collection"
+    
+    # Check system load for native/minikube (optional)
+    if [[ "$CHECK_SYSTEM_LOAD" == "true" ]] && ([[ "$env" == "native" ]] || [[ "$env" == "minikube" ]]); then
+        log_info "Checking system load..."
+        if ! "$SCRIPT_DIR/scripts/check_system_load.sh" --warn-threshold 1.0 --fail-threshold 2.0; then
+            log_warn "System load check failed, but continuing anyway"
+            log_info "Use --no-check-load to skip this check"
+            echo ""
+        fi
+    fi
     
     # Build command
     CMD=(
@@ -426,9 +441,38 @@ log_step "Data Collection Complete"
 log_info "All raw data is stored in: results/<env>/<scenario-id>/"
 log_info "Collection manifest: $MANIFEST_FILE"
 log_info "Summary: $SUMMARY_FILE"
-log_info ""
-log_info "To run analysis later:"
-echo "  ./run_all_experiments.sh --skip-generation --skip-native --skip-minikube --skip-gcp"
+echo ""
+
+# Run validation
+log_step "Validating Data Collection"
+log_info "Checking that all required data is present..."
+
+if "$SCRIPT_DIR/scripts/validate_data_collection.sh" \
+    --matrix "$MATRIX" \
+    --results-dir "$SCRIPT_DIR/results" \
+    --envs "$ENVS"; then
+    log_success "Validation passed - all required data is present!"
+    echo ""
+    log_info "✅ Ready for analysis!"
+    log_info ""
+    log_info "To run analysis:"
+    echo "  ./run_all_experiments.sh --skip-generation --skip-native --skip-minikube --skip-gcp"
+else
+    log_warn "Validation found missing or incomplete data"
+    log_info ""
+    log_info "Options:"
+    echo ""
+    echo "  1. Complete analysis for incomplete experiments (have raw data, missing merged/stats):"
+    echo "     ./scripts/complete_incomplete_experiments.sh --env $env"
+    echo ""
+    echo "  2. Re-run data collection (will skip completed ones, resume from where it left off):"
+    echo "     ./run_full_scale_data_collection.sh --env $env"
+    echo ""
+    echo "  3. Run analysis anyway (will only analyze available data):"
+    echo "     ./run_all_experiments.sh --skip-generation --skip-native --skip-minikube --skip-gcp"
+    echo ""
+    log_info "Check validation details above for counts of missing vs incomplete experiments."
+fi
 echo ""
 
 exit 0
