@@ -5,11 +5,17 @@
 ### Coverage Matrix
 - **Algorithms**: 5 (RSA-2048, ECDSA P-256, Kyber-512, Dilithium-2, Hybrid)
 - **Payload sizes**: 4 (256B, 1KB, 4KB, 16KB)
-- **Workload rates**: 3 (100, 500, 2000 msg/s)
-- **Runs per configuration**: 5
+- **Workload rates**: 3 (100, 500, 2000 msg/s) + 10K msg/s (enterprise-scale)
+- **Workload patterns**: Constant (baseline) + Burst (enterprise patterns)
+- **Duration**: 30s (baseline) + 300s (5-min sustained load)
+- **Runs per configuration**: 5 (3 for 5-min duration)
 - **Environments**: 3 (native, minikube, gcp)
-- **Total scenarios per environment**: 5 × 4 × 3 × 5 = **300**
-- **Total experiments**: 300 × 3 = **900**
+- **Total scenarios per environment**: **459**
+  - Baseline: 300 (5 × 4 × 3 × 5)
+  - Burst pattern: 50 (5 × 2 × 1 × 5)
+  - 10K msg/s: 100 (5 × 4 × 1 × 5)
+  - 5-minute duration: 9 (3 × 1 × 1 × 3)
+- **Total experiments**: 459 × 3 = **1,377**
 
 ### Research Questions to Answer
 
@@ -124,12 +130,12 @@
 
 ## Recommendations
 
-### ✅ Keep Current Design (300 scenarios)
+### ✅ Enhanced Design (459 scenarios - includes enterprise quick wins)
 
 **Reasons**:
 1. **Statistical rigor**: 5 runs per configuration is sufficient for dissertation-level analysis
 2. **Comprehensive coverage**: Algorithms, payloads (including 16KB), rates, and environments are well-covered
-3. **Time efficiency**: 300 scenarios × 3 environments = 900 total experiments is already substantial
+3. **Time efficiency**: 459 scenarios × 3 environments = 1,377 total experiments provides comprehensive coverage
 4. **Diminishing returns**: Adding more scenarios would provide marginal value for significant time cost
 
 ### 🎯 Optional Enhancements (If Time Permits)
@@ -222,7 +228,7 @@
 
 ## Final Verdict
 
-### ✅ **300 experiments per environment is SUFFICIENT**
+### ✅ **459 experiments per environment (with enterprise quick wins) is SUFFICIENT**
 
 **Reasons**:
 1. **Comprehensive coverage**: All research questions can be answered
@@ -299,7 +305,7 @@ The framework supports **separate scaling experiments** (not included in the 300
 
 ## Recommendation
 
-**Proceed with 300 experiments per environment.**
+**Proceed with 459 experiments per environment (includes enterprise quick wins: burst patterns, 10K msg/s, 5-min duration).**
 
 This design:
 - ✅ Answers all your research questions

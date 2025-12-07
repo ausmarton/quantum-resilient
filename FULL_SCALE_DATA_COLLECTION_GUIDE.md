@@ -14,13 +14,13 @@ This guide explains how to run full-scale benchmarks separately for each environ
    ```bash
    ./run_full_scale_data_collection.sh --env native
    ```
-   ⏱️ **Time**: ~4-5 hours | 📊 **Scenarios**: 300 (5 algorithms × 4 payloads × 3 rates × 5 runs)
+   ⏱️ **Time**: ~6.5-8 hours | 📊 **Scenarios**: 459 (includes burst patterns, 10K msg/s, 5-min duration)
 
 2. **Run Minikube** (Local Machine)
    ```bash
    ./run_full_scale_data_collection.sh --env minikube
    ```
-   ⏱️ **Time**: ~5-6 hours | 📊 **Scenarios**: 300
+   ⏱️ **Time**: ~7.5-9 hours | 📊 **Scenarios**: 459
 
 3. **Run GCP** (Cloud)
    ```bash
@@ -29,7 +29,7 @@ This guide explains how to run full-scale benchmarks separately for each environ
      --project <your-gcp-project> \
      --bucket <your-gcs-bucket>
    ```
-   ⏱️ **Time**: ~6-7 hours | 📊 **Scenarios**: 300
+   ⏱️ **Time**: ~9-10.5 hours | 📊 **Scenarios**: 459
 
 4. **Verify Data Collection**
    ```bash
@@ -99,15 +99,20 @@ Based on `orchestration/experiment_matrix.yaml`:
 
 - **Algorithms**: 5 (RSA-2048, ECDSA P-256, Kyber-512, Dilithium-2, Hybrid)
 - **Payload sizes**: 4 (256B, 1KB, 4KB, 16KB)
-- **Rates**: 3 (100, 500, 2000 msg/s)
-- **Runs per configuration**: 5
-- **Duration per run**: 30 seconds
-- **Total scenarios per environment**: 5 × 4 × 3 × 5 = **300 scenarios**
+- **Rates**: 3 (100, 500, 2000 msg/s) + 10K msg/s (enterprise-scale)
+- **Workload patterns**: Constant (baseline) + Burst (enterprise patterns)
+- **Duration**: 30s (baseline) + 300s (5-min sustained load)
+- **Runs per configuration**: 5 (3 for 5-min duration)
+- **Total scenarios per environment**: **459 scenarios**
+  - Baseline: 300 (5 × 4 × 3 × 5)
+  - Burst pattern: 50 (5 × 2 × 1 × 5)
+  - 10K msg/s: 100 (5 × 4 × 1 × 5)
+  - 5-minute duration: 9 (3 × 1 × 1 × 3)
 
 **Estimated time per environment:**
-- Native: ~4-5 hours (depending on hardware)
-- Minikube: ~5-6 hours (container overhead)
-- GCP: ~6-7 hours (includes cluster setup/teardown)
+- Native: ~6.5-8 hours (depending on hardware)
+- Minikube: ~7.5-9 hours (container overhead)
+- GCP: ~9-10.5 hours (includes cluster setup/teardown)
 
 ## Running Data Collection
 
@@ -182,13 +187,15 @@ After running, you'll have:
 quantum-resilient/
 ├── results/
 │   ├── native/
-│   │   ├── rsa2048_p256_r100_run1_<hash>/
-│   │   ├── rsa2048_p256_r100_run2_<hash>/
-│   │   └── ... (300 scenarios)
+│   │   ├── rsa2048_p256_r100_run1_<hash>/          # Baseline
+│   │   ├── kyber512_p1024_r2000_burst_run1_<hash>/ # Burst pattern
+│   │   ├── rsa2048_p1024_r10000_run1_<hash>/       # 10K msg/s
+│   │   ├── kyber512_p1024_r2000_5m_run1_<hash>/     # 5-min duration
+│   │   └── ... (459 scenarios total)
 │   ├── minikube/
-│   │   └── ... (300 scenarios)
+│   │   └── ... (459 scenarios)
 │   └── gcp/
-│       └── ... (300 scenarios)
+│       └── ... (459 scenarios)
 │
 └── data-collection-<timestamp>/
     ├── manifest.json           # Complete list of collected experiments
@@ -352,7 +359,7 @@ After each environment completes, verify the data:
 ./scripts/verify_experiments.sh results/
 
 # Or check specific environment
-ls -lh results/native/ | wc -l  # Should show ~300 directories
+ls -lh results/native/ | wc -l  # Should show ~459 directories
 ls -lh results/minikube/ | wc -l
 ls -lh results/gcp/ | wc -l
 ```
@@ -492,7 +499,7 @@ If experiments are being re-run when they should be skipped:
 
 ### Out of disk space
 
-Each experiment generates ~1-5 MB of data. For 300 scenarios × 3 environments = ~900 experiments = ~4-5 GB total.
+Each experiment generates ~1-5 MB of data. For 459 scenarios × 3 environments = ~1,377 experiments = ~5-7 GB total.
 
 Check disk usage:
 ```bash
@@ -555,7 +562,7 @@ This section provides a step-by-step workflow for collecting all data and genera
 
 ### Phase 1: Data Collection (You Are Here)
 
-**Status**: ✅ Native complete (300 experiments)
+**Status**: ✅ Native complete (459 experiments)
 
 **Next Steps**:
 
@@ -592,14 +599,14 @@ This section provides a step-by-step workflow for collecting all data and genera
    
    This should show:
    ```
-   NATIVE: Checking 300 expected experiments...
-     ✓ All 300 experiments complete
+   NATIVE: Checking 459 expected experiments...
+     ✓ All 459 experiments complete
    
-   MINIKUBE: Checking 300 expected experiments...
-     ✓ All 300 experiments complete
+   MINIKUBE: Checking 459 expected experiments...
+     ✓ All 459 experiments complete
    
-   GCP: Checking 300 expected experiments...
-     ✓ All 300 experiments complete
+   GCP: Checking 459 expected experiments...
+     ✓ All 459 experiments complete
    
    ✓ All required data is present - ready for analysis!
    ```
@@ -615,7 +622,7 @@ This section provides a step-by-step workflow for collecting all data and genera
      --output final-results/
    ```
    
-   This creates `final-results/index.json` with all 900 experiments (300 × 3 environments).
+   This creates `final-results/index.json` with all 1,377 experiments (459 × 3 environments).
 
 ### Phase 3: Run Complete Analysis
 
@@ -669,9 +676,9 @@ This section provides a step-by-step workflow for collecting all data and genera
 
 ### Summary Checklist
 
-- [x] ✅ Native data collection complete (300 experiments)
-- [ ] ⏳ Minikube data collection (~5-6 hours)
-- [ ] ⏳ GCP data collection (~6-7 hours)
+- [x] ✅ Native data collection complete (459 experiments)
+- [ ] ⏳ Minikube data collection (~7.5-9 hours)
+- [ ] ⏳ GCP data collection (~9-10.5 hours)
 - [ ] ⏳ Validate all environments
 - [ ] ⏳ Regenerate combined index
 - [ ] ⏳ Run complete analysis

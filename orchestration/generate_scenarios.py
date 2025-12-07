@@ -42,23 +42,45 @@ def compute_rng_seed(algorithm: str, payload: int, rate: int, run: int) -> int:
     return int.from_bytes(hash_bytes[:8], byteorder='big') % (2**63)
 
 
-def compute_scenario_hash(algorithm: str, payload: int, rate: int, run: int) -> str:
+def compute_scenario_hash(algorithm: str, payload: int, rate: int, run: int, pattern: str = "constant", duration: int = None) -> str:
     """Compute short hash for globally unique scenario ID."""
-    seed_str = f"{algorithm}:{payload}:{rate}:{run}"
+    # Include pattern and duration in hash for uniqueness
+    if duration and duration != 30:
+        seed_str = f"{algorithm}:{payload}:{rate}:{run}:{pattern}:{duration}"
+    else:
+        seed_str = f"{algorithm}:{payload}:{rate}:{run}:{pattern}"
     return hashlib.sha256(seed_str.encode()).hexdigest()[:8]
 
 
-def generate_scenario_id(algorithm: str, payload: int, rate: int, run: int, smoke_test: bool = False) -> str:
+def generate_scenario_id(algorithm: str, payload: int, rate: int, run: int, smoke_test: bool = False, pattern: str = "constant", duration: int = None) -> str:
     """
     Generate globally unique scenario ID.
     
     Format: <algorithm>_p<payload>_r<rate>_run<N>_<hash>
+    With pattern: <algorithm>_p<payload>_r<rate>_<pattern>_run<N>_<hash>
+    With duration: <algorithm>_p<payload>_r<rate>_<duration>m_run<N>_<hash>
     In smoke-test mode: <algorithm>-smoketest-p<payload>-r<rate>
     """
-    hash_suffix = compute_scenario_hash(algorithm, payload, rate, run)
+    hash_suffix = compute_scenario_hash(algorithm, payload, rate, run, pattern, duration)
     if smoke_test:
         return f"{algorithm}-smoketest-p{payload}-r{rate}"
-    return f"{algorithm}_p{payload}_r{rate}_run{run}_{hash_suffix}"
+    
+    # Build ID with optional pattern and duration suffixes
+    parts = [algorithm, f"p{payload}", f"r{rate}"]
+    
+    if pattern and pattern != "constant":
+        parts.append(pattern)
+    
+    if duration and duration != 30:
+        if duration == 300:
+            parts.append("5m")
+        else:
+            parts.append(f"{duration}s")
+    
+    parts.append(f"run{run}")
+    parts.append(hash_suffix)
+    
+    return "_".join(parts)
 
 
 def generate_scenario_yaml(
@@ -77,11 +99,19 @@ def generate_scenario_yaml(
     """
     algorithm = experiment['algorithm']
     
-    # Compute deterministic seed
+    # Get workload pattern (default: constant)
+    workload_pattern = experiment.get('workload_pattern', 'constant')
+    
+    # Get duration override (if specified, otherwise use defaults)
+    duration_sec = experiment.get('duration_sec', defaults.get('duration_sec', 30))
+    if smoke_test:
+        duration_sec = 5
+    
+    # Compute deterministic seed (include pattern and duration for uniqueness)
     rng_seed = compute_rng_seed(algorithm, payload_size, rate, run_index)
     
-    # Generate globally unique ID
-    scenario_id = generate_scenario_id(algorithm, payload_size, rate, run_index, smoke_test)
+    # Generate globally unique ID (include pattern and duration)
+    scenario_id = generate_scenario_id(algorithm, payload_size, rate, run_index, smoke_test, workload_pattern, duration_sec)
     
     # Map adapter name for hybrid operations
     # Hybrid operations use 'kyber' adapter with special operations
@@ -93,6 +123,18 @@ def generate_scenario_yaml(
     if adapter_name == 'hybrid_kyber_dilithium':
         adapter_name = 'kyber'
     
+    # Build workload configuration
+    workload_config = {
+        'msgs_per_sec': rate,
+        'msg_size_bytes': payload_size,
+        'duration_sec': duration_sec,
+        'pattern': workload_pattern,
+    }
+    
+    # Add burst configuration if pattern is burst
+    if workload_pattern == 'burst' and 'burst_config' in experiment:
+        workload_config['burst'] = experiment['burst_config'].copy()
+    
     # Build scenario
     scenario = {
         'id': scenario_id,
@@ -100,12 +142,7 @@ def generate_scenario_yaml(
         'rng_seed': rng_seed,
         
         # Workload configuration
-        'workload': {
-            'msgs_per_sec': rate,
-            'msg_size_bytes': payload_size,
-            'duration_sec': 5 if smoke_test else defaults.get('duration_sec', 30),
-            'pattern': 'constant',
-        },
+        'workload': workload_config,
         
         # Algorithm configuration
         'algorithm': {
@@ -136,7 +173,8 @@ def generate_scenario_yaml(
             'category': experiment.get('category', 'unknown'),
             'payload_size_bytes': payload_size,
             'msgs_per_sec': rate,
-            'duration_sec': defaults.get('duration_sec', 30),
+            'duration_sec': duration_sec,
+            'workload_pattern': workload_pattern,
             'run_index': run_index,
             'total_runs': 1 if smoke_test else experiment.get('runs', defaults.get('runs', 5)),
             'seed': rng_seed,

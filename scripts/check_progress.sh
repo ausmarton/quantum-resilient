@@ -115,7 +115,7 @@ EOF
 
 EXPECTED_PER_ENV=$?
 if [[ $EXPECTED_PER_ENV -ne 0 ]]; then
-    EXPECTED_PER_ENV=300  # Default fallback (5 algorithms × 4 payloads × 3 rates × 5 runs)
+    EXPECTED_PER_ENV=459  # Default fallback (includes baseline 300 + quick wins 159)
 else
     EXPECTED_PER_ENV=$(python3 <<EOF
 import yaml
