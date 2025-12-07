@@ -522,6 +522,46 @@ If experiments are being re-run when they should be skipped:
    find results/native -name "merged.jsonl" -size 0
    ```
 
+### Re-running All Experiments from Scratch
+
+If you want to delete all collected data and re-run everything:
+
+**Option 1: Using the cleanup script (Recommended)**
+```bash
+# Archive and delete all results (safe - preserves data in archive/)
+./scripts/cleanup_results.sh --all --archive
+
+# Or delete without archiving (dangerous - data is lost!)
+./scripts/cleanup_results.sh --all --no-archive
+
+# Delete specific environment only
+./scripts/cleanup_results.sh --env native --archive
+
+# See what would be deleted (dry run)
+./scripts/cleanup_results.sh --all --dry-run
+```
+
+**Option 2: Manual deletion**
+```bash
+# Archive first (recommended)
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+mkdir -p archive
+cp -r results archive/results-$TIMESTAMP
+cp -r final-results archive/final-results-$TIMESTAMP 2>/dev/null || true
+
+# Then delete
+rm -rf results/native/* results/minikube/* results/gcp/*
+rm -rf final-results/* final-results-smoke/*
+```
+
+**After cleanup, re-run:**
+```bash
+# Re-run all environments
+./run_full_scale_data_collection.sh --env native
+./run_full_scale_data_collection.sh --env minikube
+./run_full_scale_data_collection.sh --env gcp --project <project> --bucket <bucket>
+```
+
 ### Out of disk space
 
 Each experiment generates ~1-5 MB of data. 

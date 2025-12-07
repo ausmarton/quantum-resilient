@@ -42,17 +42,22 @@ def compute_rng_seed(algorithm: str, payload: int, rate: int, run: int) -> int:
     return int.from_bytes(hash_bytes[:8], byteorder='big') % (2**63)
 
 
-def compute_scenario_hash(algorithm: str, payload: int, rate: int, run: int, pattern: str = "constant", duration: int = None) -> str:
+def compute_scenario_hash(algorithm: str, payload: int, rate: int, run: int, pattern: str = "constant", duration: int = None, is_scaling: bool = False) -> str:
     """Compute short hash for globally unique scenario ID."""
-    # Include pattern and duration in hash for uniqueness
+    # IMPORTANT: For backward compatibility, only include pattern if it's NOT "constant"
+    # This ensures existing baseline experiments (pattern="constant") keep the same hash
+    seed_parts = [algorithm, str(payload), str(rate), str(run)]
+    if pattern and pattern != "constant":
+        seed_parts.append(pattern)
     if duration and duration != 30:
-        seed_str = f"{algorithm}:{payload}:{rate}:{run}:{pattern}:{duration}"
-    else:
-        seed_str = f"{algorithm}:{payload}:{rate}:{run}:{pattern}"
+        seed_parts.append(str(duration))
+    if is_scaling:
+        seed_parts.append("scaling")
+    seed_str = ":".join(seed_parts)
     return hashlib.sha256(seed_str.encode()).hexdigest()[:8]
 
 
-def generate_scenario_id(algorithm: str, payload: int, rate: int, run: int, smoke_test: bool = False, pattern: str = "constant", duration: int = None) -> str:
+def generate_scenario_id(algorithm: str, payload: int, rate: int, run: int, smoke_test: bool = False, pattern: str = "constant", duration: int = None, is_scaling: bool = False) -> str:
     """
     Generate globally unique scenario ID.
     
@@ -61,11 +66,11 @@ def generate_scenario_id(algorithm: str, payload: int, rate: int, run: int, smok
     With duration: <algorithm>_p<payload>_r<rate>_<duration>m_run<N>_<hash>
     In smoke-test mode: <algorithm>-smoketest-p<payload>-r<rate>
     """
-    hash_suffix = compute_scenario_hash(algorithm, payload, rate, run, pattern, duration)
+    hash_suffix = compute_scenario_hash(algorithm, payload, rate, run, pattern, duration, is_scaling)
     if smoke_test:
         return f"{algorithm}-smoketest-p{payload}-r{rate}"
     
-    # Build ID with optional pattern and duration suffixes
+    # Build ID with optional pattern, duration, and scaling suffixes
     parts = [algorithm, f"p{payload}", f"r{rate}"]
     
     if pattern and pattern != "constant":
@@ -76,6 +81,9 @@ def generate_scenario_id(algorithm: str, payload: int, rate: int, run: int, smok
             parts.append("5m")
         else:
             parts.append(f"{duration}s")
+    
+    if is_scaling:
+        parts.append("scaling")  # Add scaling suffix to make IDs unique
     
     parts.append(f"run{run}")
     parts.append(hash_suffix)
@@ -107,11 +115,14 @@ def generate_scenario_yaml(
     if smoke_test:
         duration_sec = 5
     
+    # Check if this is a scaling experiment
+    is_scaling = experiment.get('scaling_experiment', False)
+    
     # Compute deterministic seed (include pattern and duration for uniqueness)
     rng_seed = compute_rng_seed(algorithm, payload_size, rate, run_index)
     
-    # Generate globally unique ID (include pattern and duration)
-    scenario_id = generate_scenario_id(algorithm, payload_size, rate, run_index, smoke_test, workload_pattern, duration_sec)
+    # Generate globally unique ID (include pattern, duration, and scaling flag)
+    scenario_id = generate_scenario_id(algorithm, payload_size, rate, run_index, smoke_test, workload_pattern, duration_sec, is_scaling)
     
     # Map adapter name for hybrid operations
     # Hybrid operations use 'kyber' adapter with special operations
@@ -325,6 +336,7 @@ def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = Fa
                         'path': str(scenario_path),
                         'relative_path': str(scenario_path.relative_to(output_dir)),
                         'category': experiment.get('category', 'unknown'),
+                        'scaling_experiment': experiment.get('scaling_experiment', False),  # Include scaling flag
                     })
     
     return generated, errors

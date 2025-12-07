@@ -10,12 +10,14 @@
 - **Duration**: 30s (baseline) + 300s (5-min sustained load)
 - **Runs per configuration**: 5 (3 for 5-min duration)
 - **Environments**: 3 (native, minikube, gcp)
-- **Total scenarios per environment**: **459**
+- **Total scenarios per environment**: **468**
   - Baseline: 300 (5 × 4 × 3 × 5)
   - Burst pattern: 50 (5 × 2 × 1 × 5)
   - 10K msg/s: 100 (5 × 4 × 1 × 5)
   - 5-minute duration: 9 (3 × 1 × 1 × 3)
-- **Total experiments**: 459 × 3 = **1,377**
+  - Horizontal scaling baseline: 9 (3 × 1 × 1 × 3)
+- **Total experiments**: 468 × 3 = **1,404** (baseline)
+- **With scaling** (replicas 2,4,8 on Minikube+GCP): +54 = **1,458 total**
 
 ### Research Questions to Answer
 
@@ -130,12 +132,12 @@
 
 ## Recommendations
 
-### ✅ Enhanced Design (459 scenarios - includes enterprise quick wins)
+### ✅ Enhanced Design (468 scenarios - includes enterprise quick wins + horizontal scaling baseline)
 
 **Reasons**:
 1. **Statistical rigor**: 5 runs per configuration is sufficient for dissertation-level analysis
 2. **Comprehensive coverage**: Algorithms, payloads (including 16KB), rates, and environments are well-covered
-3. **Time efficiency**: 459 scenarios × 3 environments = 1,377 total experiments provides comprehensive coverage
+3. **Time efficiency**: 468 scenarios × 3 environments = 1,404 baseline experiments provides comprehensive coverage
 4. **Diminishing returns**: Adding more scenarios would provide marginal value for significant time cost
 
 ### 🎯 Optional Enhancements (If Time Permits)
@@ -228,7 +230,7 @@
 
 ## Final Verdict
 
-### ✅ **459 experiments per environment (with enterprise quick wins) is SUFFICIENT**
+### ✅ **468 experiments per environment (with enterprise quick wins + horizontal scaling baseline) is SUFFICIENT**
 
 **Reasons**:
 1. **Comprehensive coverage**: All research questions can be answered
@@ -305,7 +307,7 @@ The framework supports **separate scaling experiments** (not included in the 300
 
 ## Recommendation
 
-**Proceed with 459 experiments per environment (includes enterprise quick wins: burst patterns, 10K msg/s, 5-min duration).**
+**Proceed with 468 experiments per environment (includes enterprise quick wins: burst patterns, 10K msg/s, 5-min duration, plus horizontal scaling baseline).**
 
 This design:
 - ✅ Answers all your research questions

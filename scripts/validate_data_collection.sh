@@ -148,20 +148,52 @@ experiments = matrix.get("experiments", [])
 # Generate expected scenario IDs
 expected_scenarios = defaultdict(lambda: defaultdict(set))  # env -> algorithm -> set of scenario_ids
 
+# Scenario ID generation functions (matching generate_scenarios.py exactly)
+def compute_scenario_hash(algorithm, payload, rate, run, pattern="constant", duration=None, is_scaling=False):
+    """Match generate_scenarios.py logic exactly - backward compatible"""
+    # IMPORTANT: Only include pattern if NOT "constant" for backward compatibility
+    seed_parts = [algorithm, str(payload), str(rate), str(run)]
+    if pattern and pattern != "constant":
+        seed_parts.append(pattern)
+    if duration and duration != 30:
+        seed_parts.append(str(duration))
+    if is_scaling:
+        seed_parts.append("scaling")
+    seed_str = ":".join(seed_parts)
+    import hashlib
+    return hashlib.sha256(seed_str.encode()).hexdigest()[:8]
+
+def generate_scenario_id(algorithm, payload, rate, run, pattern="constant", duration=None, is_scaling=False):
+    """Match generate_scenarios.py logic exactly"""
+    hash_suffix = compute_scenario_hash(algorithm, payload, rate, run, pattern, duration, is_scaling)
+    parts = [algorithm, f"p{payload}", f"r{rate}"]
+    if pattern and pattern != "constant":
+        parts.append(pattern)
+    if duration and duration != 30:
+        if duration == 300:
+            parts.append("5m")
+        else:
+            parts.append(f"{duration}s")
+    if is_scaling:
+        parts.append("scaling")
+    parts.append(f"run{run}")
+    parts.append(hash_suffix)
+    return "_".join(parts)
+
 for exp in experiments:
     algorithm = exp["algorithm"]
     payload_sizes = exp.get("payload_sizes", [1024])
     rates = exp.get("rates", [500])
     runs = exp.get("runs", defaults.get("runs", 5))
+    pattern = exp.get("workload_pattern", "constant")
+    duration = exp.get("duration_sec", defaults.get("duration_sec", 30))
+    is_scaling = exp.get("scaling_experiment", False)
     
     for payload in payload_sizes:
         for rate in rates:
             for run_index in range(1, runs + 1):
-                # Generate scenario ID (matching generate_scenarios.py logic)
-                import hashlib
-                seed_str = f"{algorithm}:{payload}:{rate}:{run_index}"
-                hash_suffix = hashlib.sha256(seed_str.encode()).hexdigest()[:8]
-                scenario_id = f"{algorithm}_p{payload}_r{rate}_run{run_index}_{hash_suffix}"
+                # Generate scenario ID using exact same logic as generate_scenarios.py
+                scenario_id = generate_scenario_id(algorithm, payload, rate, run_index, pattern, duration, is_scaling)
                 
                 for env in envs:
                     expected_scenarios[env][algorithm].add(scenario_id)

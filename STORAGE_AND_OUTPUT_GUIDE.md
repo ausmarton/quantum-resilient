@@ -317,6 +317,40 @@ rm -rf results/native/rsa2048-smoketest-p256-r50/
 ./run_all_experiments.sh --smoke-test --envs native
 ```
 
+### 3a. Re-run All Experiments from Scratch
+
+If you want to delete all collected data and re-run everything:
+
+**Using the cleanup script (Recommended)**:
+```bash
+# Archive and delete all results (safe - preserves data in archive/)
+./scripts/cleanup_results.sh --all --archive
+
+# Or delete specific environment
+./scripts/cleanup_results.sh --env native --archive
+
+# See what would be deleted (dry run)
+./scripts/cleanup_results.sh --all --dry-run
+```
+
+**Manual deletion**:
+```bash
+# Archive first (recommended)
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+mkdir -p archive
+cp -r results archive/results-$TIMESTAMP
+cp -r final-results archive/final-results-$TIMESTAMP 2>/dev/null || true
+
+# Then delete
+rm -rf results/native/* results/minikube/* results/gcp/*
+rm -rf final-results/* final-results-smoke/*
+
+# Re-run
+./run_full_scale_data_collection.sh --env native
+./run_full_scale_data_collection.sh --env minikube
+./run_full_scale_data_collection.sh --env gcp --project <project> --bucket <bucket>
+```
+
 ### 4. Preserve Individual Experiment Results
 
 Before re-running, archive old results:

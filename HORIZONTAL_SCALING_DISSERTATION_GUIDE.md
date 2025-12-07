@@ -23,7 +23,7 @@
 
 **Baseline experiments** (replica 1):
 - Run on **all environments** (native, minikube, gcp)
-- Already included in your 459 baseline experiments
+- Already included in your 468 baseline experiments
 - Used as baseline for scaling comparisons
 
 ### 2. Analysis Pipeline
@@ -157,7 +157,7 @@ python3 analysis/plot_replica_scaling.py \
 **Dissertation Structure**:
 
 **Part A: Algorithmic Performance (Native)**
-- All 459 baseline experiments
+- All 468 baseline experiments
 - Algorithm comparison
 - Relative performance characteristics
 - Statistical significance
@@ -224,7 +224,7 @@ python3 analysis/plot_replica_scaling.py \
 #### Chapter 5: Results and Analysis
 
 **5.1 Algorithmic Performance (Native Baseline)**
-- All 459 baseline experiments
+- All 468 baseline experiments
 - Algorithm comparison (PQC vs classical)
 - Statistical significance
 - Relative performance characteristics
@@ -295,13 +295,13 @@ python3 analysis/plot_replica_scaling.py \
 ### Step 1: Collect Baseline Data (All Environments)
 
 ```bash
-# Native (459 experiments)
+# Native (468 experiments)
 ./run_full_scale_data_collection.sh --env native
 
-# Minikube (459 experiments)
+# Minikube (468 experiments)
 ./run_full_scale_data_collection.sh --env minikube
 
-# GCP (459 experiments)
+# GCP (468 experiments)
 ./run_full_scale_data_collection.sh --env gcp --project <project> --bucket <bucket>
 ```
 
@@ -417,7 +417,7 @@ python3 analysis/plot_replica_scaling.py \
 
 ## Next Steps
 
-1. **Run baseline experiments** (all 459 per environment)
+1. **Run baseline experiments** (all 468 per environment)
 2. **Run scaling experiments** (Minikube + GCP, replicas 2, 4, 8)
 3. **Generate scaling analysis** (automatic or manual)
 4. **Review generated plots** (4 scaling plots + metrics JSON)

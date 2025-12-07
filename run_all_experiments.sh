@@ -516,15 +516,17 @@ print(count)
     env_skipped=0
     
     # Extract scenarios using Python for reliable JSON parsing
+    # Include scaling_experiment flag (defaults to False if not present)
     scenarios=$(python3 -c "
 import json
 with open('$GENERATED_SCENARIOS_DIR/manifest.json') as f:
     manifest = json.load(f)
 for s in manifest['scenarios']:
-    print(f\"{s['id']}|{s['path']}|{s['algorithm']}|{s['payload_size']}|{s['rate']}\")
+    scaling = s.get('scaling_experiment', False)
+    print(f\"{s['id']}|{s['path']}|{s['algorithm']}|{s['payload_size']}|{s['rate']}|{scaling}\")
 ")
     
-    while IFS='|' read -r scenario_id scenario_path algorithm payload rate; do
+    while IFS='|' read -r scenario_id scenario_path algorithm payload rate is_scaling; do
         scenario_count=$((scenario_count + 1))
         
         # Iterate over replica counts
@@ -536,6 +538,12 @@ for s in manifest['scenarios']:
             
             # In smoke-test mode, only run with 1 replica
             if [[ "$SMOKE_TEST" == "true" ]] && [[ "$replica_count" -gt 1 ]]; then
+                continue
+            fi
+            
+            # For replicas > 1, only run scaling experiments
+            # This ensures we don't run all 468 experiments with replicas 2,4,8
+            if [[ "$replica_count" -gt 1 ]] && [[ "$is_scaling" != "True" ]]; then
                 continue
             fi
             
