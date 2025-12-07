@@ -7,7 +7,8 @@
 # - Workload rates: 100, 500, 2000, 10000 msg/s
 # - Workload patterns: Constant (baseline), Burst (enterprise patterns)
 # - Duration: 30s (baseline), 300s (5-min sustained load)
-# - Repeats: 5 runs per configuration for statistical rigor
+# - Horizontal scaling: Replicas 1,2,4,8 (Minikube + GCP only, see scaling section)
+# - Repeats: 5 runs per configuration for statistical rigor (3 for scaling)
 # =============================================================================
 
 # Global defaults
@@ -296,6 +297,51 @@ experiments:
     runs: 3
     duration_sec: 300
     category: hybrid
+    kem:
+      paramset: kyber512
+    sig:
+      paramset: dilithium2
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Horizontal Scaling Experiments (for production deployment analysis)
+  # ─────────────────────────────────────────────────────────────────────────
+  # These experiments are designed to test horizontal scaling behavior
+  # Run with --replicas 1,2,4,8 on Minikube and GCP (native skips replicas > 1)
+  # Fixed parameters: 1024B payload, 500 msg/s, 3 runs per replica count
+  
+  - algorithm: kyber512
+    description: "Kyber-512 horizontal scaling (replicas 1,2,4,8)"
+    adapter: kyber
+    operation: kem_aead_encrypt
+    payload_sizes: [1024]
+    rates: [500]
+    runs: 3
+    category: pqc
+    scaling_experiment: true  # Marker for scaling-specific experiments
+    kem:
+      paramset: kyber512
+      
+  - algorithm: dilithium2
+    description: "Dilithium-2 horizontal scaling (replicas 1,2,4,8)"
+    adapter: dilithium
+    operation: sign
+    payload_sizes: [1024]
+    rates: [500]
+    runs: 3
+    category: pqc
+    scaling_experiment: true
+    sig:
+      paramset: dilithium2
+      
+  - algorithm: hybrid_kyber_dilithium
+    description: "Hybrid horizontal scaling (replicas 1,2,4,8)"
+    adapter: hybrid_kyber_dilithium
+    operation: kem_aead_sign
+    payload_sizes: [1024]
+    rates: [500]
+    runs: 3
+    category: hybrid
+    scaling_experiment: true
     kem:
       paramset: kyber512
     sig:

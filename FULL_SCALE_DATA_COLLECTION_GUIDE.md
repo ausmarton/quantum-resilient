@@ -14,13 +14,23 @@ This guide explains how to run full-scale benchmarks separately for each environ
    ```bash
    ./run_full_scale_data_collection.sh --env native
    ```
-   ⏱️ **Time**: ~6.5-8 hours | 📊 **Scenarios**: 459 (includes burst patterns, 10K msg/s, 5-min duration)
+   ⏱️ **Time**: ~6.5-8 hours | 📊 **Scenarios**: 468 (includes burst patterns, 10K msg/s, 5-min duration, scaling baseline)
 
 2. **Run Minikube** (Local Machine)
    ```bash
    ./run_full_scale_data_collection.sh --env minikube
    ```
-   ⏱️ **Time**: ~7.5-9 hours | 📊 **Scenarios**: 459
+   ⏱️ **Time**: ~7.5-9 hours | 📊 **Scenarios**: 468 (baseline)
+   
+   **Then run horizontal scaling** (replicas 2,4,8):
+   ```bash
+   ./run_all_experiments.sh \
+     --envs minikube \
+     --replicas 1,2,4,8 \
+     --skip-generation \
+     --matrix orchestration/experiment_matrix.yaml
+   ```
+   ⏱️ **Additional time**: ~1-2 hours | 📊 **Additional scenarios**: 27 (replicas 2,4,8 for scaling experiments)
 
 3. **Run GCP** (Cloud)
    ```bash
@@ -29,7 +39,19 @@ This guide explains how to run full-scale benchmarks separately for each environ
      --project <your-gcp-project> \
      --bucket <your-gcs-bucket>
    ```
-   ⏱️ **Time**: ~9-10.5 hours | 📊 **Scenarios**: 459
+   ⏱️ **Time**: ~9-10.5 hours | 📊 **Scenarios**: 468 (baseline)
+   
+   **Then run horizontal scaling** (replicas 2,4,8):
+   ```bash
+   ./run_all_experiments.sh \
+     --envs gcp \
+     --replicas 1,2,4,8 \
+     --project <your-gcp-project> \
+     --bucket <your-gcs-bucket> \
+     --skip-generation \
+     --matrix orchestration/experiment_matrix.yaml
+   ```
+   ⏱️ **Additional time**: ~1.5-2 hours | 📊 **Additional scenarios**: 27 (replicas 2,4,8 for scaling experiments)
 
 4. **Verify Data Collection**
    ```bash
@@ -102,17 +124,20 @@ Based on `orchestration/experiment_matrix.yaml`:
 - **Rates**: 3 (100, 500, 2000 msg/s) + 10K msg/s (enterprise-scale)
 - **Workload patterns**: Constant (baseline) + Burst (enterprise patterns)
 - **Duration**: 30s (baseline) + 300s (5-min sustained load)
-- **Runs per configuration**: 5 (3 for 5-min duration)
-- **Total scenarios per environment**: **459 scenarios**
+- **Horizontal scaling**: Replicas 1,2,4,8 (Minikube + GCP only)
+- **Runs per configuration**: 5 (3 for 5-min duration and scaling)
+- **Total scenarios per environment**: **468 scenarios**
   - Baseline: 300 (5 × 4 × 3 × 5)
   - Burst pattern: 50 (5 × 2 × 1 × 5)
   - 10K msg/s: 100 (5 × 4 × 1 × 5)
   - 5-minute duration: 9 (3 × 1 × 1 × 3)
+  - Horizontal scaling: 9 (3 × 1 × 1 × 3) - replica=1 only in baseline
+- **Additional scaling scenarios** (replicas 2,4,8 on Minikube+GCP): **27 per environment**
 
 **Estimated time per environment:**
-- Native: ~6.5-8 hours (depending on hardware)
-- Minikube: ~7.5-9 hours (container overhead)
-- GCP: ~9-10.5 hours (includes cluster setup/teardown)
+- Native: ~6.5-8 hours (468 scenarios, no scaling)
+- Minikube: ~7.5-9 hours (468 baseline) + ~1-2 hours (27 scaling scenarios) = **~8.5-11 hours total**
+- GCP: ~9-10.5 hours (468 baseline) + ~1.5-2 hours (27 scaling scenarios) = **~10.5-12.5 hours total**
 
 ## Running Data Collection
 
@@ -499,7 +524,10 @@ If experiments are being re-run when they should be skipped:
 
 ### Out of disk space
 
-Each experiment generates ~1-5 MB of data. For 459 scenarios × 3 environments = ~1,377 experiments = ~5-7 GB total.
+Each experiment generates ~1-5 MB of data. 
+- Baseline: 468 scenarios × 3 environments = 1,404 experiments
+- Scaling: 27 scenarios × 2 environments (Minikube+GCP) = 54 experiments
+- **Total**: ~1,458 experiments = ~6-8 GB total
 
 Check disk usage:
 ```bash
@@ -599,14 +627,14 @@ This section provides a step-by-step workflow for collecting all data and genera
    
    This should show:
    ```
-   NATIVE: Checking 459 expected experiments...
-     ✓ All 459 experiments complete
+   NATIVE: Checking 468 expected experiments...
+     ✓ All 468 experiments complete
    
-   MINIKUBE: Checking 459 expected experiments...
-     ✓ All 459 experiments complete
+   MINIKUBE: Checking 495 expected experiments... (468 baseline + 27 scaling)
+     ✓ All 495 experiments complete
    
-   GCP: Checking 459 expected experiments...
-     ✓ All 459 experiments complete
+   GCP: Checking 495 expected experiments... (468 baseline + 27 scaling)
+     ✓ All 495 experiments complete
    
    ✓ All required data is present - ready for analysis!
    ```
@@ -622,7 +650,10 @@ This section provides a step-by-step workflow for collecting all data and genera
      --output final-results/
    ```
    
-   This creates `final-results/index.json` with all 1,377 experiments (459 × 3 environments).
+   This creates `final-results/index.json` with all 1,458 experiments:
+   - Native: 468 (baseline only)
+   - Minikube: 495 (468 baseline + 27 scaling)
+   - GCP: 495 (468 baseline + 27 scaling)
 
 ### Phase 3: Run Complete Analysis
 
@@ -676,9 +707,11 @@ This section provides a step-by-step workflow for collecting all data and genera
 
 ### Summary Checklist
 
-- [x] ✅ Native data collection complete (459 experiments)
-- [ ] ⏳ Minikube data collection (~7.5-9 hours)
-- [ ] ⏳ GCP data collection (~9-10.5 hours)
+- [x] ✅ Native data collection complete (468 experiments)
+- [ ] ⏳ Minikube baseline (468 experiments, ~7.5-9 hours)
+- [ ] ⏳ Minikube scaling (27 experiments, ~1-2 hours)
+- [ ] ⏳ GCP baseline (468 experiments, ~9-10.5 hours)
+- [ ] ⏳ GCP scaling (27 experiments, ~1.5-2 hours)
 - [ ] ⏳ Validate all environments
 - [ ] ⏳ Regenerate combined index
 - [ ] ⏳ Run complete analysis
