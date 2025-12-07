@@ -568,10 +568,10 @@ for s in manifest['scenarios']:
                     continue
                 elif [[ -f "$output_dir/merged/merged.jsonl" ]] && [[ -s "$output_dir/merged/merged.jsonl" ]]; then
                     update_progress $scenario_count $ENV_TOTAL_SCENARIOS "$env" "$run_scenario_id (cached)"
-                    add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
-                    env_completed=$((env_completed + 1))
+                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
+                env_completed=$((env_completed + 1))
                     env_skipped=$((env_skipped + 1))
-                    continue
+                continue
                 else
                     log_warn "  Found incomplete results for $run_scenario_id, will re-run"
                     # Remove incomplete results
