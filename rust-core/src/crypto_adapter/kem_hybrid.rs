@@ -71,6 +71,8 @@ pub fn aead_encrypt(
     // Generate random nonce
     let mut nonce_bytes = [0u8; NONCE_SIZE];
     rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    // Suppress deprecation warning - from_slice still works with current aead version
+    #[allow(deprecated)]
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     // Encrypt with AAD
@@ -104,6 +106,8 @@ pub fn aead_decrypt(
     let cipher = Aes256Gcm::new_from_slice(aes_key)
         .map_err(|e| CryptoError::InternalError(format!("Failed to create cipher: {}", e)))?;
 
+    // Suppress deprecation warning - from_slice still works with current aead version
+    #[allow(deprecated)]
     let nonce = Nonce::from_slice(nonce);
 
     cipher

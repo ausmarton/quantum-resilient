@@ -422,7 +422,7 @@ async fn main() {
 
         // Register with orchestrator
         match register_with_orchestrator(&orch_config, &orchestration_state).await {
-            Ok((wid, global_start, orch_time)) => {
+            Ok((wid, _global_start, orch_time)) => {
                 worker_id = Some(wid);
                 println!("Registered as worker {}", wid);
 

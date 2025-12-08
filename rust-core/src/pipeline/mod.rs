@@ -84,6 +84,7 @@ pub struct PipelineStats {
 
 /// The main pipeline struct for orchestrating benchmark runs
 pub struct Pipeline {
+    #[allow(dead_code)] // Reserved for future configuration options
     config: PipelineConfig,
 }
 
