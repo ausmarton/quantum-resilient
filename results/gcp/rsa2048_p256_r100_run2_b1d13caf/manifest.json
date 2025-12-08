@@ -1,0 +1,34 @@
+{
+  "run_id": "rsa2048_p256_r100_run2_b1d13caf",
+  "environment": "gcp_gke",
+  "provenance": {
+  "git_commit": "100525cd3bdeb2c720b06346cc15dc85353202ce",
+  "rustc_version": "1.78.0",
+  "container_image": "europe-west2-docker.pkg.dev/quantum-resilience-480303/pqc/pqc-bench:latest",
+  "gke_cluster_name": "pqc-bench-gke",
+  "gke_nodepool_size": 1,
+  "instance_machine_type": "Not Found",
+  "timestamp_utc": "2025-12-08T20:26:13Z",
+  "scenario_file_hash": "6499323330156d2f9860e697acb1f64e77e476c13e164c0325a88db08284af4a",
+  "dataset_version": "20251208202613-100525cd-64993233"
+},
+  "cloud_metadata": {
+  "type": "gcp_gke",
+  "project_id": "quantum-resilience-480303",
+  "zone": "europe-west2-c",
+  "region": "europe-west2",
+  "machine_type": "Not Found",
+  "instance_id": "3186476372157173087",
+  "cluster_name": "pqc-bench-gke",
+  "node_name": "gke-pqc-bench-gke-pqc-bench-pool-a4edf0a2-0d3f",
+  "pod_name": "pqc-bench-worker-4jrg6",
+  "pod_namespace": "default",
+  "cpu_model": "Intel(R) Xeon(R) CPU @ 2.80GHz",
+  "cpu_count": 2,
+  "memory_total_kb": 8138268,
+  "kernel_version": "6.6.105+",
+  "arch": "x86_64",
+  "container_runtime": "containerd",
+  "timestamp_utc": "2025-12-08T20:24:57Z"
+}
+}

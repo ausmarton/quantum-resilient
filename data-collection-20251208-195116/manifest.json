@@ -1,0 +1,185 @@
+{
+  "collection_timestamp": "2025-12-08T20:06:44.700177+00:00",
+  "collection_dir": "/home/ausmarton/scratchpad/quantum-resilient/data-collection-20251208-195116",
+  "matrix_file": "/home/ausmarton/scratchpad/quantum-resilient/orchestration/experiment_matrix.yaml",
+  "environments": [
+    "minikube"
+  ],
+  "mode": "data_collection_only",
+  "analysis_skipped": true,
+  "experiments": {
+    "minikube": {
+      "count": 21,
+      "experiments": [
+        {
+          "scenario_id": "rsa2048_p1024_r100_run1_bb4a239d",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r100_run1_bb4a239d",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 1319734
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r100_run2_87430079",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r100_run2_87430079",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 1319688
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r100_run3_c61abd4c",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r100_run3_c61abd4c",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 1319607
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r100_run4_ca5b58b8",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r100_run4_ca5b58b8",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 1319823
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r100_run5_6e6b980f",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r100_run5_6e6b980f",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 1316674
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r500_run1_7364fc96",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r500_run1_7364fc96",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 6660404
+        },
+        {
+          "scenario_id": "rsa2048_p256_r100_run1_c0098396",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r100_run1_c0098396",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 1310707
+        },
+        {
+          "scenario_id": "rsa2048_p256_r100_run2_b1d13caf",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r100_run2_b1d13caf",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 1310821
+        },
+        {
+          "scenario_id": "rsa2048_p256_r100_run3_ca602ba6",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r100_run3_ca602ba6",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 1310721
+        },
+        {
+          "scenario_id": "rsa2048_p256_r100_run4_ab4b1104",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r100_run4_ab4b1104",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 1310752
+        },
+        {
+          "scenario_id": "rsa2048_p256_r100_run5_2a32f235",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r100_run5_2a32f235",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 1310685
+        },
+        {
+          "scenario_id": "rsa2048_p256_r2000_run1_bbd09a68",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r2000_run1_bbd09a68",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 26688271
+        },
+        {
+          "scenario_id": "rsa2048_p256_r2000_run2_dbd80127",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r2000_run2_dbd80127",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 26684144
+        },
+        {
+          "scenario_id": "rsa2048_p256_r2000_run3_160bb359",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r2000_run3_160bb359",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 26689903
+        },
+        {
+          "scenario_id": "rsa2048_p256_r2000_run4_fdd801da",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r2000_run4_fdd801da",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 26685699
+        },
+        {
+          "scenario_id": "rsa2048_p256_r2000_run5_4b5f63aa",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r2000_run5_4b5f63aa",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 26687712
+        },
+        {
+          "scenario_id": "rsa2048_p256_r500_run1_9b997b7b",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r500_run1_9b997b7b",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 6615434
+        },
+        {
+          "scenario_id": "rsa2048_p256_r500_run2_f4f6b102",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r500_run2_f4f6b102",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 6599866
+        },
+        {
+          "scenario_id": "rsa2048_p256_r500_run3_812a1f69",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r500_run3_812a1f69",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 6616494
+        },
+        {
+          "scenario_id": "rsa2048_p256_r500_run4_bdcd5487",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r500_run4_bdcd5487",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 6615381
+        },
+        {
+          "scenario_id": "rsa2048_p256_r500_run5_e548ecf6",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r500_run5_e548ecf6",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 6615892
+        }
+      ]
+    }
+  }
+}

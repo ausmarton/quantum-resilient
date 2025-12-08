@@ -31,7 +31,7 @@ metadata:
   total_runs: 3
   seed: 3169703563896334439
   seed_hash: d51245bd
-  generated_at: '2025-12-08T19:28:16.691270+00:00'
+  generated_at: '2025-12-08T20:11:32.089088+00:00'
   generator_version: 2.0.0
   mode: full
   kem_paramset: kyber512

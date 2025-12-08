@@ -1,0 +1,31 @@
+{
+    "run_id": "rsa2048_p256_r100_run5_2a32f235",
+    "run_index": 1,
+    "scenario_id": "rsa2048_p256_r100_run5_2a32f235",
+    "scenario_path": "/home/ausmarton/scratchpad/quantum-resilient/generated-scenarios/rsa2048/p256/r100/run-5/scenario.yaml",
+    "environment": "kubernetes",
+    "execution_type": "minikube",
+    "git_commit": "100525cd3bdeb2c720b06346cc15dc85353202ce",
+    "start_time_utc": "2025-12-08T19:54:04Z",
+    "end_time_utc": "2025-12-08T19:54:46Z",
+    "duration_sec": 42,
+    "events_count": 2971,
+    "rng_seed": null,
+    "replicas": 1,
+    "scaling_mode": false,
+    "kubernetes": {
+        "node_name": "minikube",
+        "k8s_version": "unknown",
+        "namespace": "default",
+        "job_name": "pqc-bench-worker",
+        "pod_name": "pqc-bench-worker-h2bzl"
+    },
+    "container": {
+        "image": "pqc-bench:latest",
+        "runtime": "podman"
+    },
+    "minikube": {
+        "version": "v1.37",
+        "driver": "podman"
+    }
+}

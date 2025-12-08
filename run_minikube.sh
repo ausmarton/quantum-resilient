@@ -309,7 +309,30 @@ if [[ "$MINIKUBE_STATUS" != "Running" ]]; then
         exit 1
     }
 fi
-log_success "Minikube cluster is running"
+
+# CRITICAL: Ensure kubectl is pointing to Minikube (not GCP or other cluster)
+log_info "Ensuring kubectl context is set to Minikube..."
+minikube update-context >/dev/null 2>&1 || {
+    log_warn "minikube update-context failed, trying manual switch..."
+    kubectl config use-context minikube >/dev/null 2>&1 || {
+        log_error "Failed to switch to Minikube context"
+        log_info "Current context: $(kubectl config current-context 2>/dev/null || echo 'unknown')"
+        log_info "Available contexts:"
+        kubectl config get-contexts 2>&1 | head -5 || true
+        exit 1
+    }
+}
+
+# Verify we're connected to Minikube
+CURRENT_CONTEXT=$(kubectl config current-context 2>/dev/null || echo "")
+if [[ "$CURRENT_CONTEXT" != "minikube" ]]; then
+    log_error "kubectl context is not Minikube (current: $CURRENT_CONTEXT)"
+    log_error "This will cause connection timeouts to GCP API server"
+    log_info "Please run: kubectl config use-context minikube"
+    exit 1
+fi
+
+log_success "Minikube cluster is running (context: $CURRENT_CONTEXT)"
 
 # =============================================================================
 # Step 2: Create output directories
@@ -456,7 +479,7 @@ cleanup
 
 # Apply PVC (simpler than hostPath - no permission issues)
 log_info "Creating PersistentVolumeClaim..."
-kubectl apply -f "$SCRIPT_DIR/k8s/results-pvc.yaml" -n "$NAMESPACE" >/dev/null 2>&1 || true
+kubectl apply --validate=false -f "$SCRIPT_DIR/k8s/results-pvc.yaml" -n "$NAMESPACE" >/dev/null 2>&1 || true
 
 # Wait for PVC to be bound
 log_info "Waiting for PVC to be bound..."
@@ -506,7 +529,7 @@ fi
 
 kubectl create configmap "$CONFIGMAP_NAME" \
     --from-file=scenario.yaml="$TEMP_SCENARIO" \
-    --dry-run=client -o yaml | kubectl apply -f - -n "$NAMESPACE"
+    --dry-run=client -o yaml | kubectl apply --validate=false -f - -n "$NAMESPACE"
 
 rm -f "$TEMP_SCENARIO"
 log_success "ConfigMap created"
@@ -520,19 +543,19 @@ if [[ "$SCALING_MODE" == "true" ]]; then
         --from-literal=experiment_id="$RUN_EXP_ID" \
         --from-literal=replica_count="$REPLICAS" \
         --from-literal=duration_sec="30" \
-        --dry-run=client -o yaml | kubectl apply -f - -n "$NAMESPACE"
+        --dry-run=client -o yaml | kubectl apply --validate=false -f - -n "$NAMESPACE"
     
     # Create the parallel job with dynamic parallelism
     cat "$SCRIPT_DIR/k8s/worker-parallel-job.yaml" | \
         sed "s/parallelism: 1/parallelism: $REPLICAS/" | \
         sed "s/completions: 1/completions: $REPLICAS/" | \
-        kubectl apply -f - -n "$NAMESPACE"
+        kubectl apply --validate=false -f - -n "$NAMESPACE"
     
     JOB_NAME="pqc-bench-scaling"
 else
     log_info "Creating Job..."
     # Use original worker-job.yaml with PVC (simpler, no permission issues)
-    kubectl apply -f "$SCRIPT_DIR/k8s/worker-job.yaml" -n "$NAMESPACE"
+    kubectl apply --validate=false -f "$SCRIPT_DIR/k8s/worker-job.yaml" -n "$NAMESPACE"
 fi
 
 log_success "Kubernetes resources deployed"
@@ -655,7 +678,7 @@ spec:
       claimName: ${PVC_NAME}
 EOF
     
-    if kubectl apply -f "$READ_POD_YAML" 2>&1; then
+    if kubectl apply --validate=false -f "$READ_POD_YAML" 2>&1; then
         log_info "Waiting for pod to complete..."
         sleep 3
         
