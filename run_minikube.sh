@@ -615,48 +615,17 @@ POD_NAME=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath=
 POD_PHASE=$(kubectl get pod "$POD_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
 log_info "Pod: $POD_NAME (phase: $POD_PHASE)"
 
-# Copy results from PVC using kubectl run (simplest and most reliable)
+# Copy results from PVC using a temporary pod and kubectl logs
+# This is more reliable than kubectl run -i which has timing issues
 log_info "Copying results from PVC..."
 READ_POD_NAME="pvc-read-$(date +%s)"
 
-# Use kubectl run directly - simpler and more reliable than YAML file
-# This creates a pod, runs the command, outputs to stdout, then deletes the pod
 COPY_SUCCESS=false
 TEMP_OUTPUT=$(mktemp)
 
-# Use kubectl run with --rm to automatically clean up
-# The --overrides allows us to mount the PVC
-if kubectl run "$READ_POD_NAME" \
-    --image=busybox:1.36 \
-    --rm \
-    -i \
-    --restart=Never \
-    --namespace="$NAMESPACE" \
-    --overrides="{\"spec\":{\"volumes\":[{\"name\":\"results\",\"persistentVolumeClaim\":{\"claimName\":\"$PVC_NAME\"}}],\"containers\":[{\"name\":\"read\",\"image\":\"busybox:1.36\",\"command\":[\"sh\",\"-c\",\"cat /results/raw/run.jsonl 2>/dev/null || find /results -name '*.jsonl' -type f -exec cat {} \\\\;\"],\"volumeMounts\":[{\"name\":\"results\",\"mountPath\":\"/results\",\"readOnly\":true}]}]}}" \
-    > "$TEMP_OUTPUT" 2>&1; then
-    
-    # Check if output is valid
-    if [[ -f "$TEMP_OUTPUT" ]] && [[ -s "$TEMP_OUTPUT" ]] && ! grep -q "^Error\|^error\|not found\|No resources found" "$TEMP_OUTPUT" 2>/dev/null; then
-        mv "$TEMP_OUTPUT" "$RUN_OUT_DIR/raw/run.jsonl"
-        COPY_SUCCESS=true
-        log_success "Successfully copied run.jsonl from PVC"
-    else
-        log_warn "Read pod output is invalid or empty"
-        log_info "Output preview:"
-        head -5 "$TEMP_OUTPUT" 2>&1 || true
-        rm -f "$TEMP_OUTPUT"
-    fi
-else
-    EXIT_CODE=$?
-    log_error "kubectl run failed (exit code: $EXIT_CODE)"
-    log_info "Error output:"
-    cat "$TEMP_OUTPUT" 2>&1 | head -10 || true
-    rm -f "$TEMP_OUTPUT"
-    
-    # Try alternative: create pod manually and get logs
-    log_info "Trying alternative method: create pod and get logs..."
-    READ_POD_YAML=$(mktemp)
-    cat > "$READ_POD_YAML" <<EOF
+# Create a pod that will read the file
+READ_POD_YAML=$(mktemp)
+cat > "$READ_POD_YAML" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -677,35 +646,61 @@ spec:
     persistentVolumeClaim:
       claimName: ${PVC_NAME}
 EOF
+
+if kubectl apply --validate=false -f "$READ_POD_YAML" >/dev/null 2>&1; then
+    log_info "Waiting for read pod to complete..."
     
-    if kubectl apply --validate=false -f "$READ_POD_YAML" 2>&1; then
-        log_info "Waiting for pod to complete..."
-        sleep 3
-        
-        # Wait for completion
-        for i in {1..15}; do
-            PHASE=$(kubectl get pod "$READ_POD_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-            if [[ "$PHASE" == "Succeeded" ]] || [[ "$PHASE" == "Failed" ]]; then
-                break
-            fi
-            sleep 1
-        done
-        
-        if [[ "$PHASE" == "Succeeded" ]]; then
-            if kubectl logs "$READ_POD_NAME" -n "$NAMESPACE" > "$RUN_OUT_DIR/raw/run.jsonl" 2>&1; then
-                if [[ -f "$RUN_OUT_DIR/raw/run.jsonl" ]] && [[ -s "$RUN_OUT_DIR/raw/run.jsonl" ]] && ! grep -q "^Error\|^error\|not found" "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null; then
-                    COPY_SUCCESS=true
-                    log_success "Successfully copied run.jsonl from PVC (alternative method)"
-                fi
-            fi
+    # Wait for pod to be created
+    sleep 2
+    
+    # Wait for completion (with timeout)
+    for i in {1..20}; do
+        PHASE=$(kubectl get pod "$READ_POD_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        if [[ "$PHASE" == "Succeeded" ]] || [[ "$PHASE" == "Failed" ]]; then
+            break
         fi
-        
-        kubectl delete pod "$READ_POD_NAME" -n "$NAMESPACE" --ignore-not-found=true >/dev/null 2>&1
-        rm -f "$READ_POD_YAML"
+        sleep 1
+    done
+    
+    if [[ "$PHASE" == "Succeeded" ]] || [[ "$PHASE" == "Failed" ]]; then
+        # Get logs (this is more reliable than kubectl run -i)
+        if kubectl logs "$READ_POD_NAME" -n "$NAMESPACE" > "$TEMP_OUTPUT" 2>&1; then
+            # Filter out kubectl warning messages and check for valid JSONL
+            # Remove lines that are kubectl warnings or prompts
+            grep -v "^warning:" "$TEMP_OUTPUT" | \
+                grep -v "^If you don't see a command prompt" | \
+                grep -v "^Internal error occurred" | \
+                grep -v "^unable to upgrade connection" | \
+                grep -v "^container.*not found" | \
+                grep -v "^falling back to streaming logs" > "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || true
+            
+            # Check if we have valid JSONL data (at least one line starting with {)
+            if [[ -f "$RUN_OUT_DIR/raw/run.jsonl" ]] && [[ -s "$RUN_OUT_DIR/raw/run.jsonl" ]]; then
+                # Check if it contains valid JSONL (at least one line starting with {)
+                if head -1 "$RUN_OUT_DIR/raw/run.jsonl" | grep -q "^{"; then
+                    COPY_SUCCESS=true
+                    log_success "Successfully copied run.jsonl from PVC"
+                else
+                    log_warn "Output doesn't appear to be valid JSONL"
+                    log_info "First line: $(head -1 "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || echo 'empty')"
+                fi
+            else
+                log_warn "Read pod output is empty or invalid"
+            fi
+        else
+            log_error "Failed to get logs from read pod"
+        fi
     else
-        log_error "Failed to create read pod via YAML as well"
-        rm -f "$READ_POD_YAML"
+        log_error "Read pod did not complete (phase: $PHASE)"
+        kubectl describe pod "$READ_POD_NAME" -n "$NAMESPACE" 2>&1 | tail -20 || true
     fi
+    
+    # Clean up
+    kubectl delete pod "$READ_POD_NAME" -n "$NAMESPACE" --ignore-not-found=true >/dev/null 2>&1
+    rm -f "$READ_POD_YAML" "$TEMP_OUTPUT"
+else
+    log_error "Failed to create read pod"
+    rm -f "$READ_POD_YAML" "$TEMP_OUTPUT"
 fi
 
 if [[ "$COPY_SUCCESS" == "false" ]]; then
