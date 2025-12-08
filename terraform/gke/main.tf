@@ -264,25 +264,23 @@ resource "google_container_node_pool" "primary" {
 # -----------------------------------------------------------------------------
 # Kubernetes Service Account (for Workload Identity)
 # -----------------------------------------------------------------------------
-
-resource "kubernetes_service_account_v1" "pqc_bench" {
-  count = var.enable_workload_identity ? 1 : 0
-
-  metadata {
-    name      = "pqc-bench-sa"
-    namespace = "default"
-    annotations = {
-      "iam.gke.io/gcp-service-account" = google_service_account.pqc_bench.email
-    }
-  }
-
-  depends_on = [google_container_node_pool.primary]
-}
-
-# Kubernetes provider configuration
-provider "kubernetes" {
-  host                   = "https://${google_container_cluster.primary.endpoint}"
-  token                  = data.google_client_config.default.access_token
-  cluster_ca_certificate = base64decode(google_container_cluster.primary.master_auth[0].cluster_ca_certificate)
-}
+# NOTE: The Kubernetes service account is created by deploy_gcp.sh via kubectl
+# after the cluster is ready. We don't create it via Terraform to avoid
+# provider connection issues during plan phase when the cluster doesn't exist yet.
+#
+# The service account is created in deploy_gcp.sh around line 768 with:
+#   kubectl apply -f - <<EOF
+#   apiVersion: v1
+#   kind: ServiceAccount
+#   metadata:
+#     name: pqc-bench-sa
+#     namespace: default
+#     annotations:
+#       iam.gke.io/gcp-service-account: "$SA_EMAIL"
+#   EOF
+#
+# This approach is more reliable because:
+# 1. It doesn't require the Kubernetes provider to connect during Terraform plan
+# 2. It happens after kubectl is configured (cluster is ready)
+# 3. It's idempotent (kubectl apply handles existing resources)
 

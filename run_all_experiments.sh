@@ -240,11 +240,19 @@ run_experiment() {
                     $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 || exit_code=$?
                 ;;
             gcp)
-                GCP_ARGS="--scenario \"$scenario_path\" --exp-id \"$scenario_id\" --project \"$PROJECT\" --bucket \"$BUCKET\" --region \"$REGION\" --replicas \"$replicas\""
-                [ "$SMOKE_TEST" == "true" ] && GCP_ARGS="$GCP_ARGS --smoke-test"
+                # Use array to properly handle paths with spaces
+                GCP_ARGS=(
+                    --scenario "$scenario_path"
+                    --exp-id "$scenario_id"
+                    --project "$PROJECT"
+                    --bucket "$BUCKET"
+                    --region "$REGION"
+                    --replicas "$replicas"
+                )
+                [ "$SMOKE_TEST" == "true" ] && GCP_ARGS+=(--smoke-test)
                 # Always use ephemeral mode for GCP to avoid ongoing costs
-                GCP_ARGS="$GCP_ARGS --ephemeral"
-                "$SCRIPT_DIR/deploy_gcp.sh" $GCP_ARGS 2>&1 || exit_code=$?
+                GCP_ARGS+=(--ephemeral)
+                "$SCRIPT_DIR/deploy_gcp.sh" "${GCP_ARGS[@]}" 2>&1 || exit_code=$?
                 
                 if [[ $exit_code -eq 0 ]]; then
                     "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \

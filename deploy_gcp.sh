@@ -343,6 +343,19 @@ if [[ "$CREATE_CLUSTER" == "true" ]]; then
     log_info "Initializing Terraform..."
     terraform init -input=false
     
+    # Remove Kubernetes service account from state if it exists
+    # (We removed it from the Terraform config because it's created by kubectl)
+    log_info "Cleaning up Terraform state (removing Kubernetes resources if present)..."
+    if terraform state list 2>/dev/null | grep -q "kubernetes_service_account"; then
+        log_info "Removing Kubernetes service account from Terraform state..."
+        terraform state rm 'kubernetes_service_account_v1.pqc_bench[0]' 2>/dev/null || \
+        terraform state rm kubernetes_service_account_v1.pqc_bench[0] 2>/dev/null || \
+        terraform state rm 'module.kubernetes_service_account_v1.pqc_bench[0]' 2>/dev/null || true
+        log_success "Kubernetes service account removed from state"
+    else
+        log_info "No Kubernetes service account in state (this is expected)"
+    fi
+    
     log_info "Applying Terraform configuration to create cluster..."
     DISK_SIZE_GB="${DISK_SIZE_GB:-50}"
     if terraform apply -auto-approve \
@@ -522,6 +535,19 @@ else
             -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
             -var="ephemeral=$EPHEMERAL" \
             google_artifact_registry_repository.pqc "${AR_LOCATION}/${AR_REPO}" 2>/dev/null || log_warn "Artifact Registry import failed (may already be in state)"
+    fi
+    
+    # Remove Kubernetes service account from state if it exists
+    # (We removed it from the Terraform config because it's created by kubectl)
+    log_info "Cleaning up Terraform state (removing Kubernetes resources if present)..."
+    if terraform state list 2>/dev/null | grep -q "kubernetes_service_account"; then
+        log_info "Removing Kubernetes service account from Terraform state..."
+        terraform state rm 'kubernetes_service_account_v1.pqc_bench[0]' 2>/dev/null || \
+        terraform state rm kubernetes_service_account_v1.pqc_bench[0] 2>/dev/null || \
+        terraform state rm 'module.kubernetes_service_account_v1.pqc_bench[0]' 2>/dev/null || true
+        log_success "Kubernetes service account removed from state"
+    else
+        log_info "No Kubernetes service account in state (this is expected)"
     fi
     
     log_info "Applying Terraform configuration..."

@@ -1,0 +1,11 @@
+{
+  "git_commit": "09983e0a52cae5b71b9eed71a3a33f36971993e5",
+  "rustc_version": "1.78.0",
+  "container_image": "europe-west2-docker.pkg.dev/quantum-resilience-480303/pqc/pqc-bench:latest",
+  "gke_cluster_name": "pqc-bench-gke",
+  "gke_nodepool_size": 1,
+  "instance_machine_type": "Not Found",
+  "timestamp_utc": "2025-12-08T19:15:09Z",
+  "scenario_file_hash": "f43938386adc52b0d9ae20cf2cfe4d3cbbfef0ed3847667d12565ba4330a81c5",
+  "dataset_version": "20251208191509-09983e0a-f4393838"
+}
