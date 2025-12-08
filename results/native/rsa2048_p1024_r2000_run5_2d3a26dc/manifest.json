@@ -1,0 +1,14 @@
+{
+    "run_id": "rsa2048_p1024_r2000_run5_2d3a26dc_run1",
+    "run_index": 1,
+    "scenario": "/home/ausmarton/scratchpad/quantum-resilient/generated-scenarios/rsa2048/p1024/r2000/run-5/scenario.yaml",
+    "git_commit": "b7031f78bdd1bc4788094e45c2c80649264f3fa4",
+    "rustc_version": "rustc 1.91.1 (ed61e7d7e 2025-11-07) (Fedora 1.91.1-1.fc43)",
+    "start_time_utc": "2025-12-07T23:51:53Z",
+    "end_time_utc": "2025-12-07T23:52:27Z",
+    "duration_sec": 34,
+    "events_count": 37250,
+    "seed": null,
+    "host": "zbook",
+    "platform": "Linux-x86_64"
+}
