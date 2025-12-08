@@ -1088,7 +1088,9 @@ if gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/merged.jsonl" "$LOCAL_OUTP
     log_success "Downloaded merged.jsonl"
 else
     log_warn "merged.jsonl not found, trying raw data..."
-    gsutil -m cp -r "gs://${BUCKET}/experiments/${EXP_ID}/raw/*" "$LOCAL_OUTPUT_DIR/raw/" 2>/dev/null || true
+    if ! gsutil -m cp -r "gs://${BUCKET}/experiments/${EXP_ID}/raw/*" "$LOCAL_OUTPUT_DIR/raw/" 2>&1; then
+        log_error "Failed to download raw data from GCS"
+    fi
 fi
 
 # Download manifest and metadata
@@ -1098,9 +1100,37 @@ gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/cloud_metadata.json" "$LOCAL_
 gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/summary.json" "$LOCAL_OUTPUT_DIR/stats/summary.json" 2>/dev/null || log_warn "summary.json not found"
 
 # Download raw data if available
-gsutil -m cp -r "gs://${BUCKET}/experiments/${EXP_ID}/raw/*" "$LOCAL_OUTPUT_DIR/raw/" 2>/dev/null || true
+if ! gsutil -m cp -r "gs://${BUCKET}/experiments/${EXP_ID}/raw/*" "$LOCAL_OUTPUT_DIR/raw/" 2>&1; then
+    log_warn "Failed to download some raw data files"
+fi
 
-log_success "Results downloaded to: $LOCAL_OUTPUT_DIR"
+# Validate downloaded data integrity
+RAW_JSONL_FILE="$LOCAL_OUTPUT_DIR/raw/run.jsonl"
+if [[ ! -f "$RAW_JSONL_FILE" ]]; then
+    RAW_JSONL_FILE=$(find "$LOCAL_OUTPUT_DIR/raw" -name "*.jsonl" -type f | head -1)
+fi
+
+if [[ -f "$RAW_JSONL_FILE" ]]; then
+    FILE_SIZE=$(stat -f%z "$RAW_JSONL_FILE" 2>/dev/null || stat -c%s "$RAW_JSONL_FILE" 2>/dev/null || echo 0)
+    if [[ $FILE_SIZE -eq 0 ]]; then
+        log_error "Data integrity check failed: run.jsonl is 0 bytes!"
+        log_error "This indicates the benchmark didn't write any data or download failed."
+        exit 1
+    else
+        LINE_COUNT=$(wc -l < "$RAW_JSONL_FILE" 2>/dev/null || echo 0)
+        if [[ $LINE_COUNT -eq 0 ]]; then
+            log_error "Data integrity check failed: run.jsonl has no lines!"
+            log_error "File size: $FILE_SIZE bytes, but no JSONL lines found"
+            exit 1
+        fi
+        log_success "Data integrity validated: $FILE_SIZE bytes, $LINE_COUNT events"
+    fi
+else
+    log_error "Data integrity check failed: run.jsonl not found after download"
+    exit 1
+fi
+
+log_success "Results downloaded and validated: $LOCAL_OUTPUT_DIR"
 
 # =============================================================================
 # Step 8: Summary

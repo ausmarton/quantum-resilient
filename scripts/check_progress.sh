@@ -176,7 +176,7 @@ for env in "${ENVS[@]}"; do
     
     # Generate expected scenario IDs from matrix (matching generate_scenarios.py logic exactly)
     # Also include scaling experiments with _r2, _r4, _r8 suffixes for Minikube/GCP
-    read -r COMPLETED INCOMPLETE MISSING TOTAL_FOUND PERCENTAGE EXTRA_COUNT <<< $(python3 <<EOF
+    read -r COMPLETED INCOMPLETE MISSING TOTAL_FOUND PERCENTAGE_COMPLETED PERCENTAGE_PROGRESS EXTRA_COUNT <<< $(python3 <<EOF
 import yaml
 import hashlib
 from pathlib import Path
@@ -269,13 +269,18 @@ if env_results_dir.exists():
         
         # Check if this is an expected scenario
         if scenario_id in expected_scenario_ids:
+            raw_file = exp_dir / "raw" / "run.jsonl"
             merged_file = exp_dir / "merged" / "merged.jsonl"
             stats_file = exp_dir / "stats" / "summary.json"
             
+            # Check for completion - prioritize analysis outputs, but also accept raw data
+            # (raw data alone indicates data collection is complete, even if analysis hasn't run)
+            has_raw = raw_file.exists() and raw_file.stat().st_size > 0
             has_merged = merged_file.exists() and merged_file.stat().st_size > 0
             has_stats = stats_file.exists() and stats_file.stat().st_size > 0
             
-            if has_merged or has_stats:
+            # Consider complete if has analysis outputs OR has raw data
+            if has_merged or has_stats or has_raw:
                 completed += 1
             else:
                 incomplete += 1
@@ -285,9 +290,10 @@ if env_results_dir.exists():
 
 missing = max(0, expected - completed - incomplete)
 total_found = completed + incomplete
-pct = int((completed / expected) * 100) if expected > 0 else 0
+pct_completed = int((completed / expected) * 100) if expected > 0 else 0
+pct_progress = int(((completed + incomplete) / expected) * 100) if expected > 0 else 0
 
-print(f"{completed} {incomplete} {missing} {total_found} {pct} {len(extra_dirs)}")
+print(f"{completed} {incomplete} {missing} {total_found} {pct_completed} {pct_progress} {len(extra_dirs)}")
 EOF
 )
     
@@ -295,14 +301,14 @@ EOF
     TOTAL_INCOMPLETE=$((TOTAL_INCOMPLETE + INCOMPLETE))
     TOTAL_MISSING=$((TOTAL_MISSING + MISSING))
     
-    # Status indicator
-    if [[ $PERCENTAGE -eq 100 ]]; then
+    # Status indicator (use progress percentage, not completed percentage)
+    if [[ $PERCENTAGE_COMPLETED -eq 100 ]]; then
         STATUS_COLOR="$GREEN"
         STATUS="✓ Complete"
-    elif [[ $PERCENTAGE -ge 50 ]]; then
+    elif [[ $PERCENTAGE_PROGRESS -ge 50 ]]; then
         STATUS_COLOR="$YELLOW"
         STATUS="⏳ In Progress"
-    elif [[ $PERCENTAGE -gt 0 ]]; then
+    elif [[ $PERCENTAGE_PROGRESS -gt 0 ]]; then
         STATUS_COLOR="$YELLOW"
         STATUS="⏳ Started"
     else
@@ -311,9 +317,12 @@ EOF
     fi
     
     echo -e "${STATUS_COLOR}${env^^}:${NC} ${STATUS}"
-    echo "  Completed: $COMPLETED/$ENV_EXPECTED ($PERCENTAGE%)"
+    echo "  Completed: $COMPLETED/$ENV_EXPECTED ($PERCENTAGE_COMPLETED%)"
     if [[ $INCOMPLETE -gt 0 ]]; then
-        echo "  Incomplete: $INCOMPLETE"
+        echo "  Incomplete: $INCOMPLETE (experiments started but not finished)"
+    fi
+    if [[ $PERCENTAGE_PROGRESS -gt $PERCENTAGE_COMPLETED ]]; then
+        echo "  Progress: $PERCENTAGE_PROGRESS% (including incomplete)"
     fi
     if [[ $MISSING -gt 0 ]]; then
         echo "  Remaining: $MISSING"
@@ -331,26 +340,31 @@ echo -e "${MAGENTA}Overall Progress:${NC}"
 echo ""
 
 if [[ $TOTAL_EXPECTED -gt 0 ]]; then
-    OVERALL_PCT=$((TOTAL_COMPLETED * 100 / TOTAL_EXPECTED))
+    OVERALL_PCT_COMPLETED=$((TOTAL_COMPLETED * 100 / TOTAL_EXPECTED))
+    OVERALL_PCT_PROGRESS=$(((TOTAL_COMPLETED + TOTAL_INCOMPLETE) * 100 / TOTAL_EXPECTED))
 else
-    OVERALL_PCT=0
+    OVERALL_PCT_COMPLETED=0
+    OVERALL_PCT_PROGRESS=0
 fi
 
 echo "  Total Expected: $TOTAL_EXPECTED scenarios"
 echo "    - Native: $NATIVE_EXPECTED (baseline only, no scaling)"
 echo "    - Minikube: $MINIKUBE_EXPECTED ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
 echo "    - GCP: $GCP_EXPECTED ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
-echo "  Total Completed: $TOTAL_COMPLETED ($OVERALL_PCT%)"
+echo "  Total Completed: $TOTAL_COMPLETED ($OVERALL_PCT_COMPLETED%)"
 if [[ $TOTAL_INCOMPLETE -gt 0 ]]; then
-    echo "  Incomplete: $TOTAL_INCOMPLETE"
+    echo "  Incomplete: $TOTAL_INCOMPLETE (started but not finished)"
+fi
+if [[ $OVERALL_PCT_PROGRESS -gt $OVERALL_PCT_COMPLETED ]]; then
+    echo "  Total Progress: $OVERALL_PCT_PROGRESS% (including incomplete)"
 fi
 if [[ $TOTAL_MISSING -gt 0 ]]; then
     echo "  Remaining: $TOTAL_MISSING"
 fi
 
-# Progress bar (using ASCII characters for better terminal compatibility)
+# Progress bar (using progress percentage, not completed percentage)
 BAR_WIDTH=50
-FILLED=$((OVERALL_PCT * BAR_WIDTH / 100))
+FILLED=$((OVERALL_PCT_PROGRESS * BAR_WIDTH / 100))
 EMPTY=$((BAR_WIDTH - FILLED))
 
 # Use # for filled and - for empty (more compatible than Unicode blocks)
@@ -361,7 +375,7 @@ fi
 if [[ $EMPTY -gt 0 ]]; then
     printf "%${EMPTY}s" | tr ' ' '-'
 fi
-printf "] %d%%\n" "$OVERALL_PCT"
+printf "] %d%%\n" "$OVERALL_PCT_PROGRESS"
 
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"

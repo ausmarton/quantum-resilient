@@ -1,0 +1,1657 @@
+{
+  "collection_timestamp": "2025-12-08T15:32:54.630225+00:00",
+  "collection_dir": "/home/ausmarton/scratchpad/quantum-resilient/data-collection-20251208-104010",
+  "matrix_file": "/home/ausmarton/scratchpad/quantum-resilient/orchestration/experiment_matrix.yaml",
+  "environments": [
+    "minikube"
+  ],
+  "mode": "data_collection_only",
+  "analysis_skipped": true,
+  "experiments": {
+    "minikube": {
+      "count": 205,
+      "experiments": [
+        {
+          "scenario_id": "dilithium2_p1024_r100_run1_57eb86f2",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p1024_r100_run1_57eb86f2",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p1024_r100_run2_b13f4324",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p1024_r100_run2_b13f4324",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p1024_r100_run3_2d4eb911",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p1024_r100_run3_2d4eb911",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p1024_r100_run4_a575954c",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p1024_r100_run4_a575954c",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p1024_r100_run5_0ba88e7e",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p1024_r100_run5_0ba88e7e",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p1024_r500_run1_f2cfac27",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p1024_r500_run1_f2cfac27",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p1024_r500_run2_6c665614",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p1024_r500_run2_6c665614",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p1024_r500_run3_c0355e83",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p1024_r500_run3_c0355e83",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p1024_r500_run4_4c1e9dc7",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p1024_r500_run4_4c1e9dc7",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p1024_r500_run5_a54d0ed1",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p1024_r500_run5_a54d0ed1",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r100_run1_7ce32d32",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r100_run1_7ce32d32",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r100_run2_bcf3b735",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r100_run2_bcf3b735",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r100_run3_efb5090d",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r100_run3_efb5090d",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r100_run4_8d0961ff",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r100_run4_8d0961ff",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r100_run5_78cfdb66",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r100_run5_78cfdb66",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r2000_run1_4af321d2",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r2000_run1_4af321d2",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r2000_run2_d50e3006",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r2000_run2_d50e3006",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r2000_run3_c12633ba",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r2000_run3_c12633ba",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r2000_run4_d15ea423",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r2000_run4_d15ea423",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r2000_run5_004a1853",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r2000_run5_004a1853",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r500_run1_63602d34",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r500_run1_63602d34",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r500_run2_303e6f2a",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r500_run2_303e6f2a",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r500_run3_1a125376",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r500_run3_1a125376",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r500_run4_c8f2e292",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r500_run4_c8f2e292",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "dilithium2_p256_r500_run5_3c9da1e5",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/dilithium2_p256_r500_run5_3c9da1e5",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r100_run1_d68a81ef",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r100_run1_d68a81ef",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r100_run2_b3b8f8ad",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r100_run2_b3b8f8ad",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r100_run3_606a5331",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r100_run3_606a5331",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r100_run4_46b88c6c",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r100_run4_46b88c6c",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r100_run5_d1e32cd0",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r100_run5_d1e32cd0",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r2000_run1_c5c43e88",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r2000_run1_c5c43e88",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r2000_run2_e3452a94",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r2000_run2_e3452a94",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r2000_run3_9f51ae14",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r2000_run3_9f51ae14",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r2000_run4_f864b16b",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r2000_run4_f864b16b",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r2000_run5_7f5af811",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r2000_run5_7f5af811",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r500_run1_734f265e",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r500_run1_734f265e",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r500_run2_aeb32768",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r500_run2_aeb32768",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r500_run3_c0e1de8c",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r500_run3_c0e1de8c",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r500_run4_8706c7a0",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r500_run4_8706c7a0",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p1024_r500_run5_e5cef00b",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p1024_r500_run5_e5cef00b",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r100_run1_fef50d8a",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r100_run1_fef50d8a",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r100_run2_b1a9d280",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r100_run2_b1a9d280",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r100_run3_67dacbea",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r100_run3_67dacbea",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r100_run4_9865a369",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r100_run4_9865a369",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r100_run5_608d94e9",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r100_run5_608d94e9",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r2000_run1_13f8b538",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r2000_run1_13f8b538",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r2000_run2_1c2d13d4",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r2000_run2_1c2d13d4",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r2000_run3_9d394dd3",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r2000_run3_9d394dd3",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r2000_run4_ea0cda15",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r2000_run4_ea0cda15",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r2000_run5_cb0fb269",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r2000_run5_cb0fb269",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r500_run1_26558597",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r500_run1_26558597",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r500_run2_008bf031",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r500_run2_008bf031",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r500_run3_c6904328",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r500_run3_c6904328",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r500_run4_66b3307f",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r500_run4_66b3307f",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p16384_r500_run5_23775508",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p16384_r500_run5_23775508",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r100_run1_3ed5cbb6",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r100_run1_3ed5cbb6",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r100_run2_36643743",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r100_run2_36643743",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r100_run3_396210bd",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r100_run3_396210bd",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r100_run4_d43142d1",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r100_run4_d43142d1",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r100_run5_3e64473f",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r100_run5_3e64473f",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r2000_run1_20c58d33",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r2000_run1_20c58d33",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r2000_run2_ee734782",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r2000_run2_ee734782",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r2000_run3_9eaf8b1e",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r2000_run3_9eaf8b1e",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r2000_run4_029e954f",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r2000_run4_029e954f",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r2000_run5_665e86aa",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r2000_run5_665e86aa",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r500_run1_721a3e6b",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r500_run1_721a3e6b",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r500_run2_f63745ff",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r500_run2_f63745ff",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r500_run3_d36117f3",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r500_run3_d36117f3",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r500_run4_e0eae3c7",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r500_run4_e0eae3c7",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p256_r500_run5_7a05a34a",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p256_r500_run5_7a05a34a",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r100_run1_25401174",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r100_run1_25401174",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r100_run2_57a70080",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r100_run2_57a70080",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r100_run3_d9f89194",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r100_run3_d9f89194",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r100_run4_98effc87",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r100_run4_98effc87",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r100_run5_0edfe580",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r100_run5_0edfe580",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r2000_run1_5cc58db5",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r2000_run1_5cc58db5",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r2000_run2_db08536e",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r2000_run2_db08536e",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r2000_run3_512cf933",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r2000_run3_512cf933",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r2000_run4_85d092d5",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r2000_run4_85d092d5",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r2000_run5_a80d75dc",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r2000_run5_a80d75dc",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r500_run1_f600a37d",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r500_run1_f600a37d",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r500_run2_caee3be4",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r500_run2_caee3be4",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r500_run3_c7e861d4",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r500_run3_c7e861d4",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r500_run4_86deb864",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r500_run4_86deb864",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "ecdsa_p256_p4096_r500_run5_32e4994b",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/ecdsa_p256_p4096_r500_run5_32e4994b",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r100_run1_6f650210",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r100_run1_6f650210",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r100_run2_84c34b69",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r100_run2_84c34b69",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r100_run3_0247f261",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r100_run3_0247f261",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r100_run4_747ed630",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r100_run4_747ed630",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r100_run5_27cfed45",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r100_run5_27cfed45",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r2000_run1_8bf909c7",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r2000_run1_8bf909c7",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r2000_run2_d51245bd",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r2000_run2_d51245bd",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r2000_run3_156eff58",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r2000_run3_156eff58",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r2000_run4_ead2f847",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r2000_run4_ead2f847",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r2000_run5_3b3e9705",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r2000_run5_3b3e9705",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r500_run1_d5ee5d12",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r500_run1_d5ee5d12",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r500_run2_2573ba2f",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r500_run2_2573ba2f",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r500_run3_34cfb181",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r500_run3_34cfb181",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r500_run4_b1b08d2d",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r500_run4_b1b08d2d",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p1024_r500_run5_fe053552",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p1024_r500_run5_fe053552",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r100_run1_7c4456cb",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r100_run1_7c4456cb",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r100_run2_967d7ed2",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r100_run2_967d7ed2",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r100_run3_a686cf67",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r100_run3_a686cf67",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r100_run4_c3e27aaf",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r100_run4_c3e27aaf",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r100_run5_aead8b97",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r100_run5_aead8b97",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r2000_run1_f7286f3d",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r2000_run1_f7286f3d",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r2000_run2_5e07d1a3",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r2000_run2_5e07d1a3",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r2000_run3_f69a5711",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r2000_run3_f69a5711",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r2000_run4_e230ea42",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r2000_run4_e230ea42",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r2000_run5_e6847b52",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r2000_run5_e6847b52",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r500_run1_e4e01179",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r500_run1_e4e01179",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r500_run2_668affb5",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r500_run2_668affb5",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r500_run3_6c3d41f4",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r500_run3_6c3d41f4",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r500_run4_0155f011",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r500_run4_0155f011",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p16384_r500_run5_1fb8c15e",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p16384_r500_run5_1fb8c15e",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r100_run1_7ffd4c31",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r100_run1_7ffd4c31",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r100_run2_c99f579d",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r100_run2_c99f579d",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r100_run3_ef10ac42",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r100_run3_ef10ac42",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r100_run4_467df108",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r100_run4_467df108",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r100_run5_9c86ab9e",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r100_run5_9c86ab9e",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r2000_run1_918a5905",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r2000_run1_918a5905",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r2000_run2_ad6984dc",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r2000_run2_ad6984dc",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r2000_run3_4fd456dd",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r2000_run3_4fd456dd",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r2000_run4_3b8a7ea6",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r2000_run4_3b8a7ea6",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r2000_run5_fc3fed2a",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r2000_run5_fc3fed2a",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r500_run1_d3fc124a",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r500_run1_d3fc124a",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r500_run2_9f29cdf0",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r500_run2_9f29cdf0",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r500_run3_81756341",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r500_run3_81756341",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r500_run4_4dbaaa37",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r500_run4_4dbaaa37",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p256_r500_run5_8d5b96d5",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p256_r500_run5_8d5b96d5",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r100_run1_a9af4063",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r100_run1_a9af4063",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r100_run2_df6f6bf7",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r100_run2_df6f6bf7",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r100_run3_0e4e0f03",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r100_run3_0e4e0f03",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r100_run4_e8de9543",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r100_run4_e8de9543",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r100_run5_a59fa11c",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r100_run5_a59fa11c",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r2000_run1_c753eb05",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r2000_run1_c753eb05",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r2000_run2_5b8777b0",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r2000_run2_5b8777b0",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r2000_run3_91c3f69c",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r2000_run3_91c3f69c",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r2000_run4_19fda7ec",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r2000_run4_19fda7ec",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r2000_run5_501b67de",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r2000_run5_501b67de",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r500_run1_fd5f1ca6",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r500_run1_fd5f1ca6",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r500_run2_ec6fb341",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r500_run2_ec6fb341",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r500_run3_c9a3c56b",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r500_run3_c9a3c56b",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r500_run4_2b44a790",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r500_run4_2b44a790",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "kyber512_p4096_r500_run5_ea025442",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/kyber512_p4096_r500_run5_ea025442",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r100_run1_bb4a239d",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r100_run1_bb4a239d",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r100_run2_87430079",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r100_run2_87430079",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r100_run3_c61abd4c",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r100_run3_c61abd4c",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r100_run4_ca5b58b8",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r100_run4_ca5b58b8",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r100_run5_6e6b980f",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r100_run5_6e6b980f",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r2000_run1_eeb36dc8",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r2000_run1_eeb36dc8",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r2000_run2_17a27742",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r2000_run2_17a27742",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r2000_run3_344a194a",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r2000_run3_344a194a",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r2000_run4_8098ad8e",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r2000_run4_8098ad8e",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r2000_run5_2d3a26dc",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r2000_run5_2d3a26dc",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r500_run1_7364fc96",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r500_run1_7364fc96",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r500_run2_cb5371dd",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r500_run2_cb5371dd",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r500_run3_e581b0b3",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r500_run3_e581b0b3",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r500_run4_13d857a2",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r500_run4_13d857a2",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p1024_r500_run5_1933b9b9",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p1024_r500_run5_1933b9b9",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r100_run1_2ab766d2",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r100_run1_2ab766d2",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r100_run2_93259231",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r100_run2_93259231",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r100_run3_03b2c58c",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r100_run3_03b2c58c",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r100_run4_d05cc833",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r100_run4_d05cc833",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r100_run5_133e3f23",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r100_run5_133e3f23",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r2000_run1_859004d1",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r2000_run1_859004d1",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r2000_run2_aeaebadc",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r2000_run2_aeaebadc",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r2000_run3_36108b64",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r2000_run3_36108b64",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r2000_run4_8e1859c6",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r2000_run4_8e1859c6",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r2000_run5_cbd526ad",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r2000_run5_cbd526ad",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r500_run1_b7f92dd5",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r500_run1_b7f92dd5",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r500_run2_2dea1681",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r500_run2_2dea1681",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r500_run3_685e159f",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r500_run3_685e159f",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r500_run4_10f036a8",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r500_run4_10f036a8",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p16384_r500_run5_2fa960cb",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p16384_r500_run5_2fa960cb",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r100_run1_c0098396",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r100_run1_c0098396",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r100_run2_b1d13caf",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r100_run2_b1d13caf",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r100_run3_ca602ba6",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r100_run3_ca602ba6",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r100_run4_ab4b1104",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r100_run4_ab4b1104",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r100_run5_2a32f235",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r100_run5_2a32f235",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r2000_run1_bbd09a68",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r2000_run1_bbd09a68",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r2000_run2_dbd80127",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r2000_run2_dbd80127",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r2000_run3_160bb359",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r2000_run3_160bb359",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r2000_run4_fdd801da",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r2000_run4_fdd801da",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r2000_run5_4b5f63aa",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r2000_run5_4b5f63aa",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r500_run1_9b997b7b",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r500_run1_9b997b7b",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r500_run2_f4f6b102",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r500_run2_f4f6b102",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r500_run3_812a1f69",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r500_run3_812a1f69",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r500_run4_bdcd5487",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r500_run4_bdcd5487",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p256_r500_run5_e548ecf6",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p256_r500_run5_e548ecf6",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r100_run1_2565f109",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r100_run1_2565f109",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r100_run2_0a357f09",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r100_run2_0a357f09",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r100_run3_f54f910e",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r100_run3_f54f910e",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r100_run4_4a86c313",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r100_run4_4a86c313",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r100_run5_22e42bf0",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r100_run5_22e42bf0",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r2000_run1_f4179cda",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r2000_run1_f4179cda",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r2000_run2_f1ae8590",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r2000_run2_f1ae8590",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r2000_run3_264ad5d3",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r2000_run3_264ad5d3",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r2000_run4_7ca328c1",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r2000_run4_7ca328c1",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r2000_run5_5a82094a",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r2000_run5_5a82094a",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r500_run1_2678c33c",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r500_run1_2678c33c",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r500_run2_3e0c6eef",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r500_run2_3e0c6eef",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r500_run3_b9192540",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r500_run3_b9192540",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r500_run4_fb7edf39",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r500_run4_fb7edf39",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        },
+        {
+          "scenario_id": "rsa2048_p4096_r500_run5_cd869a0a",
+          "path": "/home/ausmarton/scratchpad/quantum-resilient/results/minikube/rsa2048_p4096_r500_run5_cd869a0a",
+          "has_merged_jsonl": false,
+          "has_stats": false,
+          "has_raw_jsonl": true,
+          "raw_jsonl_size_bytes": 0
+        }
+      ]
+    }
+  }
+}

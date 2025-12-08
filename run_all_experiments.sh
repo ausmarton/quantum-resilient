@@ -506,12 +506,47 @@ count = sum(1 for s in manifest['scenarios'])
 print(count)
 ")
     
+    # Calculate actual number of experiments that will run (accounting for replicas)
+    # This is different from scenario count because:
+    # - Scaling experiments run with multiple replicas (1, 2, 4, 8)
+    # - Non-scaling experiments run with replica 1 only
+    # - Native environment only runs with replica 1
+    ENV_TOTAL_EXPERIMENTS=$(python3 -c "
+import json
+import sys
+
+with open('$GENERATED_SCENARIOS_DIR/manifest.json') as f:
+    manifest = json.load(f)
+
+env = '$env'
+replicas = [int(r) for r in '$REPLICAS'.split(',')]
+scaling_replicas = [r for r in replicas if r > 1]  # [2, 4, 8] if REPLICAS='1,2,4,8'
+
+total_experiments = 0
+for s in manifest['scenarios']:
+    is_scaling = s.get('scaling_experiment', False)
+    
+    if env == 'native':
+        # Native only runs with replica 1
+        total_experiments += 1
+    elif is_scaling:
+        # Scaling experiments run with all replicas (1, 2, 4, 8)
+        total_experiments += len(replicas)
+    else:
+        # Non-scaling experiments run with replica 1 only
+        total_experiments += 1
+
+print(total_experiments)
+")
+    
     log_info "Total scenarios for ${env}: $ENV_TOTAL_SCENARIOS"
+    log_info "Total experiments to run: $ENV_TOTAL_EXPERIMENTS (accounting for replicas)"
     log_info "Progress will be shown every 5 seconds"
     echo ""
     
     # Process scenarios
     scenario_count=0
+    experiment_count=0  # Track actual experiments (not scenarios)
     env_completed=0
     env_failed=0
     env_skipped=0
@@ -557,43 +592,101 @@ for s in manifest['scenarios']:
                 run_scenario_id="$scenario_id"
             fi
             
-            update_progress $scenario_count $TOTAL_SCENARIOS "$env" "$run_scenario_id"
+            # Increment experiment count (not scenario count) for progress tracking
+            # This must happen BEFORE any continue statements to ensure accurate counting
+            experiment_count=$((experiment_count + 1))
             
             if [[ "$DRY_RUN" == "true" ]]; then
+                update_progress $experiment_count $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id"
                 log_info "  Would run: $run_scenario_id (replicas: $replica_count)"
                 add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "dry_run" "$replica_count"
                 continue
             fi
             
             # Check if already completed (resume capability)
-            # Check for both merged data and stats to ensure experiment is truly complete
-            if [[ -f "$output_dir/stats/summary.json" ]] || [[ -f "$output_dir/merged/merged.jsonl" ]]; then
-                # Verify the file is not empty
-                if [[ -f "$output_dir/stats/summary.json" ]] && [[ -s "$output_dir/stats/summary.json" ]]; then
-                    update_progress $scenario_count $ENV_TOTAL_SCENARIOS "$env" "$run_scenario_id (cached)"
-                    add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
-                    env_completed=$((env_completed + 1))
-                    env_skipped=$((env_skipped + 1))
-                    continue
-                elif [[ -f "$output_dir/merged/merged.jsonl" ]] && [[ -s "$output_dir/merged/merged.jsonl" ]]; then
-                    update_progress $scenario_count $ENV_TOTAL_SCENARIOS "$env" "$run_scenario_id (cached)"
-                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
+            # When --skip-analysis is used, only raw data exists
+            # When analysis is enabled, check for merged/stats files
+            local is_complete=false
+            local raw_file="$output_dir/raw/run.jsonl"
+            local stats_file="$output_dir/stats/summary.json"
+            local merged_file="$output_dir/merged/merged.jsonl"
+            
+            if [[ "$SKIP_ANALYSIS" == "true" ]]; then
+                # In data collection mode: check for raw data
+                if [[ -f "$raw_file" ]] && [[ -s "$raw_file" ]]; then
+                    is_complete=true
+                fi
+            else
+                # In full mode: check for analysis outputs
+                if [[ -f "$stats_file" ]] && [[ -s "$stats_file" ]]; then
+                    is_complete=true
+                elif [[ -f "$merged_file" ]] && [[ -s "$merged_file" ]]; then
+                    is_complete=true
+                fi
+            fi
+            
+            if [[ "$is_complete" == "true" ]]; then
+                # Update progress with completed count (not just experiment count)
                 env_completed=$((env_completed + 1))
-                    env_skipped=$((env_skipped + 1))
+                update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id (cached)"
+                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
+                env_skipped=$((env_skipped + 1))
                 continue
-                else
+            elif [[ -d "$output_dir" ]]; then
+                # Directory exists but incomplete - might be partial data
+                if [[ -f "$raw_file" ]] && [[ ! -s "$raw_file" ]]; then
+                    log_warn "  Found empty raw data for $run_scenario_id, will re-run"
+                    rm -rf "$output_dir"
+                elif [[ "$SKIP_ANALYSIS" != "true" ]] && [[ ! -f "$raw_file" ]]; then
                     log_warn "  Found incomplete results for $run_scenario_id, will re-run"
-                    # Remove incomplete results
                     rm -rf "$output_dir"
                 fi
             fi
             
             # Run experiment with replica count
+            # Show current progress before running
+            update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id"
+            
             if run_experiment "$env" "$scenario_path" "$run_scenario_id" "$output_dir" "$replica_count"; then
-                log_success "  Completed: $run_scenario_id (replicas: $replica_count)"
+                # Validate data integrity immediately after collection
+                local raw_file="$output_dir/raw/run.jsonl"
+                if [[ -f "$raw_file" ]]; then
+                    local file_size=$(stat -f%z "$raw_file" 2>/dev/null || stat -c%s "$raw_file" 2>/dev/null || echo 0)
+                    if [[ $file_size -eq 0 ]]; then
+                        log_error "  Data integrity check FAILED: $run_scenario_id has 0-byte file!"
+                        log_error "  This experiment will be marked as failed and can be retried"
+                        add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                        env_failed=$((env_failed + 1))
+                        FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
+                        # Remove empty file so it can be retried
+                        rm -f "$raw_file"
+                        continue
+                    else
+                        local line_count=$(wc -l < "$raw_file" 2>/dev/null || echo 0)
+                        if [[ $line_count -eq 0 ]]; then
+                            log_error "  Data integrity check FAILED: $run_scenario_id has no JSONL lines!"
+                            log_error "  File size: $file_size bytes, but no lines found"
+                            add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                            env_failed=$((env_failed + 1))
+                            FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
+                            rm -f "$raw_file"
+                            continue
+                        fi
+                        log_success "  Completed: $run_scenario_id (replicas: $replica_count) - $file_size bytes, $line_count events"
+                    fi
+                else
+                    log_error "  Data integrity check FAILED: $run_scenario_id - raw file not found!"
+                    add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                    env_failed=$((env_failed + 1))
+                    FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
+                    continue
+                fi
+                
                 add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "success" "$replica_count"
                 env_completed=$((env_completed + 1))
                 COMPLETED_SCENARIOS=$((COMPLETED_SCENARIOS + 1))
+                # Update progress with completed count after successful run
+                update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id"
             else
                 log_error "  Failed: $run_scenario_id"
                 add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
@@ -613,7 +706,7 @@ for s in manifest['scenarios']:
     log_info "Environment $env summary:"
     log_info "  Completed: $env_completed (skipped: $env_skipped, new: $((env_completed - env_skipped)))"
     log_info "  Failed: $env_failed"
-    log_info "  Progress: $((env_completed * 100 / ENV_TOTAL_SCENARIOS))%"
+    log_info "  Progress: $((env_completed * 100 / ENV_TOTAL_EXPERIMENTS))%"
     echo ""
 done
 

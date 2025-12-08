@@ -519,13 +519,26 @@ log_step "Step 7/9: Retrieving results from cluster"
 POD_NAME=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}')
 log_info "Copying results from pod: $POD_NAME"
 
-# Copy results
-kubectl cp "$NAMESPACE/$POD_NAME:/results/." "$RUN_OUT_DIR/raw/" 2>/dev/null || {
+# Copy results with proper error handling
+COPY_SUCCESS=false
+if kubectl cp "$NAMESPACE/$POD_NAME:/results/." "$RUN_OUT_DIR/raw/" 2>&1; then
+    COPY_SUCCESS=true
+else
     # Try alternative method if cp fails
     log_warn "kubectl cp failed, trying alternative method..."
-    kubectl exec "$POD_NAME" -n "$NAMESPACE" -- cat /results/raw/run.jsonl > "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || true
+    if kubectl exec "$POD_NAME" -n "$NAMESPACE" -- cat /results/raw/run.jsonl > "$RUN_OUT_DIR/raw/run.jsonl" 2>&1; then
+        COPY_SUCCESS=true
+    else
+        log_error "Failed to copy run.jsonl from pod"
+        log_info "Pod logs:"
+        kubectl logs "$POD_NAME" -n "$NAMESPACE" --tail=50 || true
+        log_info "Checking if results exist in pod:"
+        kubectl exec "$POD_NAME" -n "$NAMESPACE" -- ls -la /results/raw/ 2>&1 || true
+    fi
+    
+    # Try to copy container metadata
     kubectl exec "$POD_NAME" -n "$NAMESPACE" -- cat /results/container_metadata.json > "$RUN_OUT_DIR/container_metadata.json" 2>/dev/null || true
-}
+fi
 
 # Move files to correct locations if needed
 if [[ -f "$RUN_OUT_DIR/raw/raw/run.jsonl" ]]; then
@@ -538,17 +551,60 @@ if [[ -f "$RUN_OUT_DIR/raw/container_metadata.json" ]]; then
     cp "$RUN_OUT_DIR/raw/container_metadata.json" "$RUN_OUT_DIR/"
 fi
 
-# Verify results
-if [[ ! -f "$RUN_OUT_DIR/raw/run.jsonl" ]] && [[ $(find "$RUN_OUT_DIR/raw" -name "*.jsonl" 2>/dev/null | wc -l) -eq 0 ]]; then
+# Verify results - check both existence AND content
+RAW_JSONL_FILE="$RUN_OUT_DIR/raw/run.jsonl"
+if [[ ! -f "$RAW_JSONL_FILE" ]] && [[ $(find "$RUN_OUT_DIR/raw" -name "*.jsonl" 2>/dev/null | wc -l) -eq 0 ]]; then
     log_error "No JSONL files found in results!"
     log_info "Contents of $RUN_OUT_DIR/raw:"
     ls -la "$RUN_OUT_DIR/raw/" || true
+    log_info "Pod may have failed. Checking pod status..."
+    kubectl get pod "$POD_NAME" -n "$NAMESPACE" || true
+    kubectl logs "$POD_NAME" -n "$NAMESPACE" --tail=50 || true
     FAILED_RUNS=$((FAILED_RUNS + 1))
     continue
 fi
 
-JSONL_COUNT=$(find "$RUN_OUT_DIR/raw" -name "*.jsonl" | wc -l)
-log_success "Retrieved $JSONL_COUNT JSONL file(s)"
+# Find the actual JSONL file (might be in subdirectory)
+if [[ ! -f "$RAW_JSONL_FILE" ]]; then
+    RAW_JSONL_FILE=$(find "$RUN_OUT_DIR/raw" -name "*.jsonl" -type f | head -1)
+fi
+
+# Validate file has content (not 0 bytes)
+if [[ -f "$RAW_JSONL_FILE" ]]; then
+    FILE_SIZE=$(stat -f%z "$RAW_JSONL_FILE" 2>/dev/null || stat -c%s "$RAW_JSONL_FILE" 2>/dev/null || echo 0)
+    if [[ $FILE_SIZE -eq 0 ]]; then
+        log_error "Data collection failed: run.jsonl is 0 bytes!"
+        log_error "This indicates the benchmark didn't write any data."
+        log_info "Checking pod logs for errors..."
+        kubectl logs "$POD_NAME" -n "$NAMESPACE" --tail=100 || true
+        log_info "Checking if benchmark process completed..."
+        kubectl exec "$POD_NAME" -n "$NAMESPACE" -- ps aux 2>/dev/null || true
+        log_info "Checking if results directory exists in pod..."
+        kubectl exec "$POD_NAME" -n "$NAMESPACE" -- ls -la /results/raw/ 2>&1 || true
+        FAILED_RUNS=$((FAILED_RUNS + 1))
+        # Remove empty file so it will be retried
+        rm -f "$RAW_JSONL_FILE"
+        continue
+    else
+        # Validate file has valid JSONL content (at least one line)
+        LINE_COUNT=$(wc -l < "$RAW_JSONL_FILE" 2>/dev/null || echo 0)
+        if [[ $LINE_COUNT -eq 0 ]]; then
+            log_error "Data collection failed: run.jsonl has no lines!"
+            log_error "File size: $FILE_SIZE bytes, but no JSONL lines found"
+            FAILED_RUNS=$((FAILED_RUNS + 1))
+            rm -f "$RAW_JSONL_FILE"
+            continue
+        fi
+        log_success "Retrieved run.jsonl: $FILE_SIZE bytes, $LINE_COUNT events"
+    fi
+else
+    log_error "run.jsonl file not found after copy attempt"
+    FAILED_RUNS=$((FAILED_RUNS + 1))
+    continue
+fi
+
+JSONL_COUNT=$(find "$RUN_OUT_DIR/raw" -name "*.jsonl" -type f | wc -l)
+log_success "Retrieved $JSONL_COUNT JSONL file(s) with valid data"
 
 # =============================================================================
 # Step 8: Generate manifest
