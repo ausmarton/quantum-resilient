@@ -1073,21 +1073,58 @@ log_step "Step 7/8: Verifying GCS artifacts"
 
 log_info "Checking GCS bucket for results..."
 
-# Wait for upload to complete (give it more time)
+# Wait for upload sidecar to complete
 log_info "Waiting for upload sidecar to complete..."
-sleep 30
-
-# Check upload container status
 UPLOAD_POD=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+
 if [[ -n "$UPLOAD_POD" ]]; then
-    UPLOAD_STATUS=$(kubectl get pod "$UPLOAD_POD" -n "$NAMESPACE" -o jsonpath='{.status.containerStatuses[?(@.name=="upload-results")].state.terminated.exitCode}' 2>/dev/null || echo "")
-    if [[ "$UPLOAD_STATUS" == "1" ]] || [[ "$UPLOAD_STATUS" == "2" ]]; then
-        log_error "Upload container exited with error code: $UPLOAD_STATUS"
-        log_info "Upload container logs:"
-        kubectl logs "$UPLOAD_POD" -n "$NAMESPACE" -c upload-results --tail=100
-        exit 1
+    # Wait for upload container to finish (with timeout)
+    log_info "Waiting for upload-results container to complete..."
+    MAX_WAIT=120  # 2 minutes max wait
+    WAIT_COUNT=0
+    UPLOAD_COMPLETE=false
+    
+    while [[ $WAIT_COUNT -lt $MAX_WAIT ]]; do
+        # Check if upload container has terminated
+        UPLOAD_PHASE=$(kubectl get pod "$UPLOAD_POD" -n "$NAMESPACE" -o jsonpath='{.status.containerStatuses[?(@.name=="upload-results")].state.terminated.reason}' 2>/dev/null || echo "")
+        UPLOAD_EXIT=$(kubectl get pod "$UPLOAD_POD" -n "$NAMESPACE" -o jsonpath='{.status.containerStatuses[?(@.name=="upload-results")].state.terminated.exitCode}' 2>/dev/null || echo "")
+        
+        if [[ -n "$UPLOAD_PHASE" ]]; then
+            if [[ "$UPLOAD_EXIT" == "0" ]]; then
+                log_success "Upload container completed successfully"
+                UPLOAD_COMPLETE=true
+                break
+            elif [[ "$UPLOAD_EXIT" == "1" ]] || [[ "$UPLOAD_EXIT" == "2" ]]; then
+                log_error "Upload container exited with error code: $UPLOAD_EXIT"
+                log_info "Upload container logs:"
+                kubectl logs "$UPLOAD_POD" -n "$NAMESPACE" -c upload-results --tail=100 2>/dev/null || {
+                    log_warn "Could not get upload container logs, trying all containers:"
+                    kubectl logs "$UPLOAD_POD" -n "$NAMESPACE" --all-containers=true --tail=100
+                }
+                exit 1
+            fi
+        fi
+        
+        sleep 5
+        WAIT_COUNT=$((WAIT_COUNT + 5))
+        if [[ $((WAIT_COUNT % 30)) -eq 0 ]]; then
+            log_info "Still waiting for upload... ($WAIT_COUNT/$MAX_WAIT seconds)"
+        fi
+    done
+    
+    if [[ "$UPLOAD_COMPLETE" != "true" ]]; then
+        log_warn "Upload container did not complete within timeout, checking logs..."
+        kubectl logs "$UPLOAD_POD" -n "$NAMESPACE" -c upload-results --tail=100 2>/dev/null || {
+            log_warn "Could not get upload container logs, trying all containers:"
+            kubectl logs "$UPLOAD_POD" -n "$NAMESPACE" --all-containers=true --tail=100
+        }
     fi
+else
+    log_warn "Could not find pod for job $JOB_NAME"
 fi
+
+# Give GCS a moment for eventual consistency
+sleep 5
 
 # List artifacts
 log_info "Listing artifacts in gs://${BUCKET}/experiments/${EXP_ID}/"
@@ -1097,14 +1134,19 @@ if [[ -z "$ARTIFACTS" ]]; then
     log_error "No artifacts found in GCS!"
     log_info "Checking upload container logs..."
     if [[ -n "$UPLOAD_POD" ]]; then
-        kubectl logs "$UPLOAD_POD" -n "$NAMESPACE" -c upload-results --tail=100
+        kubectl logs "$UPLOAD_POD" -n "$NAMESPACE" -c upload-results --tail=200 2>/dev/null || {
+            log_warn "Could not get upload container logs, trying all containers:"
+            kubectl logs "$UPLOAD_POD" -n "$NAMESPACE" --all-containers=true --tail=200
+        }
     else
-        kubectl logs -l job-name="$JOB_NAME" -n "$NAMESPACE" -c upload-results --tail=100
+        kubectl logs -l job-name="$JOB_NAME" -n "$NAMESPACE" --all-containers=true --tail=200 2>/dev/null || true
     fi
     log_info "Checking if bucket exists and is accessible..."
     if gsutil ls "gs://${BUCKET}/" >/dev/null 2>&1; then
         log_info "Bucket exists. Listing contents:"
         gsutil ls "gs://${BUCKET}/" | head -20
+        log_info "Checking experiments directory:"
+        gsutil ls "gs://${BUCKET}/experiments/" 2>/dev/null | head -20 || log_warn "experiments/ directory not found"
     else
         log_error "Cannot access bucket gs://${BUCKET}/"
     fi
