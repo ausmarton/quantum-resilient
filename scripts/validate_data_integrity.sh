@@ -176,10 +176,21 @@ for env in "${ENVS[@]}"; do
         # Validate JSONL format (check first line is valid JSON)
         FIRST_LINE=$(head -1 "$jsonl_file" 2>/dev/null || echo "")
         if [[ -n "$FIRST_LINE" ]]; then
+            # Check if it's an error message (kubectl errors start with "error:")
+            if [[ "$FIRST_LINE" =~ ^error: ]]; then
+                TOTAL_INVALID=$((TOTAL_INVALID + 1))
+                SCENARIO_ID=$(basename "$(dirname "$(dirname "$jsonl_file")")")
+                log_error "  ✗ $SCENARIO_ID: Contains error message (not JSONL data)"
+                log_error "    First line: ${FIRST_LINE:0:80}..."
+                continue
+            fi
+            
+            # Check if it's valid JSON
             if ! echo "$FIRST_LINE" | python3 -m json.tool >/dev/null 2>&1; then
                 TOTAL_INVALID=$((TOTAL_INVALID + 1))
                 SCENARIO_ID=$(basename "$(dirname "$(dirname "$jsonl_file")")")
                 log_error "  ✗ $SCENARIO_ID: Invalid JSONL format"
+                log_error "    First line: ${FIRST_LINE:0:80}..."
                 continue
             fi
         fi

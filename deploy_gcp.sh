@@ -1117,6 +1117,24 @@ if [[ -f "$RAW_JSONL_FILE" ]]; then
         log_error "This indicates the benchmark didn't write any data or download failed."
         exit 1
     else
+        # Check if file contains error messages (not JSONL data)
+        FIRST_LINE=$(head -1 "$RAW_JSONL_FILE" 2>/dev/null || echo "")
+        if [[ -n "$FIRST_LINE" ]] && [[ "$FIRST_LINE" =~ ^error: ]]; then
+            log_error "Data integrity check failed: file contains error message, not JSONL data!"
+            log_error "First line: ${FIRST_LINE:0:100}..."
+            log_error "This indicates the download or upload process failed."
+            exit 1
+        fi
+        
+        # Validate JSONL format
+        if [[ -n "$FIRST_LINE" ]]; then
+            if ! echo "$FIRST_LINE" | python3 -m json.tool >/dev/null 2>&1; then
+                log_error "Data integrity check failed: file does not contain valid JSONL!"
+                log_error "First line: ${FIRST_LINE:0:100}..."
+                exit 1
+            fi
+        fi
+        
         LINE_COUNT=$(wc -l < "$RAW_JSONL_FILE" 2>/dev/null || echo 0)
         if [[ $LINE_COUNT -eq 0 ]]; then
             log_error "Data integrity check failed: run.jsonl has no lines!"

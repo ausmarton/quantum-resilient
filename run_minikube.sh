@@ -38,6 +38,8 @@ RUNS=1
 SEED=""
 REPLICAS=1
 SKIP_BUILD=false
+FORCE_BUILD=false
+TAG_WITH_GIT=false
 SKIP_ANALYSIS=false
 SKIP_AGGREGATION=false
 KEEP_JOB=false
@@ -94,7 +96,9 @@ OPTIONS:
     --runs N            Number of repeated runs (default: 1)
     --replicas N        Number of parallel pod replicas (default: 1)
     --seed NUM          Base RNG seed (each run gets seed+run_index)
-    --skip-build        Skip container image build
+    --skip-build        Skip container image build (uses existing if available)
+    --force-build       Force rebuild even if image exists
+    --tag-git           Tag image with git commit hash for reproducibility
     --skip-analysis     Skip Python analysis after run
     --skip-aggregation  Skip aggregation across runs
     --keep-job          Don't delete Job after completion
@@ -168,6 +172,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-build)
             SKIP_BUILD=true
+            shift
+            ;;
+        --force-build)
+            FORCE_BUILD=true
+            shift
+            ;;
+        --tag-git)
+            TAG_WITH_GIT=true
             shift
             ;;
         --skip-analysis)
@@ -316,8 +328,33 @@ log_success "Created: $OUT_DIR/{raw,merged,stats,figures}"
 # =============================================================================
 log_step "Step 3/9: Building container image"
 
-if [[ "$SKIP_BUILD" == "true" ]]; then
-    log_warn "Skipping build (--skip-build)"
+# Check if image already exists
+if podman image exists "$IMAGE_NAME:$IMAGE_TAG" 2>/dev/null; then
+    if [[ "$SKIP_BUILD" == "true" ]]; then
+        log_info "Image $IMAGE_NAME:$IMAGE_TAG already exists, skipping build (--skip-build)"
+    else
+        log_info "Image $IMAGE_NAME:$IMAGE_TAG already exists"
+        log_info "Use --skip-build to avoid this check, or rebuild with --force-build"
+        
+        # Check if we should rebuild anyway (e.g., if source changed)
+        if [[ "${FORCE_BUILD:-false}" == "true" ]]; then
+            log_info "Force rebuilding image (--force-build)..."
+            cd "$SCRIPT_DIR"
+            podman build -t "$IMAGE_NAME:$IMAGE_TAG" -f Containerfile . 2>&1 | while read -r line; do
+                echo "  $line"
+            done
+            
+            if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+                log_error "Container build failed"
+                exit 1
+            fi
+            
+            log_success "Image rebuilt: $IMAGE_NAME:$IMAGE_TAG"
+        else
+            log_success "Using existing image: $IMAGE_NAME:$IMAGE_TAG"
+            log_info "  (To rebuild, use --force-build flag)"
+        fi
+    fi
 else
     log_info "Building $IMAGE_NAME:$IMAGE_TAG with Podman..."
     
@@ -332,6 +369,16 @@ else
     fi
     
     log_success "Image built: $IMAGE_NAME:$IMAGE_TAG"
+    
+    # Optionally tag with git commit hash for reproducibility
+    if [[ "${TAG_WITH_GIT:-false}" == "true" ]]; then
+        GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        if [[ "$GIT_COMMIT" != "unknown" ]]; then
+            GIT_TAG="${IMAGE_NAME}:git-${GIT_COMMIT}"
+            log_info "Tagging image with git commit: $GIT_TAG"
+            podman tag "$IMAGE_NAME:$IMAGE_TAG" "$GIT_TAG" 2>/dev/null || true
+        fi
+    fi
 fi
 
 # =============================================================================
@@ -340,16 +387,32 @@ fi
 log_step "Step 4/9: Loading image into Minikube"
 
 log_info "Loading image into Minikube..."
-minikube image load "$IMAGE_NAME:$IMAGE_TAG" 2>&1 | while read -r line; do
-    echo "  $line"
-done
-
-log_success "Image loaded into Minikube"
-
-# Verify image is available
-if ! minikube image ls 2>/dev/null | grep -q "$IMAGE_NAME"; then
-    log_warn "Image may not be visible in minikube image ls, continuing..."
+# Tag with localhost/ prefix (Minikube expects this for local images)
+LOCAL_IMAGE="localhost/${IMAGE_NAME}:${IMAGE_TAG}"
+if ! podman image exists "$LOCAL_IMAGE" 2>/dev/null; then
+    log_info "Tagging image as $LOCAL_IMAGE..."
+    podman tag "$IMAGE_NAME:$IMAGE_TAG" "$LOCAL_IMAGE" 2>/dev/null || {
+        log_error "Failed to tag image"
+        exit 1
+    }
 fi
+
+# Load into Minikube using podman save/load
+TEMP_TAR=$(mktemp --suffix=.tar)
+if podman save "$LOCAL_IMAGE" -o "$TEMP_TAR" 2>/dev/null; then
+    if minikube image load "$TEMP_TAR" >/dev/null 2>&1; then
+log_success "Image loaded into Minikube"
+    else
+        log_error "Failed to load image into Minikube"
+        rm -f "$TEMP_TAR"
+        exit 1
+    fi
+    rm -f "$TEMP_TAR"
+else
+    log_error "Failed to save image to tar"
+    exit 1
+fi
+
 
 # =============================================================================
 # Multi-Run Execution Loop
@@ -381,6 +444,7 @@ for ((RUN_INDEX = 1; RUN_INDEX <= RUNS; RUN_INDEX++)); do
     mkdir -p "$RUN_OUT_DIR/merged"
     mkdir -p "$RUN_OUT_DIR/stats"
     mkdir -p "$RUN_OUT_DIR/figures"
+    
 
 # =============================================================================
 # Step 5: Deploy Kubernetes resources
@@ -390,15 +454,22 @@ log_step "Step 5/9: Deploying Kubernetes resources (Run $RUN_INDEX/$RUNS)"
 # Clean up any existing job
 cleanup
 
-# Apply PVC
+# Apply PVC (simpler than hostPath - no permission issues)
 log_info "Creating PersistentVolumeClaim..."
-kubectl apply -f "$SCRIPT_DIR/k8s/results-pvc.yaml" -n "$NAMESPACE"
+kubectl apply -f "$SCRIPT_DIR/k8s/results-pvc.yaml" -n "$NAMESPACE" >/dev/null 2>&1 || true
 
 # Wait for PVC to be bound
 log_info "Waiting for PVC to be bound..."
-kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc/"$PVC_NAME" -n "$NAMESPACE" --timeout=60s || {
+kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc/"$PVC_NAME" -n "$NAMESPACE" --timeout=60s >/dev/null 2>&1 || {
     log_warn "PVC may not be bound immediately, continuing..."
 }
+
+# Create output directory for final results
+log_info "Creating output directory: $RUN_OUT_DIR"
+mkdir -p "$RUN_OUT_DIR/raw"
+mkdir -p "$RUN_OUT_DIR/merged"
+mkdir -p "$RUN_OUT_DIR/stats"
+mkdir -p "$RUN_OUT_DIR/figures"
 
 # Create ConfigMap from scenario file
 log_info "Creating ConfigMap from scenario: $SCENARIO"
@@ -460,6 +531,7 @@ if [[ "$SCALING_MODE" == "true" ]]; then
     JOB_NAME="pqc-bench-scaling"
 else
     log_info "Creating Job..."
+    # Use original worker-job.yaml with PVC (simpler, no permission issues)
     kubectl apply -f "$SCRIPT_DIR/k8s/worker-job.yaml" -n "$NAMESPACE"
 fi
 
@@ -511,62 +583,130 @@ kill $LOG_PID 2>/dev/null || true
 log_success "Job completed successfully"
 
 # =============================================================================
-# Step 7: Retrieve results from cluster
+# Step 7: Copy results from PVC
 # =============================================================================
-log_step "Step 7/9: Retrieving results from cluster"
+log_step "Step 7/9: Copying results from PVC"
 
-# Get pod name (may have changed)
-POD_NAME=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}')
-log_info "Copying results from pod: $POD_NAME"
+# Get pod name
+POD_NAME=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+POD_PHASE=$(kubectl get pod "$POD_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+log_info "Pod: $POD_NAME (phase: $POD_PHASE)"
 
-# Copy results with proper error handling
+# Copy results from PVC using kubectl run (simplest and most reliable)
+log_info "Copying results from PVC..."
+READ_POD_NAME="pvc-read-$(date +%s)"
+
+# Use kubectl run directly - simpler and more reliable than YAML file
+# This creates a pod, runs the command, outputs to stdout, then deletes the pod
 COPY_SUCCESS=false
-if kubectl cp "$NAMESPACE/$POD_NAME:/results/." "$RUN_OUT_DIR/raw/" 2>&1; then
-    COPY_SUCCESS=true
-else
-    # Try alternative method if cp fails
-    log_warn "kubectl cp failed, trying alternative method..."
-    if kubectl exec "$POD_NAME" -n "$NAMESPACE" -- cat /results/raw/run.jsonl > "$RUN_OUT_DIR/raw/run.jsonl" 2>&1; then
-        COPY_SUCCESS=true
-    else
-        log_error "Failed to copy run.jsonl from pod"
-        log_info "Pod logs:"
-        kubectl logs "$POD_NAME" -n "$NAMESPACE" --tail=50 || true
-        log_info "Checking if results exist in pod:"
-        kubectl exec "$POD_NAME" -n "$NAMESPACE" -- ls -la /results/raw/ 2>&1 || true
-    fi
+TEMP_OUTPUT=$(mktemp)
+
+# Use kubectl run with --rm to automatically clean up
+# The --overrides allows us to mount the PVC
+if kubectl run "$READ_POD_NAME" \
+    --image=busybox:1.36 \
+    --rm \
+    -i \
+    --restart=Never \
+    --namespace="$NAMESPACE" \
+    --overrides="{\"spec\":{\"volumes\":[{\"name\":\"results\",\"persistentVolumeClaim\":{\"claimName\":\"$PVC_NAME\"}}],\"containers\":[{\"name\":\"read\",\"image\":\"busybox:1.36\",\"command\":[\"sh\",\"-c\",\"cat /results/raw/run.jsonl 2>/dev/null || find /results -name '*.jsonl' -type f -exec cat {} \\\\;\"],\"volumeMounts\":[{\"name\":\"results\",\"mountPath\":\"/results\",\"readOnly\":true}]}]}}" \
+    > "$TEMP_OUTPUT" 2>&1; then
     
-    # Try to copy container metadata
-    kubectl exec "$POD_NAME" -n "$NAMESPACE" -- cat /results/container_metadata.json > "$RUN_OUT_DIR/container_metadata.json" 2>/dev/null || true
+    # Check if output is valid
+    if [[ -f "$TEMP_OUTPUT" ]] && [[ -s "$TEMP_OUTPUT" ]] && ! grep -q "^Error\|^error\|not found\|No resources found" "$TEMP_OUTPUT" 2>/dev/null; then
+        mv "$TEMP_OUTPUT" "$RUN_OUT_DIR/raw/run.jsonl"
+        COPY_SUCCESS=true
+        log_success "Successfully copied run.jsonl from PVC"
+    else
+        log_warn "Read pod output is invalid or empty"
+        log_info "Output preview:"
+        head -5 "$TEMP_OUTPUT" 2>&1 || true
+        rm -f "$TEMP_OUTPUT"
+    fi
+else
+    EXIT_CODE=$?
+    log_error "kubectl run failed (exit code: $EXIT_CODE)"
+    log_info "Error output:"
+    cat "$TEMP_OUTPUT" 2>&1 | head -10 || true
+    rm -f "$TEMP_OUTPUT"
+    
+    # Try alternative: create pod manually and get logs
+    log_info "Trying alternative method: create pod and get logs..."
+    READ_POD_YAML=$(mktemp)
+    cat > "$READ_POD_YAML" <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${READ_POD_NAME}
+  namespace: ${NAMESPACE}
+spec:
+  restartPolicy: Never
+  containers:
+  - name: read
+    image: busybox:1.36
+    command: ["sh", "-c", "cat /results/raw/run.jsonl 2>/dev/null || find /results -name '*.jsonl' -type f -exec cat {} \\;"]
+    volumeMounts:
+    - name: results
+      mountPath: /results
+      readOnly: true
+  volumes:
+  - name: results
+    persistentVolumeClaim:
+      claimName: ${PVC_NAME}
+EOF
+    
+    if kubectl apply -f "$READ_POD_YAML" 2>&1; then
+        log_info "Waiting for pod to complete..."
+        sleep 3
+        
+        # Wait for completion
+        for i in {1..15}; do
+            PHASE=$(kubectl get pod "$READ_POD_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            if [[ "$PHASE" == "Succeeded" ]] || [[ "$PHASE" == "Failed" ]]; then
+                break
+            fi
+            sleep 1
+        done
+        
+        if [[ "$PHASE" == "Succeeded" ]]; then
+            if kubectl logs "$READ_POD_NAME" -n "$NAMESPACE" > "$RUN_OUT_DIR/raw/run.jsonl" 2>&1; then
+                if [[ -f "$RUN_OUT_DIR/raw/run.jsonl" ]] && [[ -s "$RUN_OUT_DIR/raw/run.jsonl" ]] && ! grep -q "^Error\|^error\|not found" "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null; then
+                    COPY_SUCCESS=true
+                    log_success "Successfully copied run.jsonl from PVC (alternative method)"
+                fi
+            fi
+        fi
+        
+        kubectl delete pod "$READ_POD_NAME" -n "$NAMESPACE" --ignore-not-found=true >/dev/null 2>&1
+        rm -f "$READ_POD_YAML"
+    else
+        log_error "Failed to create read pod via YAML as well"
+        rm -f "$READ_POD_YAML"
+    fi
 fi
 
-# Move files to correct locations if needed
-if [[ -f "$RUN_OUT_DIR/raw/raw/run.jsonl" ]]; then
-    mv "$RUN_OUT_DIR/raw/raw/"* "$RUN_OUT_DIR/raw/" 2>/dev/null || true
-    rmdir "$RUN_OUT_DIR/raw/raw" 2>/dev/null || true
-fi
-
-# Copy container metadata to root
-if [[ -f "$RUN_OUT_DIR/raw/container_metadata.json" ]]; then
-    cp "$RUN_OUT_DIR/raw/container_metadata.json" "$RUN_OUT_DIR/"
-fi
-
-# Verify results - check both existence AND content
-RAW_JSONL_FILE="$RUN_OUT_DIR/raw/run.jsonl"
-if [[ ! -f "$RAW_JSONL_FILE" ]] && [[ $(find "$RUN_OUT_DIR/raw" -name "*.jsonl" 2>/dev/null | wc -l) -eq 0 ]]; then
-    log_error "No JSONL files found in results!"
-    log_info "Contents of $RUN_OUT_DIR/raw:"
-    ls -la "$RUN_OUT_DIR/raw/" || true
-    log_info "Pod may have failed. Checking pod status..."
-    kubectl get pod "$POD_NAME" -n "$NAMESPACE" || true
-    kubectl logs "$POD_NAME" -n "$NAMESPACE" --tail=50 || true
+if [[ "$COPY_SUCCESS" == "false" ]]; then
+    log_error "Failed to copy results from PVC"
+    log_info "Main pod logs (last 20 lines):"
+    kubectl logs "$POD_NAME" -n "$NAMESPACE" --tail=20 2>&1 | head -20 || true
+    log_info "To recover data manually, create a pod to read from PVC:"
+    log_info "  kubectl run pvc-read --image=busybox:1.36 --rm -i --restart=Never --overrides='{\"spec\":{\"volumes\":[{\"name\":\"results\",\"persistentVolumeClaim\":{\"claimName\":\"$PVC_NAME\"}}],\"containers\":[{\"name\":\"read\",\"image\":\"busybox:1.36\",\"command\":[\"sh\",\"-c\",\"cat /results/raw/run.jsonl\"],\"volumeMounts\":[{\"name\":\"results\",\"mountPath\":\"/results\"}]}]}}' > output.jsonl"
     FAILED_RUNS=$((FAILED_RUNS + 1))
     continue
 fi
 
-# Find the actual JSONL file (might be in subdirectory)
+# Verify results - check both existence AND content
+RAW_JSONL_FILE="$RUN_OUT_DIR/raw/run.jsonl"
 if [[ ! -f "$RAW_JSONL_FILE" ]]; then
     RAW_JSONL_FILE=$(find "$RUN_OUT_DIR/raw" -name "*.jsonl" -type f | head -1)
+fi
+
+if [[ ! -f "$RAW_JSONL_FILE" ]]; then
+    log_error "No JSONL files found in results!"
+    log_info "Contents of $RUN_OUT_DIR/raw:"
+    ls -la "$RUN_OUT_DIR/raw/" || true
+    FAILED_RUNS=$((FAILED_RUNS + 1))
+    continue
 fi
 
 # Validate file has content (not 0 bytes)
@@ -595,16 +735,36 @@ if [[ -f "$RAW_JSONL_FILE" ]]; then
             rm -f "$RAW_JSONL_FILE"
             continue
         fi
-        log_success "Retrieved run.jsonl: $FILE_SIZE bytes, $LINE_COUNT events"
+        # Check if first line is valid JSON (not an error message)
+        FIRST_LINE=$(head -1 "$RAW_JSONL_FILE" 2>/dev/null || echo "")
+        if [[ -n "$FIRST_LINE" ]] && [[ "$FIRST_LINE" =~ ^error: ]]; then
+            log_error "Data collection failed: file contains error message, not JSONL data!"
+            log_error "First line: ${FIRST_LINE:0:100}..."
+            FAILED_RUNS=$((FAILED_RUNS + 1))
+            rm -f "$RAW_JSONL_FILE"
+            continue
+        fi
+        
+        if [[ -n "$FIRST_LINE" ]]; then
+            if ! echo "$FIRST_LINE" | python3 -m json.tool >/dev/null 2>&1; then
+                log_error "Data collection failed: file does not contain valid JSONL!"
+                log_error "First line: ${FIRST_LINE:0:100}..."
+                FAILED_RUNS=$((FAILED_RUNS + 1))
+                rm -f "$RAW_JSONL_FILE"
+                continue
+            fi
+        fi
+        
+        log_success "Verified run.jsonl: $FILE_SIZE bytes, $LINE_COUNT events"
     fi
-else
-    log_error "run.jsonl file not found after copy attempt"
-    FAILED_RUNS=$((FAILED_RUNS + 1))
-    continue
-fi
+    else
+        log_error "run.jsonl file not found"
+        FAILED_RUNS=$((FAILED_RUNS + 1))
+        continue
+    fi
 
 JSONL_COUNT=$(find "$RUN_OUT_DIR/raw" -name "*.jsonl" -type f | wc -l)
-log_success "Retrieved $JSONL_COUNT JSONL file(s) with valid data"
+log_success "Verified $JSONL_COUNT JSONL file(s) with valid data"
 
 # =============================================================================
 # Step 8: Generate manifest
@@ -793,4 +953,5 @@ echo ""
 log_success "Done!"
 
 exit 0
+
 

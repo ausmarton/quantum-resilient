@@ -606,10 +606,10 @@ for s in manifest['scenarios']:
             # Check if already completed (resume capability)
             # When --skip-analysis is used, only raw data exists
             # When analysis is enabled, check for merged/stats files
-            local is_complete=false
-            local raw_file="$output_dir/raw/run.jsonl"
-            local stats_file="$output_dir/stats/summary.json"
-            local merged_file="$output_dir/merged/merged.jsonl"
+            is_complete=false
+            raw_file="$output_dir/raw/run.jsonl"
+            stats_file="$output_dir/stats/summary.json"
+            merged_file="$output_dir/merged/merged.jsonl"
             
             if [[ "$SKIP_ANALYSIS" == "true" ]]; then
                 # In data collection mode: check for raw data
@@ -649,9 +649,9 @@ for s in manifest['scenarios']:
             
             if run_experiment "$env" "$scenario_path" "$run_scenario_id" "$output_dir" "$replica_count"; then
                 # Validate data integrity immediately after collection
-                local raw_file="$output_dir/raw/run.jsonl"
+                raw_file="$output_dir/raw/run.jsonl"
                 if [[ -f "$raw_file" ]]; then
-                    local file_size=$(stat -f%z "$raw_file" 2>/dev/null || stat -c%s "$raw_file" 2>/dev/null || echo 0)
+                    file_size=$(stat -f%z "$raw_file" 2>/dev/null || stat -c%s "$raw_file" 2>/dev/null || echo 0)
                     if [[ $file_size -eq 0 ]]; then
                         log_error "  Data integrity check FAILED: $run_scenario_id has 0-byte file!"
                         log_error "  This experiment will be marked as failed and can be retried"
@@ -662,7 +662,7 @@ for s in manifest['scenarios']:
                         rm -f "$raw_file"
                         continue
                     else
-                        local line_count=$(wc -l < "$raw_file" 2>/dev/null || echo 0)
+                        line_count=$(wc -l < "$raw_file" 2>/dev/null || echo 0)
                         if [[ $line_count -eq 0 ]]; then
                             log_error "  Data integrity check FAILED: $run_scenario_id has no JSONL lines!"
                             log_error "  File size: $file_size bytes, but no lines found"

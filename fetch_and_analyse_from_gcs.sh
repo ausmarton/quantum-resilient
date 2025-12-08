@@ -250,20 +250,63 @@ else
     
     # Download raw data
     log_info "Downloading raw data..."
-    gsutil -m cp -r "$GCS_PATH/raw/*" "$OUT_DIR/raw/" 2>/dev/null || true
+    if ! gsutil -m cp -r "$GCS_PATH/raw/*" "$OUT_DIR/raw/" 2>&1; then
+        log_warn "Some raw data files may have failed to download"
+    fi
     
     log_success "Download complete"
 fi
 
-# Verify we have data to analyze
+# Verify we have data to analyze and validate integrity
 if [[ ! -f "$OUT_DIR/merged/merged.jsonl" ]]; then
     # Check for raw data
-    RAW_COUNT=$(find "$OUT_DIR/raw" -name "*.jsonl" 2>/dev/null | wc -l)
+    RAW_COUNT=$(find "$OUT_DIR/raw" -name "*.jsonl" -type f 2>/dev/null | wc -l)
     if [[ $RAW_COUNT -eq 0 ]]; then
         log_error "No data files found!"
         exit 1
     fi
+    
     log_info "Found $RAW_COUNT raw JSONL file(s)"
+    
+    # Validate integrity of downloaded files
+    INVALID_COUNT=0
+    for jsonl_file in "$OUT_DIR/raw"/*.jsonl; do
+        [[ ! -f "$jsonl_file" ]] && continue
+        
+        FILE_SIZE=$(stat -f%z "$jsonl_file" 2>/dev/null || stat -c%s "$jsonl_file" 2>/dev/null || echo 0)
+        if [[ $FILE_SIZE -eq 0 ]]; then
+            log_error "Invalid file (0 bytes): $(basename "$jsonl_file")"
+            INVALID_COUNT=$((INVALID_COUNT + 1))
+            continue
+        fi
+        
+        # Check for error messages
+        FIRST_LINE=$(head -1 "$jsonl_file" 2>/dev/null || echo "")
+        if [[ -n "$FIRST_LINE" ]] && [[ "$FIRST_LINE" =~ ^error: ]]; then
+            log_error "Invalid file (contains error message): $(basename "$jsonl_file")"
+            log_error "  First line: ${FIRST_LINE:0:80}..."
+            INVALID_COUNT=$((INVALID_COUNT + 1))
+            continue
+        fi
+        
+        # Validate JSONL format
+        if [[ -n "$FIRST_LINE" ]]; then
+            if ! echo "$FIRST_LINE" | python3 -m json.tool >/dev/null 2>&1; then
+                log_error "Invalid file (not valid JSONL): $(basename "$jsonl_file")"
+                log_error "  First line: ${FIRST_LINE:0:80}..."
+                INVALID_COUNT=$((INVALID_COUNT + 1))
+                continue
+            fi
+        fi
+    done
+    
+    if [[ $INVALID_COUNT -gt 0 ]]; then
+        log_error "Found $INVALID_COUNT invalid file(s) out of $RAW_COUNT"
+        log_error "These files may need to be re-downloaded or re-run"
+        exit 1
+    fi
+    
+    log_success "All $RAW_COUNT file(s) validated successfully"
 fi
 
 # =============================================================================
