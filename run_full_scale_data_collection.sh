@@ -264,6 +264,12 @@ for env in "${ENV_ARRAY[@]}"; do
         --max-retries "$MAX_RETRIES"
     )
     
+    # For minikube and GCP, include scaling replicas (1,2,4,8) for scaling experiments
+    # Native doesn't support replicas > 1, so only pass for containerized environments
+    if [[ "$env" == "minikube" ]] || [[ "$env" == "gcp" ]]; then
+        CMD+=(--replicas "1,2,4,8")
+    fi
+    
     if [[ "$env" == "gcp" ]]; then
         CMD+=(--project "$PROJECT" --bucket "$BUCKET" --region "$REGION")
     fi
