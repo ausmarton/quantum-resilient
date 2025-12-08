@@ -565,6 +565,21 @@ spec:
       nodeSelector:
         cloud.google.com/gke-nodepool: pqc-bench-pool
 
+      # Pod anti-affinity: Spread jobs across nodes for isolation
+      # This ensures experiments don't interfere with each other (noisy neighbor prevention)
+      # Using preferredDuringScheduling to ensure isolation when nodes are available,
+      # but allow scheduling if needed (cluster will be sized appropriately)
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: pqc-bench
+                    component: worker
+                topologyKey: kubernetes.io/hostname
+
       # Tolerations
       tolerations:
         - key: "cloud.google.com/gke-spot"

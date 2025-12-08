@@ -1,0 +1,19 @@
+{
+  "type": "gcp_gke",
+  "project_id": "quantum-resilience-480303",
+  "zone": "",
+  "region": "",
+  "machine_type": "",
+  "instance_id": "8117769890835367771",
+  "cluster_name": "pqc-bench-gke",
+  "node_name": "gke-pqc-bench-gke-pqc-bench-pool-b4e0f7ca-szs9",
+  "pod_name": "pqc-bench-worker-8h5q2",
+  "pod_namespace": "default",
+  "cpu_model": "Intel(R) Xeon(R) CPU @ 2.80GHz",
+  "cpu_count": 2,
+  "memory_total_kb": 8138268,
+  "kernel_version": "6.6.105+",
+  "arch": "x86_64",
+  "container_runtime": "containerd",
+  "timestamp_utc": "2025-12-08T20:50:23Z"
+}

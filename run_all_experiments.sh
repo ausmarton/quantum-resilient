@@ -240,37 +240,92 @@ run_experiment() {
                     $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 || exit_code=$?
                 ;;
             gcp)
-                # Use array to properly handle paths with spaces
-                GCP_ARGS=(
-                    --scenario "$scenario_path"
-                    --exp-id "$scenario_id"
-                    --project "$PROJECT"
-                    --bucket "$BUCKET"
-                    --region "$REGION"
-                    --replicas "$replicas"
-                )
-                [ "$SMOKE_TEST" == "true" ] && GCP_ARGS+=(--smoke-test)
+                # Unified execution: Always use Kubernetes Job submission
+                # PARALLEL_JOBS=1 = sequential (submit one, wait, submit next)
+                # PARALLEL_JOBS>1 = parallel (submit multiple, wait for all)
+                # This eliminates redundant code paths
                 
-                # For batch runs (multiple experiments), use persistent cluster mode
-                # For single runs, use ephemeral mode to avoid ongoing costs
-                # Persistent mode is determined by GCP_USE_PERSISTENT_CLUSTER variable
-                # which is set before the experiment loop if running a batch
                 if [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
-                    # Persistent cluster mode: cluster already exists, just run experiment
-                    # Image was built during setup, so skip build for all experiments
-                    GCP_ARGS+=(--skip-terraform --skip-build)
-                else
-                    # Ephemeral mode: create cluster, run, destroy (default for single runs)
-                    GCP_ARGS+=(--ephemeral)
-                fi
-                
-                "$SCRIPT_DIR/deploy_gcp.sh" "${GCP_ARGS[@]}" 2>&1 || exit_code=$?
-                
-                if [[ $exit_code -eq 0 ]]; then
-                    "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
+                    # Persistent cluster mode: use direct Kubernetes Job submission
+                    if [[ -z "${GCP_IMAGE_NAME:-}" ]]; then
+                        # Get image name if not set
+                        IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/pqc"
+                        GCP_IMAGE_NAME="${IMAGE_REPO}/pqc-bench:latest"
+                    fi
+                    
+                    # Determine namespace
+                    if [[ "$SMOKE_TEST" == "true" ]]; then
+                        GCP_NAMESPACE="pqc-smoke-test"
+                    else
+                        GCP_NAMESPACE="default"
+                    fi
+                    
+                    # Submit job (non-blocking for parallel, blocking for sequential)
+                    JOB_NAME=$("$SCRIPT_DIR/scripts/submit_gcp_job_parallel.sh" \
+                        --scenario "$scenario_path" \
                         --exp-id "$scenario_id" \
+                        --project "$PROJECT" \
                         --bucket "$BUCKET" \
-                        --out "$output_dir" 2>&1 || exit_code=$?
+                        --region "$REGION" \
+                        --image "$GCP_IMAGE_NAME" \
+                        --namespace "$GCP_NAMESPACE" \
+                        --replicas "$replicas" \
+                        $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1) || exit_code=$?
+                    
+                    if [[ $exit_code -eq 0 ]]; then
+                        # Store job for tracking (used for parallel mode)
+                        if [[ $PARALLEL_JOBS -gt 1 ]]; then
+                            echo "$JOB_NAME|$scenario_id|$output_dir" >> "${JOB_TRACKING_FILE:-/tmp/gcp_jobs_${env}.txt}"
+                            # For parallel mode, wait for all jobs at the end
+                            exit_code=0  # Job submission succeeded
+                        else
+                            # Sequential mode: wait for this job to complete, then download
+                            log_info "  Waiting for job $JOB_NAME to complete..."
+                            while true; do
+                                STATUS=$(kubectl get job "$JOB_NAME" -n "$GCP_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "")
+                                FAILED_STATUS=$(kubectl get job "$JOB_NAME" -n "$GCP_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "")
+                                
+                                if [[ "$STATUS" == "True" ]]; then
+                                    # Job completed, download results
+                                    if "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
+                                        --exp-id "$scenario_id" \
+                                        --bucket "$BUCKET" \
+                                        --out "$output_dir" 2>&1; then
+                                        exit_code=0
+                                    else
+                                        exit_code=1
+                                    fi
+                                    break
+                                elif [[ "$FAILED_STATUS" == "True" ]]; then
+                                    log_error "  Job $JOB_NAME failed"
+                                    exit_code=1
+                                    break
+                                fi
+                                sleep 5
+                            done
+                        fi
+                    fi
+                else
+                    # Ephemeral mode: use deploy_gcp.sh (for single experiments or when cluster doesn't exist)
+                    GCP_ARGS=(
+                        --scenario "$scenario_path"
+                        --exp-id "$scenario_id"
+                        --project "$PROJECT"
+                        --bucket "$BUCKET"
+                        --region "$REGION"
+                        --replicas "$replicas"
+                        --ephemeral
+                    )
+                    [ "$SMOKE_TEST" == "true" ] && GCP_ARGS+=(--smoke-test)
+                    
+                    "$SCRIPT_DIR/deploy_gcp.sh" "${GCP_ARGS[@]}" 2>&1 || exit_code=$?
+                    
+                    if [[ $exit_code -eq 0 ]]; then
+                        "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
+                            --exp-id "$scenario_id" \
+                            --bucket "$BUCKET" \
+                            --out "$output_dir" 2>&1 || exit_code=$?
+                    fi
                 fi
                 ;;
         esac
@@ -566,6 +621,10 @@ print(total_experiments)
     
     # For GCP batch runs (multiple experiments), use persistent cluster mode for efficiency
     # This creates the cluster once, reuses it for all experiments, then destroys it
+    # Export variables so they're available in run_experiment function
+    export GCP_USE_PERSISTENT_CLUSTER=false
+    export GCP_CLUSTER_EXISTS=false
+    
     if [[ "$env" == "gcp" ]] && [[ $ENV_TOTAL_EXPERIMENTS -gt 1 ]]; then
         log_info "Detected batch run with $ENV_TOTAL_EXPERIMENTS experiments"
         log_info "Using persistent cluster mode for efficiency (cluster created once, reused, destroyed at end)"
@@ -583,9 +642,22 @@ print(total_experiments)
             --project "$PROJECT" &>/dev/null 2>&1; then
             log_warn "Cluster $CLUSTER_NAME already exists"
             log_info "Will reuse existing cluster (use --skip-gcp and destroy manually if needed)"
-            GCP_USE_PERSISTENT_CLUSTER=true
-            GCP_CLUSTER_EXISTS=true
+            export GCP_USE_PERSISTENT_CLUSTER=true
+            export GCP_CLUSTER_EXISTS=true
         else
+            # Calculate node count based on parallel jobs for proper isolation
+            # Each job needs ~1 CPU (800m request), n2-standard-2 has 2 vCPUs
+            # To avoid noisy neighbor: max 1 job per node (or 2 if we allow some sharing)
+            # For safety and isolation: use 1 job per node
+            # Add 1 extra node for system overhead
+            if [[ $PARALLEL_JOBS -gt 1 ]]; then
+                CALCULATED_NODE_COUNT=$((PARALLEL_JOBS + 1))
+                log_info "Calculated node count: $CALCULATED_NODE_COUNT (for $PARALLEL_JOBS parallel jobs + 1 overhead)"
+            else
+                CALCULATED_NODE_COUNT="${NODE_COUNT:-1}"
+                log_info "Using node count: $CALCULATED_NODE_COUNT (sequential mode)"
+            fi
+            
             log_info "Creating persistent cluster for batch run..."
             if "$SCRIPT_DIR/deploy_gcp.sh" \
                 --create-cluster \
@@ -593,14 +665,15 @@ print(total_experiments)
                 --bucket "$BUCKET" \
                 --region "$REGION" \
                 --machine-type "${MACHINE_TYPE:-n2-standard-2}" \
+                --node-count "$CALCULATED_NODE_COUNT" \
                 $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo ""); then
                 log_success "Cluster created successfully"
-                GCP_USE_PERSISTENT_CLUSTER=true
-                GCP_CLUSTER_EXISTS=false  # We just created it
+                export GCP_USE_PERSISTENT_CLUSTER=true
+                export GCP_CLUSTER_EXISTS=false  # We just created it
             else
                 log_error "Failed to create cluster, falling back to ephemeral mode"
-                GCP_USE_PERSISTENT_CLUSTER=false
-                GCP_CLUSTER_EXISTS=false
+                export GCP_USE_PERSISTENT_CLUSTER=false
+                export GCP_CLUSTER_EXISTS=false
             fi
         fi
         
@@ -617,6 +690,10 @@ if manifest['scenarios']:
 " 2>/dev/null || echo "")
             
             if [[ -n "$FIRST_SCENARIO" ]] && [[ -f "$FIRST_SCENARIO" ]]; then
+                # Get image name from deploy script
+                IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/pqc"
+                export GCP_IMAGE_NAME="${IMAGE_REPO}/pqc-bench:latest"
+                
                 if "$SCRIPT_DIR/deploy_gcp.sh" \
                     --scenario "$FIRST_SCENARIO" \
                     --exp-id "batch-setup-$(date +%s)" \
@@ -626,16 +703,32 @@ if manifest['scenarios']:
                     --skip-terraform \
                     --skip-aggregation \
                     $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 | grep -E "(Building|Pushing|Image|ERROR|WARN)" || true; then
-                    log_success "Image built and ready for batch"
+                    log_success "Image built and ready for batch: $GCP_IMAGE_NAME"
                 else
                     log_warn "Image build had issues, but continuing (will build per-experiment if needed)"
+                    # Try to get image name from terraform output
+                    export GCP_IMAGE_NAME="${IMAGE_REPO}/pqc-bench:latest"
                 fi
             fi
         fi
     else
         # Single experiment or non-GCP: use default behavior (ephemeral for GCP)
-        GCP_USE_PERSISTENT_CLUSTER=false
-        GCP_CLUSTER_EXISTS=false
+        export GCP_USE_PERSISTENT_CLUSTER=false
+        export GCP_CLUSTER_EXISTS=false
+    fi
+    
+    # For GCP execution with persistent cluster, create temp file to track jobs
+    # Used for both sequential (PARALLEL_JOBS=1) and parallel (PARALLEL_JOBS>1) modes
+    if [[ "$env" == "gcp" ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
+        TEMP_DIR=$(mktemp -d)
+        export TEMP_DIR
+        export JOB_TRACKING_FILE="${TEMP_DIR}/gcp_jobs_${env}.txt"
+        > "$JOB_TRACKING_FILE"  # Create empty file
+        if [[ $PARALLEL_JOBS -gt 1 ]]; then
+            log_info "Parallel execution mode: Jobs will be submitted in batches of $PARALLEL_JOBS"
+        else
+            log_info "Sequential execution mode: Jobs will be submitted one at a time"
+        fi
     fi
     
     # Process scenarios
@@ -737,8 +830,10 @@ for s in manifest['scenarios']:
                 fi
             fi
             
-            # Run experiment with replica count
-            # Show current progress before running
+            # Run experiment
+            # For GCP with persistent cluster: job submission is handled in run_experiment
+            # For parallel mode: jobs are submitted and tracked, then waited on at the end
+            # For sequential mode: each job is submitted and waited on immediately
             update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id"
             
             if run_experiment "$env" "$scenario_path" "$run_scenario_id" "$output_dir" "$replica_count"; then
@@ -776,25 +871,80 @@ for s in manifest['scenarios']:
                     continue
                 fi
                 
-                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "success" "$replica_count"
-                env_completed=$((env_completed + 1))
-                COMPLETED_SCENARIOS=$((COMPLETED_SCENARIOS + 1))
-                # Update progress with completed count after successful run
-                update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id"
-            else
-                log_error "  Failed: $run_scenario_id"
-                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
-                env_failed=$((env_failed + 1))
-                FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
-                
-                if [[ "$CONTINUE_ON_ERROR" != "true" ]]; then
-                    log_error "Stopping due to failure (use --continue-on-error to ignore)"
-                    exit 1
+                    add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "success" "$replica_count"
+                    env_completed=$((env_completed + 1))
+                    COMPLETED_SCENARIOS=$((COMPLETED_SCENARIOS + 1))
+                    # Update progress with completed count after successful run
+                    update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id"
+                else
+                    log_error "  Failed: $run_scenario_id"
+                    add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                    env_failed=$((env_failed + 1))
+                    FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
+                    
+                    if [[ "$CONTINUE_ON_ERROR" != "true" ]]; then
+                        log_error "Stopping due to failure (use --continue-on-error to ignore)"
+                        exit 1
+                    fi
                 fi
-            fi
         done
         
     done <<< "$scenarios"
+    
+    # For GCP execution with persistent cluster and parallel jobs, wait for all jobs to complete
+    # For sequential mode (PARALLEL_JOBS=1), jobs are already waited on individually
+    if [[ "$env" == "gcp" ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]] && [[ $PARALLEL_JOBS -gt 1 ]] && [[ -f "${JOB_TRACKING_FILE:-}" ]]; then
+        log_info "Waiting for all parallel jobs to complete..."
+        
+        # Determine namespace
+        if [[ "$SMOKE_TEST" == "true" ]]; then
+            GCP_NAMESPACE="pqc-smoke-test"
+        else
+            GCP_NAMESPACE="default"
+        fi
+        
+        # Track job completion
+        TOTAL_JOBS=$(wc -l < "$JOB_TRACKING_FILE" 2>/dev/null || echo "0")
+        COMPLETED_JOBS=0
+        FAILED_JOBS=0
+        
+        while IFS='|' read -r job_name scenario_id output_dir; do
+            # Wait for job to complete
+            while true; do
+                STATUS=$(kubectl get job "$job_name" -n "$GCP_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "")
+                FAILED_STATUS=$(kubectl get job "$job_name" -n "$GCP_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "")
+                
+                if [[ "$STATUS" == "True" ]]; then
+                    # Job completed successfully, download results
+                    if "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
+                        --exp-id "$scenario_id" \
+                        --bucket "$BUCKET" \
+                        --out "$output_dir" 2>&1; then
+                        COMPLETED_JOBS=$((COMPLETED_JOBS + 1))
+                        env_completed=$((env_completed + 1))
+                        log_success "  Completed: $scenario_id"
+                    else
+                        FAILED_JOBS=$((FAILED_JOBS + 1))
+                        env_failed=$((env_failed + 1))
+                        log_error "  Failed to download results for: $scenario_id"
+                    fi
+                    break
+                elif [[ "$FAILED_STATUS" == "True" ]]; then
+                    FAILED_JOBS=$((FAILED_JOBS + 1))
+                    env_failed=$((env_failed + 1))
+                    log_error "  Job failed: $scenario_id"
+                    break
+                fi
+                sleep 5
+            done
+            
+            # Update progress
+            update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$scenario_id"
+        done < "$JOB_TRACKING_FILE"
+        
+        log_info "Parallel execution complete: $COMPLETED_JOBS succeeded, $FAILED_JOBS failed"
+        rm -rf "$TEMP_DIR"
+    fi
     
     echo ""
     log_info "Environment $env summary:"
