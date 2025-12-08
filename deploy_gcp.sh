@@ -388,7 +388,17 @@ if [[ "$DESTROY_CLUSTER" == "true" ]]; then
     # First, try Terraform destroy (if Terraform state exists)
     cd "$TERRAFORM_DIR"
     if [[ -f terraform.tfstate ]] || [[ -f .terraform/terraform.tfstate ]]; then
-        log_info "Running Terraform destroy..."
+        # CRITICAL: Remove persistent resources from state before destroy
+        log_info "Protecting persistent resources from destruction..."
+        terraform state rm google_storage_bucket.results 2>/dev/null || true
+        terraform state rm google_storage_bucket_object.experiments_marker 2>/dev/null || true
+        terraform state rm google_service_account.pqc_bench 2>/dev/null || true
+        terraform state rm google_project_iam_member.ar_reader 2>/dev/null || true
+        terraform state rm google_storage_bucket_iam_member.gcs_admin 2>/dev/null || true
+        terraform state rm google_service_account_iam_member.workload_identity 2>/dev/null || true
+        terraform state rm google_artifact_registry_repository.pqc 2>/dev/null || true
+        
+        log_info "Running Terraform destroy (cluster and node pool only)..."
         if terraform destroy -auto-approve \
             -var="project_id=$PROJECT" \
             -var="region=$REGION" \
@@ -399,7 +409,7 @@ if [[ "$DESTROY_CLUSTER" == "true" ]]; then
             -var="smoke_test=$SMOKE_TEST" \
             -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
             -var="ephemeral=true" 2>&1; then
-            log_success "Terraform destroy completed"
+            log_success "Terraform destroy completed (persistent resources preserved)"
         else
             log_warn "Terraform destroy had errors (cluster may not be in Terraform state)"
         fi
@@ -477,64 +487,82 @@ if [[ "$SKIP_TERRAFORM" == "true" ]]; then
 else
     cd "$TERRAFORM_DIR"
     
-    log_info "Initializing Terraform..."
-    terraform init -input=false
-    
-    # Import existing resources into Terraform state (needed for ephemeral mode)
-    log_info "Checking for existing resources to import into Terraform state..."
-    
-    # Import bucket if it exists
-    if gsutil ls -b "gs://${BUCKET}" &>/dev/null; then
-        log_info "Bucket exists, importing into Terraform state..."
-        terraform import \
-            -var="project_id=$PROJECT" \
-            -var="region=$REGION" \
-            -var="bucket_name=$BUCKET" \
-            -var="machine_type=$MACHINE_TYPE" \
-            -var="node_count=$NODE_COUNT" \
-            -var="cluster_name=$CLUSTER_NAME" \
-            -var="smoke_test=$SMOKE_TEST" \
-            -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
-            -var="ephemeral=$EPHEMERAL" \
-            google_storage_bucket.results "$BUCKET" 2>/dev/null || log_warn "Bucket import failed (may already be in state)"
+    # Optimize: Only run terraform init if not already initialized
+    if [[ ! -d ".terraform" ]] || [[ ! -f ".terraform/terraform.tfstate" ]] || [[ -z "$(ls -A .terraform/providers 2>/dev/null)" ]]; then
+        log_info "Initializing Terraform..."
+        terraform init -input=false
+    else
+        log_info "Terraform already initialized, skipping init (using cached providers)"
     fi
     
-    # Import service account if it exists
+    # Import existing resources into Terraform state (needed for ephemeral mode)
+    # Optimize: Only import if not already in state
+    log_info "Checking for existing resources to import into Terraform state..."
+    
+    # Import bucket if it exists and not in state
+    if gsutil ls -b "gs://${BUCKET}" &>/dev/null; then
+        if ! terraform state show google_storage_bucket.results &>/dev/null; then
+            log_info "Bucket exists but not in state, importing..."
+            terraform import \
+                -var="project_id=$PROJECT" \
+                -var="region=$REGION" \
+                -var="bucket_name=$BUCKET" \
+                -var="machine_type=$MACHINE_TYPE" \
+                -var="node_count=$NODE_COUNT" \
+                -var="cluster_name=$CLUSTER_NAME" \
+                -var="smoke_test=$SMOKE_TEST" \
+                -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
+                -var="ephemeral=$EPHEMERAL" \
+                google_storage_bucket.results "$BUCKET" 2>/dev/null || log_warn "Bucket import failed (may already be in state)"
+        else
+            log_info "Bucket already in Terraform state, skipping import"
+        fi
+    fi
+    
+    # Import service account if it exists and not in state
     SA_EMAIL="pqc-bench-worker@${PROJECT}.iam.gserviceaccount.com"
     if gcloud iam service-accounts describe "$SA_EMAIL" \
         --project "$PROJECT" >/dev/null 2>&1; then
-        log_info "Service account exists, importing into Terraform state..."
-        terraform import \
-            -var="project_id=$PROJECT" \
-            -var="region=$REGION" \
-            -var="bucket_name=$BUCKET" \
-            -var="machine_type=$MACHINE_TYPE" \
-            -var="node_count=$NODE_COUNT" \
-            -var="cluster_name=$CLUSTER_NAME" \
-            -var="smoke_test=$SMOKE_TEST" \
-            -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
-            -var="ephemeral=$EPHEMERAL" \
-            google_service_account.pqc_bench "projects/${PROJECT}/serviceAccounts/${SA_EMAIL}" 2>/dev/null || log_warn "Service account import failed (may already be in state)"
+        if ! terraform state show google_service_account.pqc_bench &>/dev/null; then
+            log_info "Service account exists but not in state, importing..."
+            terraform import \
+                -var="project_id=$PROJECT" \
+                -var="region=$REGION" \
+                -var="bucket_name=$BUCKET" \
+                -var="machine_type=$MACHINE_TYPE" \
+                -var="node_count=$NODE_COUNT" \
+                -var="cluster_name=$CLUSTER_NAME" \
+                -var="smoke_test=$SMOKE_TEST" \
+                -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
+                -var="ephemeral=$EPHEMERAL" \
+                google_service_account.pqc_bench "projects/${PROJECT}/serviceAccounts/${SA_EMAIL}" 2>/dev/null || log_warn "Service account import failed (may already be in state)"
+        else
+            log_info "Service account already in Terraform state, skipping import"
+        fi
     fi
     
-    # Import Artifact Registry repository if it exists
+    # Import Artifact Registry repository if it exists and not in state
     AR_LOCATION="${REGION}"
     AR_REPO="pqc"
     if gcloud artifacts repositories describe "$AR_REPO" \
         --location "$AR_LOCATION" \
         --project "$PROJECT" >/dev/null 2>&1; then
-        log_info "Artifact Registry repository exists, importing into Terraform state..."
-        terraform import \
-            -var="project_id=$PROJECT" \
-            -var="region=$REGION" \
-            -var="bucket_name=$BUCKET" \
-            -var="machine_type=$MACHINE_TYPE" \
-            -var="node_count=$NODE_COUNT" \
-            -var="cluster_name=$CLUSTER_NAME" \
-            -var="smoke_test=$SMOKE_TEST" \
-            -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
-            -var="ephemeral=$EPHEMERAL" \
-            google_artifact_registry_repository.pqc "${AR_LOCATION}/${AR_REPO}" 2>/dev/null || log_warn "Artifact Registry import failed (may already be in state)"
+        if ! terraform state show google_artifact_registry_repository.pqc &>/dev/null; then
+            log_info "Artifact Registry repository exists but not in state, importing..."
+            terraform import \
+                -var="project_id=$PROJECT" \
+                -var="region=$REGION" \
+                -var="bucket_name=$BUCKET" \
+                -var="machine_type=$MACHINE_TYPE" \
+                -var="node_count=$NODE_COUNT" \
+                -var="cluster_name=$CLUSTER_NAME" \
+                -var="smoke_test=$SMOKE_TEST" \
+                -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
+                -var="ephemeral=$EPHEMERAL" \
+                google_artifact_registry_repository.pqc "${AR_LOCATION}/${AR_REPO}" 2>/dev/null || log_warn "Artifact Registry import failed (may already be in state)"
+        else
+            log_info "Artifact Registry repository already in Terraform state, skipping import"
+        fi
     fi
     
     # Remove Kubernetes service account from state if it exists
@@ -1229,9 +1257,29 @@ echo ""
 if [[ "$DESTROY_AFTER" == "true" || "$EPHEMERAL" == "true" ]]; then
     log_step "Step 9/9: Destroying infrastructure and cleaning up resources"
     
-    # Run Terraform destroy
+    # CRITICAL: Remove bucket from state before destroy to prevent deletion
+    # The bucket is a persistent resource that should never be destroyed
     cd "$TERRAFORM_DIR"
-    log_info "Running Terraform destroy..."
+    log_info "Protecting GCS bucket from destruction..."
+    if terraform state list 2>/dev/null | grep -q "google_storage_bucket.results"; then
+        log_info "Removing bucket from Terraform state (bucket will persist)"
+        terraform state rm google_storage_bucket.results 2>/dev/null || \
+        terraform state rm 'google_storage_bucket.results' 2>/dev/null || true
+        # Also remove bucket object marker
+        terraform state rm google_storage_bucket_object.experiments_marker 2>/dev/null || true
+        log_success "Bucket protected from destruction"
+    fi
+    
+    # Also protect service account and Artifact Registry (persistent resources)
+    log_info "Protecting persistent resources (service account, Artifact Registry)..."
+    terraform state rm google_service_account.pqc_bench 2>/dev/null || true
+    terraform state rm google_project_iam_member.ar_reader 2>/dev/null || true
+    terraform state rm google_storage_bucket_iam_member.gcs_admin 2>/dev/null || true
+    terraform state rm google_service_account_iam_member.workload_identity 2>/dev/null || true
+    terraform state rm google_artifact_registry_repository.pqc 2>/dev/null || true
+    
+    # Run Terraform destroy (will only destroy cluster and node pool now)
+    log_info "Running Terraform destroy (cluster and node pool only)..."
     if terraform destroy -auto-approve \
         -var="project_id=$PROJECT" \
         -var="region=$REGION" \
@@ -1242,7 +1290,7 @@ if [[ "$DESTROY_AFTER" == "true" || "$EPHEMERAL" == "true" ]]; then
         -var="smoke_test=$SMOKE_TEST" \
         -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
         -var="ephemeral=$EPHEMERAL"; then
-        log_success "Terraform destroy completed"
+        log_success "Terraform destroy completed (persistent resources preserved)"
     else
         log_warn "Terraform destroy had errors (some resources may already be deleted or not in state)"
     fi

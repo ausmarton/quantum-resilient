@@ -12,6 +12,7 @@ resource "google_storage_bucket" "results" {
   # Allow importing existing buckets
   lifecycle {
     create_before_destroy = false
+    prevent_destroy = true  # CRITICAL: Never destroy the bucket - it contains experiment results
     ignore_changes = [
       # Ignore changes to lifecycle rules if bucket already exists with different rules
       lifecycle_rule,

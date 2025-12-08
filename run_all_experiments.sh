@@ -250,8 +250,20 @@ run_experiment() {
                     --replicas "$replicas"
                 )
                 [ "$SMOKE_TEST" == "true" ] && GCP_ARGS+=(--smoke-test)
-                # Always use ephemeral mode for GCP to avoid ongoing costs
-                GCP_ARGS+=(--ephemeral)
+                
+                # For batch runs (multiple experiments), use persistent cluster mode
+                # For single runs, use ephemeral mode to avoid ongoing costs
+                # Persistent mode is determined by GCP_USE_PERSISTENT_CLUSTER variable
+                # which is set before the experiment loop if running a batch
+                if [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
+                    # Persistent cluster mode: cluster already exists, just run experiment
+                    # Image was built during setup, so skip build for all experiments
+                    GCP_ARGS+=(--skip-terraform --skip-build)
+                else
+                    # Ephemeral mode: create cluster, run, destroy (default for single runs)
+                    GCP_ARGS+=(--ephemeral)
+                fi
+                
                 "$SCRIPT_DIR/deploy_gcp.sh" "${GCP_ARGS[@]}" 2>&1 || exit_code=$?
                 
                 if [[ $exit_code -eq 0 ]]; then
@@ -552,6 +564,80 @@ print(total_experiments)
     log_info "Progress will be shown every 5 seconds"
     echo ""
     
+    # For GCP batch runs (multiple experiments), use persistent cluster mode for efficiency
+    # This creates the cluster once, reuses it for all experiments, then destroys it
+    if [[ "$env" == "gcp" ]] && [[ $ENV_TOTAL_EXPERIMENTS -gt 1 ]]; then
+        log_info "Detected batch run with $ENV_TOTAL_EXPERIMENTS experiments"
+        log_info "Using persistent cluster mode for efficiency (cluster created once, reused, destroyed at end)"
+        
+        # Determine cluster name based on smoke-test mode
+        if [[ "$SMOKE_TEST" == "true" ]]; then
+            CLUSTER_NAME="pqc-smoke-test"
+        else
+            CLUSTER_NAME="pqc-bench-gke"
+        fi
+        
+        # Check if cluster already exists
+        if gcloud container clusters describe "$CLUSTER_NAME" \
+            --region "$REGION" \
+            --project "$PROJECT" &>/dev/null 2>&1; then
+            log_warn "Cluster $CLUSTER_NAME already exists"
+            log_info "Will reuse existing cluster (use --skip-gcp and destroy manually if needed)"
+            GCP_USE_PERSISTENT_CLUSTER=true
+            GCP_CLUSTER_EXISTS=true
+        else
+            log_info "Creating persistent cluster for batch run..."
+            if "$SCRIPT_DIR/deploy_gcp.sh" \
+                --create-cluster \
+                --project "$PROJECT" \
+                --bucket "$BUCKET" \
+                --region "$REGION" \
+                --machine-type "${MACHINE_TYPE:-n2-standard-2}" \
+                $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo ""); then
+                log_success "Cluster created successfully"
+                GCP_USE_PERSISTENT_CLUSTER=true
+                GCP_CLUSTER_EXISTS=false  # We just created it
+            else
+                log_error "Failed to create cluster, falling back to ephemeral mode"
+                GCP_USE_PERSISTENT_CLUSTER=false
+                GCP_CLUSTER_EXISTS=false
+            fi
+        fi
+        
+        # Build image once for the batch (if cluster exists or was just created)
+        if [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
+            log_info "Building container image once for batch run..."
+            # Get first scenario for image build
+            FIRST_SCENARIO=$(python3 -c "
+import json
+with open('$GENERATED_SCENARIOS_DIR/manifest.json') as f:
+    manifest = json.load(f)
+if manifest['scenarios']:
+    print(manifest['scenarios'][0]['path'])
+" 2>/dev/null || echo "")
+            
+            if [[ -n "$FIRST_SCENARIO" ]] && [[ -f "$FIRST_SCENARIO" ]]; then
+                if "$SCRIPT_DIR/deploy_gcp.sh" \
+                    --scenario "$FIRST_SCENARIO" \
+                    --exp-id "batch-setup-$(date +%s)" \
+                    --project "$PROJECT" \
+                    --bucket "$BUCKET" \
+                    --region "$REGION" \
+                    --skip-terraform \
+                    --skip-aggregation \
+                    $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 | grep -E "(Building|Pushing|Image|ERROR|WARN)" || true; then
+                    log_success "Image built and ready for batch"
+                else
+                    log_warn "Image build had issues, but continuing (will build per-experiment if needed)"
+                fi
+            fi
+        fi
+    else
+        # Single experiment or non-GCP: use default behavior (ephemeral for GCP)
+        GCP_USE_PERSISTENT_CLUSTER=false
+        GCP_CLUSTER_EXISTS=false
+    fi
+    
     # Process scenarios
     scenario_count=0
     experiment_count=0  # Track actual experiments (not scenarios)
@@ -716,6 +802,24 @@ for s in manifest['scenarios']:
     log_info "  Failed: $env_failed"
     log_info "  Progress: $((env_completed * 100 / ENV_TOTAL_EXPERIMENTS))%"
     echo ""
+    
+    # Cleanup: Destroy persistent cluster if we created it for this batch
+    if [[ "$env" == "gcp" ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]] && [[ "${GCP_CLUSTER_EXISTS:-true}" == "false" ]]; then
+        log_info "Destroying persistent cluster after batch completion..."
+        if "$SCRIPT_DIR/deploy_gcp.sh" \
+            --destroy-cluster \
+            --project "$PROJECT" \
+            --bucket "$BUCKET" \
+            --region "$REGION" \
+            $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo ""); then
+            log_success "Cluster destroyed successfully"
+        else
+            log_warn "Cluster destruction had errors (cluster may still exist)"
+            log_info "You can destroy it manually with:"
+            echo "  ./deploy_gcp.sh --destroy-cluster --project $PROJECT --bucket $BUCKET --region $REGION"
+        fi
+    fi
+    
 done
 
 # =============================================================================

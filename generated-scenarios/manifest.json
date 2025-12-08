@@ -1,15 +1,15 @@
 {
-  "generated_at": "2025-12-08T19:13:41.933603+00:00",
+  "generated_at": "2025-12-08T19:28:16.963216+00:00",
   "generator_version": "2.0.0",
   "matrix_file": "/home/ausmarton/scratchpad/quantum-resilient/orchestration/experiment_matrix.yaml",
   "total_scenarios": 468,
   "validation_errors": 0,
   "algorithms": [
-    "kyber512",
-    "hybrid_kyber_dilithium",
     "ecdsa_p256",
+    "hybrid_kyber_dilithium",
+    "rsa2048",
     "dilithium2",
-    "rsa2048"
+    "kyber512"
   ],
   "payload_sizes": [
     256,
