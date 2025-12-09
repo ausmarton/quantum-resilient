@@ -73,7 +73,12 @@ final-results-smoke/
 **/figures/
 **/stats/
 *.parquet
-# Note: Keep raw JSONL files - they are benchmark data that cannot be easily regenerated
+
+# Experiment results (raw data and analysis outputs)
+# These are large and should be stored separately (e.g., GCS for GCP, local storage for native/minikube)
+results/
+**/results/
+# Note: Raw JSONL files are benchmark data but too large for git. Store in external storage.
 
 # Temporary files
 *.tmp
