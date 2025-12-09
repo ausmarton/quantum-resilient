@@ -642,7 +642,10 @@ log_info "Pod: $POD_NAME (phase: $POD_PHASE)"
 
 # Copy results from PVC using a temporary pod and kubectl logs
 # This is more reliable than kubectl run -i which has timing issues
+# Note: We can't exec into completed pods, so we'll create a read pod to check the PVC
 log_info "Copying results from PVC..."
+log_info "Creating read pod to access PVC (cannot exec into completed pod $POD_NAME)..."
+
 READ_POD_NAME="pvc-read-$(date +%s)"
 
 COPY_SUCCESS=false
@@ -650,18 +653,18 @@ TEMP_OUTPUT=$(mktemp)
 
 # Create a pod that will read the file
 READ_POD_YAML=$(mktemp)
-cat > "$READ_POD_YAML" <<EOF
+cat > "$READ_POD_YAML" <<'HEREDOC_EOF'
 apiVersion: v1
 kind: Pod
 metadata:
-  name: ${READ_POD_NAME}
-  namespace: ${NAMESPACE}
+  name: READ_POD_NAME_PLACEHOLDER
+  namespace: NAMESPACE_PLACEHOLDER
 spec:
   restartPolicy: Never
   containers:
   - name: read
     image: busybox:1.36
-    command: ["sh", "-c", "cat /results/raw/run.jsonl 2>/dev/null || find /results -name '*.jsonl' -type f -exec cat {} \\;"]
+    command: ["sh", "-c", "if [ -f /results/raw/run.jsonl ]; then cat /results/raw/run.jsonl; elif [ -d /results/raw ]; then find /results/raw -name '*.jsonl' -type f -exec cat {} \\;; else find /results -name '*.jsonl' -type f -exec cat {} \\;; fi"]
     volumeMounts:
     - name: results
       mountPath: /results
@@ -669,63 +672,174 @@ spec:
   volumes:
   - name: results
     persistentVolumeClaim:
-      claimName: ${PVC_NAME}
-EOF
+      claimName: PVC_NAME_PLACEHOLDER
+HEREDOC_EOF
+# Replace placeholders with actual values
+log_info "Replacing placeholders in YAML..."
+# Use | as delimiter to avoid issues with / in values
+SED_SUCCESS=true
+if ! sed -i "s|READ_POD_NAME_PLACEHOLDER|${READ_POD_NAME}|g" "$READ_POD_YAML"; then
+    log_error "Failed to replace READ_POD_NAME_PLACEHOLDER"
+    SED_SUCCESS=false
+fi
+if [[ "$SED_SUCCESS" == "true" ]] && ! sed -i "s|NAMESPACE_PLACEHOLDER|${NAMESPACE}|g" "$READ_POD_YAML"; then
+    log_error "Failed to replace NAMESPACE_PLACEHOLDER"
+    SED_SUCCESS=false
+fi
+if [[ "$SED_SUCCESS" == "true" ]] && ! sed -i "s|PVC_NAME_PLACEHOLDER|${PVC_NAME}|g" "$READ_POD_YAML"; then
+    log_error "Failed to replace PVC_NAME_PLACEHOLDER"
+    SED_SUCCESS=false
+fi
 
-if kubectl apply --validate=false -f "$READ_POD_YAML" >/dev/null 2>&1; then
-    log_info "Waiting for read pod to complete..."
+# Verify YAML file exists and has content
+if [[ "$SED_SUCCESS" == "true" ]] && ([[ ! -f "$READ_POD_YAML" ]] || [[ ! -s "$READ_POD_YAML" ]]); then
+    log_error "YAML file $READ_POD_YAML does not exist or is empty"
+    SED_SUCCESS=false
+fi
+
+if [[ "$SED_SUCCESS" == "false" ]]; then
+    log_error "Failed to prepare read pod YAML"
+    rm -f "$READ_POD_YAML" "$TEMP_OUTPUT"
+    COPY_SUCCESS=false
+elif [[ "$SED_SUCCESS" == "true" ]]; then
+    # Try to apply the pod and capture any errors for debugging
+    log_info "Creating read pod $READ_POD_NAME to access PVC $PVC_NAME..."
+    log_info "Read pod YAML location: $READ_POD_YAML"
+    log_info "YAML file size: $(wc -c < "$READ_POD_YAML") bytes"
     
-    # Wait for pod to be created
-    sleep 2
+    # Show first few lines of YAML for debugging
+    log_info "YAML content (first 10 lines):"
+    head -10 "$READ_POD_YAML" 2>/dev/null | sed 's/^/  /' || log_warn "Could not read YAML file"
     
-    # Wait for completion (with timeout)
-    for i in {1..20}; do
-        PHASE=$(kubectl get pod "$READ_POD_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-        if [[ "$PHASE" == "Succeeded" ]] || [[ "$PHASE" == "Failed" ]]; then
-            break
-        fi
-        sleep 1
-    done
-    
-    if [[ "$PHASE" == "Succeeded" ]] || [[ "$PHASE" == "Failed" ]]; then
-        # Get logs (this is more reliable than kubectl run -i)
-        if kubectl logs "$READ_POD_NAME" -n "$NAMESPACE" > "$TEMP_OUTPUT" 2>&1; then
-            # Filter out kubectl warning messages and check for valid JSONL
-            # Remove lines that are kubectl warnings or prompts
-            grep -v "^warning:" "$TEMP_OUTPUT" | \
-                grep -v "^If you don't see a command prompt" | \
-                grep -v "^Internal error occurred" | \
-                grep -v "^unable to upgrade connection" | \
-                grep -v "^container.*not found" | \
-                grep -v "^falling back to streaming logs" > "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || true
-            
-            # Check if we have valid JSONL data (at least one line starting with {)
-            if [[ -f "$RUN_OUT_DIR/raw/run.jsonl" ]] && [[ -s "$RUN_OUT_DIR/raw/run.jsonl" ]]; then
-                # Check if it contains valid JSONL (at least one line starting with {)
-                if head -1 "$RUN_OUT_DIR/raw/run.jsonl" | grep -q "^{"; then
-                    COPY_SUCCESS=true
-                    log_success "Successfully copied run.jsonl from PVC"
-                else
-                    log_warn "Output doesn't appear to be valid JSONL"
-                    log_info "First line: $(head -1 "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || echo 'empty')"
-                fi
-            else
-                log_warn "Read pod output is empty or invalid"
-            fi
-        else
-            log_error "Failed to get logs from read pod"
-        fi
+    log_info "Running kubectl apply..."
+    # Temporarily disable exit on error to capture kubectl output even if it fails
+    set +e
+    KUBECTL_APPLY_OUTPUT=$(kubectl apply --validate=false -f "$READ_POD_YAML" 2>&1)
+    KUBECTL_APPLY_EXIT=$?
+    set -e
+
+    log_info "kubectl apply exit code: $KUBECTL_APPLY_EXIT"
+    if [[ -n "$KUBECTL_APPLY_OUTPUT" ]]; then
+        log_info "kubectl apply output: $KUBECTL_APPLY_OUTPUT"
     else
-        log_error "Read pod did not complete (phase: $PHASE)"
-        kubectl describe pod "$READ_POD_NAME" -n "$NAMESPACE" 2>&1 | tail -20 || true
+        log_warn "kubectl apply output is empty"
     fi
     
-    # Clean up
-    kubectl delete pod "$READ_POD_NAME" -n "$NAMESPACE" --ignore-not-found=true >/dev/null 2>&1
-    rm -f "$READ_POD_YAML" "$TEMP_OUTPUT"
-else
-    log_error "Failed to create read pod"
-    rm -f "$READ_POD_YAML" "$TEMP_OUTPUT"
+    # Also validate the YAML file exists and show its full content for debugging
+    if [[ -f "$READ_POD_YAML" ]]; then
+        log_info "Full YAML file content:"
+        cat "$READ_POD_YAML" | sed 's/^/  /' || log_warn "Could not read full YAML file"
+    else
+        log_error "YAML file does not exist: $READ_POD_YAML"
+    fi
+
+    if [[ $KUBECTL_APPLY_EXIT -eq 0 ]]; then
+        log_info "Read pod created: $READ_POD_NAME"
+        log_info "Waiting for read pod to complete..."
+        
+        # Wait for pod to be created
+        sleep 2
+        
+        # Wait for completion (with timeout)
+        PHASE=""
+        for i in {1..30}; do
+            PHASE=$(kubectl get pod "$READ_POD_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+            if [[ -z "$PHASE" ]]; then
+                log_warn "Pod $READ_POD_NAME not found yet (attempt $i/30)"
+                sleep 1
+                continue
+            fi
+            if [[ "$PHASE" == "Succeeded" ]] || [[ "$PHASE" == "Failed" ]]; then
+                log_info "Read pod phase: $PHASE"
+                break
+            fi
+            if [[ $i -eq 10 ]] || [[ $i -eq 20 ]]; then
+                log_info "Read pod still running (phase: $PHASE, attempt $i/30)"
+            fi
+            sleep 1
+        done
+        
+        if [[ -z "$PHASE" ]]; then
+            log_error "Read pod $READ_POD_NAME was never created or is not visible"
+            kubectl get pod "$READ_POD_NAME" -n "$NAMESPACE" 2>&1 || log_error "Pod does not exist"
+            kubectl get pods -n "$NAMESPACE" | grep -E "pvc-read|NAME" | head -5 || true
+        elif [[ "$PHASE" == "Succeeded" ]] || [[ "$PHASE" == "Failed" ]]; then
+            # Get logs (this is more reliable than kubectl run -i)
+            log_info "Getting logs from read pod..."
+            if kubectl logs "$READ_POD_NAME" -n "$NAMESPACE" > "$TEMP_OUTPUT" 2>&1; then
+                LOG_SIZE=$(stat -f%z "$TEMP_OUTPUT" 2>/dev/null || stat -c%s "$TEMP_OUTPUT" 2>/dev/null || echo 0)
+                log_info "Read pod logs size: $LOG_SIZE bytes"
+                
+                # Extract JSONL lines (lines that start with {)
+                # Filter out kubectl warning messages and non-JSONL lines
+                grep -E "^{" "$TEMP_OUTPUT" > "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || true
+                
+                # Also filter out common kubectl warning messages
+                if [[ -s "$RUN_OUT_DIR/raw/run.jsonl" ]]; then
+                    # Remove any lines that don't look like JSON
+                    grep -E "^{" "$RUN_OUT_DIR/raw/run.jsonl" > "${RUN_OUT_DIR}/raw/run.jsonl.tmp" 2>/dev/null && mv "${RUN_OUT_DIR}/raw/run.jsonl.tmp" "$RUN_OUT_DIR/raw/run.jsonl" || true
+                fi
+                
+                # Check if we have valid JSONL data (at least one line starting with {)
+                if [[ -f "$RUN_OUT_DIR/raw/run.jsonl" ]] && [[ -s "$RUN_OUT_DIR/raw/run.jsonl" ]]; then
+                    FILE_SIZE=$(stat -f%z "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || stat -c%s "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || echo 0)
+                    log_info "Filtered output file size: $FILE_SIZE bytes"
+                    
+                    # Check if it contains valid JSONL (at least one line starting with {)
+                    FIRST_LINE=$(head -1 "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || echo "")
+                    if [[ -n "$FIRST_LINE" ]] && echo "$FIRST_LINE" | grep -q "^{"; then
+                        COPY_SUCCESS=true
+                        log_success "Successfully copied run.jsonl from PVC"
+                    else
+                        log_warn "Output doesn't appear to be valid JSONL"
+                        log_info "First line (first 100 chars): ${FIRST_LINE:0:100}"
+                        log_info "Raw temp output (first 20 lines):"
+                        head -20 "$TEMP_OUTPUT" 2>/dev/null | sed 's/^/  /' || true
+                        log_info "Checking if raw directory exists in PVC..."
+                        # Try to list the directory structure
+                        kubectl logs "$READ_POD_NAME" -n "$NAMESPACE" 2>&1 | grep -E "(Listing|raw|jsonl|Found)" | head -20 || true
+                    fi
+                else
+                    log_warn "Read pod output is empty or invalid"
+                    log_info "Temp output file exists: $([[ -f "$TEMP_OUTPUT" ]] && echo 'yes' || echo 'no')"
+                    log_info "Temp output size: $LOG_SIZE bytes"
+                    log_info "Temp output (first 10 lines):"
+                    head -10 "$TEMP_OUTPUT" 2>/dev/null | sed 's/^/  /' || true
+                    log_info "Note: Cannot exec into completed pod to verify PVC contents directly"
+                    log_info "The read pod should have accessed the PVC - check its logs above"
+                fi
+            else
+                LOG_ERROR_OUTPUT=$(kubectl logs "$READ_POD_NAME" -n "$NAMESPACE" 2>&1)
+                log_error "Failed to get logs from read pod"
+                log_error "kubectl logs error output: $LOG_ERROR_OUTPUT"
+                log_info "Pod status:"
+                kubectl get pod "$READ_POD_NAME" -n "$NAMESPACE" -o yaml 2>&1 | grep -A 5 "status:" | head -10 || true
+            fi
+        else
+            log_error "Read pod did not complete (phase: $PHASE after 30 seconds)"
+            log_info "Pod description:"
+            kubectl describe pod "$READ_POD_NAME" -n "$NAMESPACE" 2>&1 | tail -30 || true
+            log_info "Pod events:"
+            kubectl get events -n "$NAMESPACE" --field-selector involvedObject.name="$READ_POD_NAME" 2>&1 | tail -10 || true
+        fi
+        
+        # Clean up
+        log_info "Cleaning up read pod..."
+        kubectl delete pod "$READ_POD_NAME" -n "$NAMESPACE" --ignore-not-found=true >/dev/null 2>&1
+        rm -f "$READ_POD_YAML" "$TEMP_OUTPUT"
+    else
+        log_error "Failed to create read pod"
+        log_error "kubectl apply exit code: $KUBECTL_APPLY_EXIT"
+        log_error "kubectl apply output: $KUBECTL_APPLY_OUTPUT"
+        log_info "Checking if PVC exists..."
+        kubectl get pvc "$PVC_NAME" -n "$NAMESPACE" 2>&1 || log_error "PVC not found!"
+        log_info "Checking for existing pods with same name..."
+        kubectl get pod "$READ_POD_NAME" -n "$NAMESPACE" 2>&1 || log_info "No existing pod found"
+        log_info "Checking PVC status:"
+        kubectl get pvc "$PVC_NAME" -n "$NAMESPACE" -o yaml 2>&1 | grep -A 5 "status:" | head -10 || true
+        rm -f "$READ_POD_YAML" "$TEMP_OUTPUT"
+        COPY_SUCCESS=false
+    fi
 fi
 
 if [[ "$COPY_SUCCESS" == "false" ]]; then
@@ -993,8 +1107,12 @@ echo "    --native results/native_exp/stats/summary.json \\"
 echo "    --k8s $OUT_DIR/stats/summary.json"
 echo ""
 
-log_success "Done!"
-
-exit 0
+if [[ $FAILED_RUNS -gt 0 ]]; then
+    log_error "Done with $FAILED_RUNS failed run(s)"
+    exit 1
+else
+    log_success "Done!"
+    exit 0
+fi
 
 
