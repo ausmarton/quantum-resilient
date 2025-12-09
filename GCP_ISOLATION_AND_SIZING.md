@@ -123,6 +123,39 @@ The extra node provides:
 - GCS uploads are independent
 - No network interference between experiments
 
+### Private Cluster Configuration
+
+**Configuration**: GKE nodes have **no external IP addresses** (private cluster)
+
+**Rationale**:
+1. **Enterprise Alignment**: Private clusters are standard in enterprise production environments, making our experiments more representative
+2. **Eliminates Network Overhead**: Removes NAT routing overhead that could introduce variability in measurements
+3. **Security**: Reduces attack surface by removing external IP exposure
+4. **Experiment Validity**: Since we measure CPU/crypto performance (not network latency), removing external IPs eliminates unnecessary network overhead without affecting our measurements
+
+**Access Requirements**:
+- Nodes access **Artifact Registry** via Private Google Access (for pulling container images)
+- Nodes access **GCS** via Private Google Access (for uploading results)
+- Nodes access **GKE control plane** via private endpoint
+- **kubectl** access remains via public endpoint (for cluster management)
+
+**Setup Requirement**:
+Private Google Access must be enabled on the subnet:
+
+```bash
+gcloud compute networks subnets update default \
+  --region=<region> \
+  --enable-private-ip-google-access
+```
+
+**Note**: This is usually enabled by default on the default network, but should be verified.
+
+**Impact on Research**:
+- ✅ **Positive**: More representative of enterprise environments
+- ✅ **Positive**: Eliminates network overhead from measurements
+- ✅ **Positive**: Better security posture
+- ⚪ **Neutral**: No impact on CPU/crypto benchmarking (we're not measuring network)
+
 ### Storage Isolation
 
 - Each job uses `emptyDir` volume (ephemeral)

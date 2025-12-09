@@ -545,13 +545,38 @@ if [[ "$SCALING_MODE" == "true" ]]; then
         --from-literal=duration_sec="30" \
         --dry-run=client -o yaml | kubectl apply --validate=false -f - -n "$NAMESPACE"
     
-    # Create the parallel job with dynamic parallelism
+    # CRITICAL: Generate unique job name to avoid collisions
+    # Kubernetes job names must be RFC 1123 subdomain compliant (max 63 chars)
+    # Format: pqc-bench-<sanitized-exp-id-with-replica>
+    # Sanitize experiment ID: lowercase, replace _ with -, remove invalid chars
+    SANITIZE_K8S_NAME() {
+        echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/_/-/g' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g'
+    }
+    
+    # Extract replica suffix if present (e.g., _r4, _r8)
+    REPLICA_SUFFIX=""
+    if [[ "$RUN_EXP_ID" =~ _r([0-9]+)$ ]]; then
+        REPLICA_SUFFIX="_r${BASH_REMATCH[1]}"
+        BASE_EXP_ID="${RUN_EXP_ID%_r*}"
+    else
+        BASE_EXP_ID="$RUN_EXP_ID"
+        if [[ "$REPLICAS" -gt 1 ]]; then
+            REPLICA_SUFFIX="_r${REPLICAS}"
+        fi
+    fi
+    
+    # Sanitize base ID and truncate, leaving room for replica suffix
+    # "pqc-bench-" is 10 chars, replica suffix is max 4 chars (_r8), so we have 49 chars for base ID
+    SANITIZED_BASE=$(SANITIZE_K8S_NAME "$BASE_EXP_ID" | cut -c1-49)
+    SANITIZED_SUFFIX=$(SANITIZE_K8S_NAME "$REPLICA_SUFFIX" | sed 's/^_//')
+    JOB_NAME="pqc-bench-${SANITIZED_BASE}${SANITIZED_SUFFIX}"
+    
+    # Create the parallel job with dynamic parallelism and unique name
     cat "$SCRIPT_DIR/k8s/worker-parallel-job.yaml" | \
+        sed "s/name: pqc-bench-scaling/name: $JOB_NAME/" | \
         sed "s/parallelism: 1/parallelism: $REPLICAS/" | \
         sed "s/completions: 1/completions: $REPLICAS/" | \
         kubectl apply --validate=false -f - -n "$NAMESPACE"
-    
-    JOB_NAME="pqc-bench-scaling"
 else
     log_info "Creating Job..."
     # Use original worker-job.yaml with PVC (simpler, no permission issues)

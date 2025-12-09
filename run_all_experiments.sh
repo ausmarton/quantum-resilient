@@ -261,7 +261,7 @@ run_experiment() {
                     fi
                     
                     # Submit job (non-blocking for parallel, blocking for sequential)
-                    JOB_NAME=$("$SCRIPT_DIR/scripts/submit_gcp_job_parallel.sh" \
+                    JOB_SUBMIT_OUTPUT=$("$SCRIPT_DIR/scripts/submit_gcp_job_parallel.sh" \
                         --scenario "$scenario_path" \
                         --exp-id "$scenario_id" \
                         --project "$PROJECT" \
@@ -271,6 +271,24 @@ run_experiment() {
                         --namespace "$GCP_NAMESPACE" \
                         --replicas "$replicas" \
                         $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1) || exit_code=$?
+                    
+                    if [[ $exit_code -ne 0 ]]; then
+                        log_error "Job submission failed for $scenario_id (replicas: $replicas)"
+                        # Print all output lines (errors go to stderr, which is captured)
+                        if [[ -n "$JOB_SUBMIT_OUTPUT" ]]; then
+                            echo "$JOB_SUBMIT_OUTPUT" | while IFS= read -r line || [[ -n "$line" ]]; do
+                                log_error "  $line"
+                            done
+                        else
+                            log_error "  No error output captured (check kubectl connectivity and cluster status)"
+                        fi
+                    else
+                        JOB_NAME=$(echo "$JOB_SUBMIT_OUTPUT" | tail -1)
+                        if [[ -z "$JOB_NAME" ]]; then
+                            log_error "Job submission returned success but no job name for $scenario_id"
+                            exit_code=1
+                        fi
+                    fi
                     
                     if [[ $exit_code -eq 0 ]]; then
                         # Store job for tracking (used for parallel mode)
@@ -637,28 +655,580 @@ print(total_experiments)
         fi
         
         # Check if cluster already exists
+        # Calculate node count based on parallel jobs for proper isolation
+        # Each job needs ~1 CPU (800m request), n2-standard-2 has 2 vCPUs
+        # To avoid noisy neighbor: max 1 job per node (or 2 if we allow some sharing)
+        # For safety and isolation: use 1 job per node
+        # Add 1 extra node for system overhead
+        if [[ $PARALLEL_JOBS -gt 1 ]]; then
+            CALCULATED_NODE_COUNT=$((PARALLEL_JOBS + 1))
+            log_info "Calculated node count: $CALCULATED_NODE_COUNT (for $PARALLEL_JOBS parallel jobs + 1 overhead)"
+        else
+            CALCULATED_NODE_COUNT="${NODE_COUNT:-1}"
+            log_info "Using node count: $CALCULATED_NODE_COUNT (sequential mode)"
+        fi
+        
         if gcloud container clusters describe "$CLUSTER_NAME" \
             --region "$REGION" \
             --project "$PROJECT" &>/dev/null 2>&1; then
             log_warn "Cluster $CLUSTER_NAME already exists"
+            
+            # Detect the actual node pool name (could be pqc-bench-pool, default-pool, etc.)
+            NODE_POOL_NAME=$(gcloud container node-pools list \
+                --cluster "$CLUSTER_NAME" \
+                --region "$REGION" \
+                --project "$PROJECT" \
+                --format="value(name)" 2>/dev/null | head -1 || echo "")
+            
+            if [[ -z "$NODE_POOL_NAME" ]]; then
+                log_warn "Cluster exists but has no node pools. Creating node pool..."
+                
+                # Create node pool using Terraform (only the node pool, not the cluster)
+                TERRAFORM_DIR="$SCRIPT_DIR/terraform/gke"
+                cd "$TERRAFORM_DIR"
+                
+                # Initialize Terraform if needed
+                if [[ ! -d ".terraform" ]]; then
+                    log_info "Initializing Terraform..."
+                    terraform init -input=false >/dev/null 2>&1 || {
+                        log_error "Terraform initialization failed"
+                        cd "$SCRIPT_DIR"
+                        log_error "Please manually create a node pool or fix the cluster"
+                        export GCP_USE_PERSISTENT_CLUSTER=false
+                        export GCP_CLUSTER_EXISTS=false
+                        continue
+                    }
+                fi
+                
+                # Import the existing cluster into Terraform state (if not already imported)
+                log_info "Ensuring cluster is in Terraform state..."
+                if ! terraform state show google_container_cluster.primary >/dev/null 2>&1; then
+                    log_info "Importing existing cluster into Terraform state..."
+                    terraform import google_container_cluster.primary "projects/${PROJECT}/locations/${REGION}/clusters/${CLUSTER_NAME}" >/dev/null 2>&1 || {
+                        log_warn "Could not import cluster into Terraform state (may already exist)"
+                    }
+                fi
+                
+                # For Terraform with regional clusters, node_count is TOTAL nodes (not per zone)
+                # However, based on quota errors, it seems Terraform might interpret it as per-zone
+                # So we'll use gcloud directly which is more explicit about per-zone vs total
+                # Calculate nodes per zone for gcloud (which requires per-zone specification)
+                ZONES=$(gcloud compute regions describe "$REGION" --project "$PROJECT" --format="value(zones)" 2>/dev/null | tr ';' '\n' | wc -l || echo "3")
+                NODES_PER_ZONE=$(( (CALCULATED_NODE_COUNT + ZONES - 1) / ZONES ))
+                TOTAL_NODES=$((NODES_PER_ZONE * ZONES))
+                log_info "Creating node pool with $NODES_PER_ZONE nodes per zone (total: $TOTAL_NODES nodes across $ZONES zones)..."
+                
+                # Use gcloud directly for more reliable node pool creation
+                if gcloud container node-pools create pqc-bench-pool \
+                    --cluster "$CLUSTER_NAME" \
+                    --region "$REGION" \
+                    --project "$PROJECT" \
+                    --num-nodes "$NODES_PER_ZONE" \
+                    --machine-type "${MACHINE_TYPE:-n2-standard-2}" \
+                    --disk-size "${DISK_SIZE_GB:-50}" \
+                    --disk-type "pd-standard" \
+                    --enable-autorepair \
+                    --enable-autoupgrade \
+                    --quiet 2>&1; then
+                    log_success "Node pool created via gcloud: $NODES_PER_ZONE nodes per zone (total: $TOTAL_NODES)"
+                    NODE_POOL_NAME="pqc-bench-pool"
+                else
+                    log_error "Failed to create node pool via gcloud"
+                    log_warn "This might be due to insufficient quota. Check quotas at:"
+                    log_info "  https://console.cloud.google.com/iam-admin/quotas?project=$PROJECT"
+                    log_info "Required resources for $TOTAL_NODES nodes (${MACHINE_TYPE:-n2-standard-2}):"
+                    # Calculate required resources
+                    CPU_PER_NODE=2  # n2-standard-2 has 2 vCPUs
+                    DISK_PER_NODE="${DISK_SIZE_GB:-50}"
+                    TOTAL_CPUS=$((TOTAL_NODES * CPU_PER_NODE))
+                    TOTAL_DISK=$((TOTAL_NODES * DISK_PER_NODE))
+                    log_info "  - CPUs: $TOTAL_CPUS (N2_CPUS quota)"
+                    log_info "  - Disk: ${TOTAL_DISK}GB (DISKS_TOTAL_GB quota)"
+                    log_info ""
+                    log_info "To create manually:"
+                    log_info "  gcloud container node-pools create pqc-bench-pool --cluster $CLUSTER_NAME --region $REGION --num-nodes $NODES_PER_ZONE"
+                    cd "$SCRIPT_DIR"
+                    export GCP_USE_PERSISTENT_CLUSTER=false
+                    export GCP_CLUSTER_EXISTS=false
+                    NODE_POOL_NAME=""  # Clear node pool name so we skip scaling
+                fi
+                
+                cd "$SCRIPT_DIR"
+                
+                # After creating node pool, verify it exists and continue with scaling
+                if [[ -n "$NODE_POOL_NAME" ]]; then
+                    log_info "Node pool created: $NODE_POOL_NAME"
+                    # Wait a moment for node pool to be ready
+                    sleep 5
+                fi
+            fi
+            
+            # Now proceed with scaling if we have a node pool
+            if [[ -n "$NODE_POOL_NAME" ]]; then
+                log_info "Detected node pool: $NODE_POOL_NAME"
+                
+                # Always check and scale cluster to match calculated node count
+                CURRENT_NODE_COUNT=$(gcloud container node-pools describe "$NODE_POOL_NAME" \
+                    --cluster "$CLUSTER_NAME" \
+                    --region "$REGION" \
+                    --project "$PROJECT" \
+                    --format="value(initialNodeCount)" 2>/dev/null || echo "0")
+                
+                # For regional clusters, --num-nodes is per zone, so we need to calculate nodes per zone
+                # Get the number of zones the cluster spans
+                # First try to get from cluster description
+                CLUSTER_LOCATIONS=$(gcloud container clusters describe "$CLUSTER_NAME" \
+                    --region "$REGION" \
+                    --project "$PROJECT" \
+                    --format="value(locations)" 2>/dev/null || echo "")
+                
+                if [[ -n "$CLUSTER_LOCATIONS" ]]; then
+                    # Count zones from cluster locations
+                    # Locations can be comma or semicolon separated
+                    if echo "$CLUSTER_LOCATIONS" | grep -q ';'; then
+                        ZONES=$(echo "$CLUSTER_LOCATIONS" | tr ';' '\n' | wc -l)
+                    else
+                        ZONES=$(echo "$CLUSTER_LOCATIONS" | tr ',' '\n' | wc -l)
+                    fi
+                    log_info "Cluster spans zones: $CLUSTER_LOCATIONS ($ZONES zones)"
+                else
+                    # Fallback: get zones from region description (more reliable)
+                    ZONES=$(gcloud compute regions describe "$REGION" \
+                        --project "$PROJECT" \
+                        --format="value(zones)" 2>/dev/null | tr ';' '\n' | wc -l)
+                    if [[ -z "$ZONES" ]] || [[ "$ZONES" -eq 0 ]]; then
+                        # Final fallback: assume 3 zones for regional clusters
+                        ZONES=3
+                        log_warn "Could not detect zone count, assuming 3 zones (regional cluster default)"
+                    else
+                        log_info "Detected $ZONES zones in region $REGION"
+                    fi
+                fi
+                
+                # Calculate nodes per zone (round up to ensure we have enough total nodes)
+                NODES_PER_ZONE=$(( (CALCULATED_NODE_COUNT + ZONES - 1) / ZONES ))
+                TOTAL_NODES=$((NODES_PER_ZONE * ZONES))
+                
+                log_info "Calculated: $NODES_PER_ZONE nodes per zone × $ZONES zones = $TOTAL_NODES total nodes"
+                
+                # For Terraform, node_count is TOTAL nodes (not per zone) for regional clusters
+                # GCP will distribute them across zones automatically
+                CURRENT_TOTAL_NODES=$((CURRENT_NODE_COUNT * ZONES))
+                
+                # Compare current total nodes with required total nodes
+                # Use CALCULATED_NODE_COUNT directly (it's already the total we want)
+                if [[ "$CURRENT_TOTAL_NODES" -ne "$CALCULATED_NODE_COUNT" ]]; then
+                    log_info "Current cluster state: $CURRENT_NODE_COUNT nodes per zone (total: $CURRENT_TOTAL_NODES nodes)"
+                    log_info "Target cluster state: $CALCULATED_NODE_COUNT total nodes (will be distributed across $ZONES zones)"
+                    log_info "Scaling cluster from $CURRENT_TOTAL_NODES to $CALCULATED_NODE_COUNT total nodes (for $PARALLEL_JOBS parallel jobs)"
+                    
+                    # Estimate resource requirements for quota checking
+                    # n2-standard-2 has 2 vCPUs and 8GB RAM per node
+                    REQUIRED_CPUS=$((CALCULATED_NODE_COUNT * 2))
+                    REQUIRED_DISK_GB=$((CALCULATED_NODE_COUNT * 50))  # 50GB per node (default disk size)
+                    
+                    log_info "Resource requirements: $REQUIRED_CPUS vCPUs, $REQUIRED_DISK_GB GB disk (for $CALCULATED_NODE_COUNT n2-standard-2 nodes)"
+                    log_info "If scaling fails due to quota, reduce PARALLEL_JOBS or increase GCP quotas"
+                    
+                    # Use Terraform to scale the cluster (keeps state in sync)
+                    log_info "Scaling cluster using Terraform (node_count=$CALCULATED_NODE_COUNT)..."
+                    TERRAFORM_DIR="$SCRIPT_DIR/terraform/gke"
+                    cd "$TERRAFORM_DIR"
+                    
+                    # Initialize Terraform if needed
+                    if [[ ! -d .terraform ]]; then
+                        log_info "Initializing Terraform..."
+                        terraform init -input=false >/dev/null 2>&1 || true
+                    fi
+                    
+                    # Check if node pool name matches what Terraform expects
+                    # Terraform expects "pqc-bench-pool", but cluster might have "default-pool"
+                    TERRAFORM_EXPECTED_POOL="pqc-bench-pool"
+                    
+                    # Check if cluster and node pool are in Terraform state
+                    CLUSTER_IN_STATE=$(terraform state list 2>/dev/null | grep -q "google_container_cluster.primary" && echo "yes" || echo "no")
+                    NODE_POOL_IN_STATE=$(terraform state list 2>/dev/null | grep -q "google_container_node_pool.primary" && echo "yes" || echo "no")
+                    
+                    # If node pool name doesn't match, we can't use Terraform to manage it
+                    # But we can still try to import the cluster and use gcloud for the node pool
+                    if [[ "$NODE_POOL_NAME" != "$TERRAFORM_EXPECTED_POOL" ]]; then
+                        log_info "Node pool name '$NODE_POOL_NAME' doesn't match Terraform expected name '$TERRAFORM_EXPECTED_POOL'"
+                        log_info "Cannot use Terraform to manage this node pool (name mismatch)"
+                        log_info "Will use gcloud for scaling the node pool"
+                        USE_TERRAFORM_FOR_NODE_POOL=false
+                    else
+                        USE_TERRAFORM_FOR_NODE_POOL=true
+                    fi
+                    
+                    # Always try to import cluster into Terraform state (for consistency)
+                    if [[ "$CLUSTER_IN_STATE" == "no" ]]; then
+                        log_info "Cluster exists but not in Terraform state. Importing..."
+                        CLUSTER_RESOURCE_ID="projects/$PROJECT/locations/$REGION/clusters/$CLUSTER_NAME"
+                        if terraform import \
+                            -var="project_id=$PROJECT" \
+                            -var="region=$REGION" \
+                            -var="bucket_name=$BUCKET" \
+                            -var="machine_type=${MACHINE_TYPE:-n2-standard-2}" \
+                            -var="node_count=$CURRENT_TOTAL_NODES" \
+                            -var="cluster_name=$CLUSTER_NAME" \
+                            -var="smoke_test=$SMOKE_TEST" \
+                            -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
+                            -var="ephemeral=false" \
+                            google_container_cluster.primary "$CLUSTER_RESOURCE_ID" >/dev/null 2>&1; then
+                            log_success "Cluster imported into Terraform state"
+                        else
+                            log_warn "Failed to import cluster into Terraform state (may already exist or be managed elsewhere)"
+                        fi
+                    fi
+                    
+                    # Only try to import/manage node pool with Terraform if name matches
+                    if [[ "$USE_TERRAFORM_FOR_NODE_POOL" == "true" ]]; then
+                        # Import node pool if it exists but isn't in state
+                        if [[ "$NODE_POOL_IN_STATE" == "no" ]]; then
+                            log_info "Node pool exists but not in Terraform state. Importing..."
+                            NODE_POOL_RESOURCE_ID="projects/$PROJECT/locations/$REGION/clusters/$CLUSTER_NAME/nodePools/$NODE_POOL_NAME"
+                            if terraform import \
+                                -var="project_id=$PROJECT" \
+                                -var="region=$REGION" \
+                                -var="bucket_name=$BUCKET" \
+                                -var="machine_type=${MACHINE_TYPE:-n2-standard-2}" \
+                                -var="node_count=$CURRENT_TOTAL_NODES" \
+                                -var="cluster_name=$CLUSTER_NAME" \
+                                -var="smoke_test=$SMOKE_TEST" \
+                                -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
+                                -var="ephemeral=false" \
+                                google_container_node_pool.primary "$NODE_POOL_RESOURCE_ID" >/dev/null 2>&1; then
+                                log_success "Node pool imported into Terraform state"
+                            else
+                                log_warn "Failed to import node pool. Will try to update anyway."
+                            fi
+                        fi
+                    fi
+                    
+                    # Apply scaling - use Terraform if node pool name matches, otherwise use gcloud
+                    # For regional clusters, Terraform's node_count is TOTAL nodes (distributed across zones)
+                    set +e  # Don't exit on error, we'll handle it
+                    if [[ "$USE_TERRAFORM_FOR_NODE_POOL" == "false" ]]; then
+                        # Use gcloud for scaling when node pool name doesn't match Terraform expectation
+                        log_info "Using gcloud to scale node pool '$NODE_POOL_NAME' (not managed by Terraform)"
+                        SCALE_OUTPUT=$(timeout 300 gcloud container clusters resize "$CLUSTER_NAME" \
+                            --node-pool "$NODE_POOL_NAME" \
+                            --num-nodes "$NODES_PER_ZONE" \
+                            --region "$REGION" \
+                            --project "$PROJECT" \
+                            --quiet 2>&1)
+                        SCALE_EXIT_CODE=$?
+                    else
+                        # Use Terraform to update only the node pool (not the cluster)
+                        SCALE_OUTPUT=$(timeout 600 terraform apply -auto-approve \
+                            -target=google_container_node_pool.primary \
+                            -var="project_id=$PROJECT" \
+                            -var="region=$REGION" \
+                            -var="bucket_name=$BUCKET" \
+                            -var="machine_type=${MACHINE_TYPE:-n2-standard-2}" \
+                            -var="node_count=$CALCULATED_NODE_COUNT" \
+                            -var="cluster_name=$CLUSTER_NAME" \
+                            -var="smoke_test=$SMOKE_TEST" \
+                            -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
+                            -var="ephemeral=false" 2>&1)
+                        SCALE_EXIT_CODE=$?
+                    fi
+                    set -e  # Re-enable exit on error
+                    
+                    cd "$SCRIPT_DIR"
+                    
+                    # Always log output for debugging
+                    if [[ -n "$SCALE_OUTPUT" ]]; then
+                        if [[ "$USE_TERRAFORM_FOR_NODE_POOL" == "false" ]]; then
+                            log_info "gcloud scaling command output:"
+                        else
+                            log_info "Terraform apply output:"
+                        fi
+                        echo "$SCALE_OUTPUT" | tail -30 | while IFS= read -r line || [[ -n "$line" ]]; do
+                            log_info "  $line"
+                        done
+                    fi
+                    
+                    if [[ $SCALE_EXIT_CODE -eq 0 ]]; then
+                        if [[ "$USE_TERRAFORM_FOR_NODE_POOL" == "false" ]]; then
+                            log_success "Cluster scaling initiated using gcloud"
+                        else
+                            log_success "Cluster scaled successfully using Terraform"
+                        fi
+                        log_info "Target: $CALCULATED_NODE_COUNT total nodes (distributed across $ZONES zones)"
+                        log_info "Note: Actual scaling may take 5-10 minutes to complete"
+                    elif [[ $SCALE_EXIT_CODE -eq 124 ]]; then
+                        if [[ "$USE_TERRAFORM_FOR_NODE_POOL" == "false" ]]; then
+                            log_warn "gcloud scaling command timed out after 300 seconds (5 minutes)"
+                            log_info "This may indicate the operation is still in progress (scaling can take 5-10 minutes)"
+                        else
+                            log_warn "Terraform apply timed out after 600 seconds (10 minutes)"
+                            log_info "This may indicate the operation is still in progress"
+                        fi
+                        
+                        # Check if there are ongoing operations
+                        log_info "Checking for ongoing cluster operations..."
+                        ONGOING_OPS=$(gcloud container operations list \
+                            --cluster "$CLUSTER_NAME" \
+                            --region "$REGION" \
+                            --project "$PROJECT" \
+                            --filter="status=RUNNING" \
+                            --format="value(name)" 2>/dev/null | wc -l | tr -d '[:space:]' || echo "0")
+                        ONGOING_OPS=${ONGOING_OPS:-0}
+                        
+                        if [[ "$ONGOING_OPS" =~ ^[0-9]+$ ]] && [[ "$ONGOING_OPS" -gt 0 ]]; then
+                            log_info "Found $ONGOING_OPS ongoing operation(s) - scaling is likely still in progress"
+                            log_info "Waiting up to 10 minutes for scaling to complete..."
+                            
+                            # Wait for operations to complete (with timeout)
+                            MAX_WAIT=600  # 10 minutes
+                            WAIT_START=$(date +%s)
+                            while [[ $(($(date +%s) - WAIT_START)) -lt $MAX_WAIT ]]; do
+                                ONGOING_OPS=$(gcloud container operations list \
+                                    --cluster "$CLUSTER_NAME" \
+                                    --region "$REGION" \
+                                    --project "$PROJECT" \
+                                    --filter="status=RUNNING" \
+                                    --format="value(name)" 2>/dev/null | wc -l | tr -d '[:space:]' || echo "0")
+                                ONGOING_OPS=${ONGOING_OPS:-0}
+                                
+                                if [[ "$ONGOING_OPS" =~ ^[0-9]+$ ]] && [[ "$ONGOING_OPS" -eq 0 ]]; then
+                                    log_success "Scaling operation completed"
+                                    break
+                                fi
+                                
+                                ELAPSED=$(($(date +%s) - WAIT_START))
+                                if [[ $((ELAPSED % 60)) -eq 0 ]] && [[ $ELAPSED -gt 0 ]]; then
+                                    log_info "Still waiting... ($((ELAPSED / 60)) minutes elapsed, $ONGOING_OPS operation(s) still running)"
+                                fi
+                                sleep 10
+                            done
+                            
+                            if [[ $(($(date +%s) - WAIT_START)) -ge $MAX_WAIT ]]; then
+                                log_warn "Timeout waiting for scaling to complete. Proceeding with current cluster state."
+                            fi
+                        else
+                            log_info "No ongoing operations detected. Scaling may have completed or failed."
+                        fi
+                        
+                        log_info "Check cluster status with:"
+                        log_info "  gcloud container node-pools describe $NODE_POOL_NAME --cluster $CLUSTER_NAME --region $REGION"
+                        log_warn "Continuing with existing cluster size ($CURRENT_TOTAL_NODES nodes). Performance may be degraded."
+                    else
+                        if echo "$SCALE_OUTPUT" | grep -q "INSUFFICIENT_QUOTA\|quota"; then
+                            log_error "Failed to scale cluster due to insufficient quota"
+                            log_info "Required: $REQUIRED_CPUS vCPUs, $REQUIRED_DISK_GB GB disk (for $CALCULATED_NODE_COUNT n2-standard-2 nodes)"
+                            
+                            # Extract specific quota information from error message
+                            if echo "$SCALE_OUTPUT" | grep -q "request requires.*short"; then
+                                log_info ""
+                                log_info "Quota details from error:"
+                                echo "$SCALE_OUTPUT" | grep -E "request requires|short|quota of|available" | while IFS= read -r line || [[ -n "$line" ]]; do
+                                    log_info "  $line"
+                                done
+                                
+                                # Try to extract the shortfall amount and quota name
+                                SHORTFALL=$(echo "$SCALE_OUTPUT" | grep -oP "short '\K[0-9.]+" | head -1 || echo "")
+                                QUOTA_NAME=$(echo "$SCALE_OUTPUT" | grep -oP 'resource "\K[^"]+' | head -1 || echo "")
+                                
+                                if [[ -n "$SHORTFALL" ]]; then
+                                    log_info ""
+                                    log_info "You need to free up or increase quota by approximately $SHORTFALL GB"
+                                    
+                                    # Provide specific guidance based on quota type
+                                    if echo "$SCALE_OUTPUT" | grep -q "SSD_TOTAL_GB"; then
+                                        log_info ""
+                                        log_info "To find 'SSD_TOTAL_GB' quota in GCP Console:"
+                                        log_info "  1. Go to: https://console.cloud.google.com/iam-admin/quotas?usage=USED&project=$PROJECT"
+                                        log_info "  2. Filter by:"
+                                        log_info "     - Service: 'Compute Engine API'"
+                                        log_info "     - Location: '$REGION' (regional quota)"
+                                        log_info "  3. Search for: 'Persistent Disk SSD' or 'SSD_TOTAL_GB'"
+                                        log_info "     (It may also appear as 'Persistent Disk SSD (GB)' or 'SSD persistent disk')"
+                                        log_info "  4. Click on the quota and request an increase"
+                                        log_info ""
+                                        log_info "Alternative: Use gcloud to find the quota:"
+                                        log_info "  gcloud compute project-info describe --project $PROJECT --format='table(quotas.metric,quotas.limit,quotas.usage)' | grep -i ssd"
+                                    elif echo "$SCALE_OUTPUT" | grep -q "DISKS_TOTAL_GB"; then
+                                        log_info ""
+                                        log_info "To find 'DISKS_TOTAL_GB' quota in GCP Console:"
+                                        log_info "  1. Go to: https://console.cloud.google.com/iam-admin/quotas?usage=USED&project=$PROJECT"
+                                        log_info "  2. Filter by:"
+                                        log_info "     - Service: 'Compute Engine API'"
+                                        log_info "     - Location: '$REGION' (regional quota)"
+                                        log_info "  3. Search for: 'Persistent Disk' or 'DISKS_TOTAL_GB'"
+                                    fi
+                                    
+                                    log_info ""
+                                    log_info "Check current disk usage:"
+                                    log_info "  gcloud compute disks list --project $PROJECT --format='table(name,sizeGb,zone)'"
+                                    log_info "Delete unused disks to free up quota, or request an increase at:"
+                                    log_info "  https://console.cloud.google.com/iam-admin/quotas?usage=USED&project=$PROJECT"
+                                fi
+                            fi
+                            
+                            # Check if current cluster size is sufficient for desired parallelism
+                            # Each node can handle ~1-2 jobs (conservative estimate: 1 job per node)
+                            MAX_JOBS_WITH_CURRENT_CLUSTER=$CURRENT_TOTAL_NODES
+                            
+                            if [[ $PARALLEL_JOBS -gt $MAX_JOBS_WITH_CURRENT_CLUSTER ]]; then
+                                log_error ""
+                                log_error "CRITICAL: Cluster has only $CURRENT_TOTAL_NODES nodes but $PARALLEL_JOBS parallel jobs requested!"
+                                log_error "Experiments will likely fail due to insufficient resources."
+                                log_info ""
+                                log_info "Immediate options:"
+                                log_info "  1. Reduce PARALLEL_JOBS to $MAX_JOBS_WITH_CURRENT_CLUSTER or less:"
+                                log_info "     PARALLEL_JOBS=$MAX_JOBS_WITH_CURRENT_CLUSTER ./run_full_scale_data_collection.sh --env gcp ..."
+                                log_info "  2. Free up disk quota or increase GCP quotas:"
+                                log_info "     https://console.cloud.google.com/iam-admin/quotas?usage=USED&project=$PROJECT"
+                                log_info "  3. Use smaller machine type (currently: ${MACHINE_TYPE:-n2-standard-2})"
+                                log_info ""
+                                if [[ "$USE_TERRAFORM_FOR_NODE_POOL" == "false" ]]; then
+                                    log_info "To scale manually after fixing quota:"
+                                    log_info "  gcloud container clusters resize $CLUSTER_NAME --node-pool $NODE_POOL_NAME --num-nodes $NODES_PER_ZONE --region $REGION"
+                                else
+                                    log_info "To scale manually after fixing quota:"
+                                    log_info "  cd terraform/gke && terraform apply -var='node_count=$CALCULATED_NODE_COUNT' -auto-approve"
+                                fi
+                                log_warn "Continuing with existing cluster size, but experiments may fail!"
+                            else
+                                log_warn "Cluster size ($CURRENT_TOTAL_NODES nodes) should be sufficient for $PARALLEL_JOBS parallel jobs"
+                                log_info "Options to scale up later:"
+                                log_info "  1. Free up disk quota or increase GCP quotas:"
+                                log_info "     https://console.cloud.google.com/iam-admin/quotas?usage=USED&project=$PROJECT"
+                                log_info "  2. Use smaller machine type (currently: ${MACHINE_TYPE:-n2-standard-2})"
+                                log_warn "Continuing with existing cluster size. Performance may be degraded."
+                            fi
+                        else
+                            if [[ "$USE_TERRAFORM_FOR_NODE_POOL" == "false" ]]; then
+                                log_error "Failed to scale cluster with gcloud. Error:"
+                            else
+                                log_error "Failed to scale cluster with Terraform. Error:"
+                            fi
+                            echo "$SCALE_OUTPUT" | grep -i "error\|failed" | head -10
+                            if [[ "$USE_TERRAFORM_FOR_NODE_POOL" == "false" ]]; then
+                                log_info "To scale manually:"
+                                log_info "  gcloud container clusters resize $CLUSTER_NAME --node-pool $NODE_POOL_NAME --num-nodes $NODES_PER_ZONE --region $REGION"
+                            else
+                                log_info "To scale manually using Terraform:"
+                                log_info "  cd terraform/gke && terraform apply -var='node_count=$CALCULATED_NODE_COUNT' -auto-approve"
+                            fi
+                            log_warn "Continuing with existing cluster size ($CURRENT_TOTAL_NODES nodes). Performance may be degraded."
+                        fi
+                    fi
+                else
+                    log_info "Cluster already has $CURRENT_TOTAL_NODES total nodes (matches required $CALCULATED_NODE_COUNT)"
+                fi
+            else
+                log_error "No node pool available. Cannot proceed with cluster scaling."
+                export GCP_USE_PERSISTENT_CLUSTER=false
+            fi
+            
+            # Verify bucket access before starting experiments
+            log_info "Verifying GCS bucket access..."
+            if gsutil ls -b "gs://${BUCKET}" &>/dev/null; then
+                log_success "Bucket gs://${BUCKET} is accessible"
+            else
+                log_error "Cannot access bucket gs://${BUCKET}"
+                log_info "Please verify:"
+                log_info "  1. Bucket exists: gsutil ls -b gs://${BUCKET}"
+                log_info "  2. You have permissions: gsutil iam get gs://${BUCKET}"
+                log_info "  3. Service account has access (if using Workload Identity)"
+                export GCP_USE_PERSISTENT_CLUSTER=false
+            fi
+            
+            # CRITICAL: Ensure cluster is in RUNNING state before proceeding
+            log_info "Verifying cluster is in RUNNING state..."
+            CLUSTER_STATUS=$(gcloud container clusters describe "$CLUSTER_NAME" \
+                --region "$REGION" \
+                --project "$PROJECT" \
+                --format="value(status)" 2>/dev/null || echo "")
+            
+            if [[ "$CLUSTER_STATUS" != "RUNNING" ]]; then
+                log_warn "Cluster status is '$CLUSTER_STATUS' (expected: RUNNING)"
+                
+                if [[ "$CLUSTER_STATUS" == "RECONCILING" ]] || [[ "$CLUSTER_STATUS" == "PROVISIONING" ]]; then
+                    log_info "Cluster is being provisioned/reconciled. Waiting up to 10 minutes for RUNNING state..."
+                    MAX_WAIT=600  # 10 minutes
+                    WAIT_START=$(date +%s)
+                    while [[ $(($(date +%s) - WAIT_START)) -lt $MAX_WAIT ]]; do
+                        CLUSTER_STATUS=$(gcloud container clusters describe "$CLUSTER_NAME" \
+                            --region "$REGION" \
+                            --project "$PROJECT" \
+                            --format="value(status)" 2>/dev/null || echo "")
+                        
+                        if [[ "$CLUSTER_STATUS" == "RUNNING" ]]; then
+                            log_success "Cluster is now RUNNING"
+                            break
+                        fi
+                        
+                        ELAPSED=$(($(date +%s) - WAIT_START))
+                        if [[ $((ELAPSED % 60)) -eq 0 ]] && [[ $ELAPSED -gt 0 ]]; then
+                            log_info "Still waiting... ($((ELAPSED / 60)) minutes elapsed, status: $CLUSTER_STATUS)"
+                        fi
+                        sleep 15
+                    done
+                fi
+                
+                # Final check
+                CLUSTER_STATUS=$(gcloud container clusters describe "$CLUSTER_NAME" \
+                    --region "$REGION" \
+                    --project "$PROJECT" \
+                    --format="value(status)" 2>/dev/null || echo "")
+                
+                if [[ "$CLUSTER_STATUS" != "RUNNING" ]]; then
+                    log_error "Cluster is not in RUNNING state (current: $CLUSTER_STATUS)"
+                    log_error "Cannot proceed with experiments. Cluster must be RUNNING."
+                    log_info "Check cluster status:"
+                    log_info "  gcloud container clusters describe $CLUSTER_NAME --region $REGION --project $PROJECT"
+                    log_info "Wait for cluster to be RUNNING, then retry."
+                    log_info "If cluster is stuck, you may need to delete and recreate it:"
+                    log_info "  gcloud container clusters delete $CLUSTER_NAME --region $REGION --project $PROJECT"
+                    exit 1
+                fi
+            else
+                log_success "Cluster is RUNNING"
+            fi
+            
+            # Configure kubectl credentials for the cluster
+            log_info "Configuring kubectl credentials..."
+            if ! gcloud container clusters get-credentials "$CLUSTER_NAME" \
+                --region "$REGION" \
+                --project "$PROJECT" 2>&1; then
+                log_error "Failed to configure kubectl credentials"
+                log_info "Please ensure you have access to the cluster:"
+                log_info "  gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $PROJECT"
+                exit 1
+            fi
+            
+            # Verify kubectl connectivity
+            log_info "Verifying kubectl connectivity..."
+            if ! kubectl cluster-info &>/dev/null; then
+                log_error "Cannot connect to Kubernetes cluster via kubectl"
+                log_info "This may be due to:"
+                log_info "  1. Private cluster endpoint (ensure enable_private_endpoint=false or configure authorized networks)"
+                log_info "  2. Network connectivity issues"
+                log_info "  3. Authentication problems"
+                log_info ""
+                log_info "Try manually:"
+                log_info "  gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $PROJECT"
+                log_info "  kubectl cluster-info"
+                exit 1
+            fi
+            log_success "kubectl is connected to cluster"
+            
             log_info "Will reuse existing cluster (use --skip-gcp and destroy manually if needed)"
             export GCP_USE_PERSISTENT_CLUSTER=true
             export GCP_CLUSTER_EXISTS=true
         else
-            # Calculate node count based on parallel jobs for proper isolation
-            # Each job needs ~1 CPU (800m request), n2-standard-2 has 2 vCPUs
-            # To avoid noisy neighbor: max 1 job per node (or 2 if we allow some sharing)
-            # For safety and isolation: use 1 job per node
-            # Add 1 extra node for system overhead
-            if [[ $PARALLEL_JOBS -gt 1 ]]; then
-                CALCULATED_NODE_COUNT=$((PARALLEL_JOBS + 1))
-                log_info "Calculated node count: $CALCULATED_NODE_COUNT (for $PARALLEL_JOBS parallel jobs + 1 overhead)"
-            else
-                CALCULATED_NODE_COUNT="${NODE_COUNT:-1}"
-                log_info "Using node count: $CALCULATED_NODE_COUNT (sequential mode)"
-            fi
             
             log_info "Creating persistent cluster for batch run..."
+            # For Terraform, node_count is TOTAL nodes (not per zone) for regional clusters
+            # GCP will distribute them across zones automatically
+            # Calculate nodes per zone for logging, but pass total to Terraform
+            ZONES=$(gcloud compute regions describe "$REGION" --project "$PROJECT" --format="value(zones)" 2>/dev/null | tr ';' '\n' | wc -l || echo "3")
+            NODES_PER_ZONE=$(( (CALCULATED_NODE_COUNT + ZONES - 1) / ZONES ))
+            log_info "Will create cluster with $CALCULATED_NODE_COUNT total nodes (~$NODES_PER_ZONE per zone across $ZONES zones)"
             if "$SCRIPT_DIR/deploy_gcp.sh" \
                 --create-cluster \
                 --project "$PROJECT" \
@@ -668,6 +1238,59 @@ print(total_experiments)
                 --node-count "$CALCULATED_NODE_COUNT" \
                 $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo ""); then
                 log_success "Cluster created successfully"
+                
+                # Wait for cluster to be RUNNING
+                log_info "Waiting for cluster to be RUNNING..."
+                MAX_WAIT=900  # 15 minutes for new cluster
+                WAIT_START=$(date +%s)
+                while [[ $(($(date +%s) - WAIT_START)) -lt $MAX_WAIT ]]; do
+                    CLUSTER_STATUS=$(gcloud container clusters describe "$CLUSTER_NAME" \
+                        --region "$REGION" \
+                        --project "$PROJECT" \
+                        --format="value(status)" 2>/dev/null || echo "")
+                    
+                    if [[ "$CLUSTER_STATUS" == "RUNNING" ]]; then
+                        log_success "Cluster is RUNNING"
+                        break
+                    fi
+                    
+                    ELAPSED=$(($(date +%s) - WAIT_START))
+                    if [[ $((ELAPSED % 60)) -eq 0 ]] && [[ $ELAPSED -gt 0 ]]; then
+                        log_info "Still waiting... ($((ELAPSED / 60)) minutes elapsed, status: $CLUSTER_STATUS)"
+                    fi
+                    sleep 15
+                done
+                
+                # Final check
+                CLUSTER_STATUS=$(gcloud container clusters describe "$CLUSTER_NAME" \
+                    --region "$REGION" \
+                    --project "$PROJECT" \
+                    --format="value(status)" 2>/dev/null || echo "")
+                
+                if [[ "$CLUSTER_STATUS" != "RUNNING" ]]; then
+                    log_error "Cluster creation completed but cluster is not RUNNING (status: $CLUSTER_STATUS)"
+                    log_error "Cannot proceed with experiments."
+                    exit 1
+                fi
+                
+                # Configure kubectl credentials for the newly created cluster
+                log_info "Configuring kubectl credentials for new cluster..."
+                if ! gcloud container clusters get-credentials "$CLUSTER_NAME" \
+                    --region "$REGION" \
+                    --project "$PROJECT" 2>&1; then
+                    log_error "Failed to configure kubectl credentials"
+                    exit 1
+                fi
+                
+                # Verify kubectl connectivity
+                log_info "Verifying kubectl connectivity..."
+                if ! kubectl cluster-info &>/dev/null; then
+                    log_error "Cannot connect to Kubernetes cluster via kubectl"
+                    log_info "This may be due to private cluster endpoint configuration"
+                    exit 1
+                fi
+                log_success "kubectl is connected to cluster"
+                
                 export GCP_USE_PERSISTENT_CLUSTER=true
                 export GCP_CLUSTER_EXISTS=false  # We just created it
             else
@@ -702,6 +1325,7 @@ if manifest['scenarios']:
                     --region "$REGION" \
                     --skip-terraform \
                     --skip-aggregation \
+                    --skip-job \
                     $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 | grep -E "(Building|Pushing|Image|ERROR|WARN)" || true; then
                     log_success "Image built and ready for batch: $GCP_IMAGE_NAME"
                 else
@@ -793,22 +1417,43 @@ for s in manifest['scenarios']:
             # Check if already completed (resume capability)
             # When --skip-analysis is used, only raw data exists
             # When analysis is enabled, check for merged/stats files
+            # For GCP: also check GCS bucket for existing results
             is_complete=false
             raw_file="$output_dir/raw/run.jsonl"
             stats_file="$output_dir/stats/summary.json"
             merged_file="$output_dir/merged/merged.jsonl"
             
-            if [[ "$SKIP_ANALYSIS" == "true" ]]; then
-                # In data collection mode: check for raw data
-                if [[ -f "$raw_file" ]] && [[ -s "$raw_file" ]]; then
+            # For GCP: check GCS bucket first (results are stored there, not locally)
+            # BUCKET is set as a parameter and should be available in this scope
+            if [[ "$env" == "gcp" ]] && [[ -n "${BUCKET:-}" ]]; then
+                GCS_EXP_PATH="gs://${BUCKET}/experiments/${run_scenario_id}"
+                
+                # Check if experiment exists in GCS (quiet check to avoid noise)
+                if gsutil -q ls "$GCS_EXP_PATH/merged.jsonl" &>/dev/null 2>&1; then
+                    # Merged file exists in GCS
                     is_complete=true
+                    log_info "  Found existing results in GCS for $run_scenario_id (merged.jsonl)"
+                elif gsutil -q ls "$GCS_EXP_PATH/raw/run.jsonl" &>/dev/null 2>&1; then
+                    # Raw file exists in GCS
+                    is_complete=true
+                    log_info "  Found existing results in GCS for $run_scenario_id (raw/run.jsonl)"
                 fi
-            else
-                # In full mode: check for analysis outputs
-                if [[ -f "$stats_file" ]] && [[ -s "$stats_file" ]]; then
-                    is_complete=true
-                elif [[ -f "$merged_file" ]] && [[ -s "$merged_file" ]]; then
-                    is_complete=true
+            fi
+            
+            # Also check local files (for all environments, including GCP if downloaded)
+            if [[ "$is_complete" != "true" ]]; then
+                if [[ "$SKIP_ANALYSIS" == "true" ]]; then
+                    # In data collection mode: check for raw data
+                    if [[ -f "$raw_file" ]] && [[ -s "$raw_file" ]]; then
+                        is_complete=true
+                    fi
+                else
+                    # In full mode: check for analysis outputs
+                    if [[ -f "$stats_file" ]] && [[ -s "$stats_file" ]]; then
+                        is_complete=true
+                    elif [[ -f "$merged_file" ]] && [[ -s "$merged_file" ]]; then
+                        is_complete=true
+                    fi
                 fi
             fi
             
@@ -838,8 +1483,15 @@ for s in manifest['scenarios']:
             
             if run_experiment "$env" "$scenario_path" "$run_scenario_id" "$output_dir" "$replica_count"; then
                 # Validate data integrity immediately after collection
-                raw_file="$output_dir/raw/run.jsonl"
-                if [[ -f "$raw_file" ]]; then
+                # NOTE: For GCP parallel jobs, skip this check - download happens later in the parallel job waiting loop
+                if [[ "$env" == "gcp" ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]] && [[ $PARALLEL_JOBS -gt 1 ]]; then
+                    # For parallel GCP jobs, data integrity is checked after download in the parallel job waiting loop
+                    # Just mark as submitted for now
+                    log_info "  Submitted: $run_scenario_id (will be validated after job completion)"
+                else
+                    # For sequential jobs or non-GCP, check immediately
+                    raw_file="$output_dir/raw/run.jsonl"
+                    if [[ -f "$raw_file" ]]; then
                     file_size=$(stat -f%z "$raw_file" 2>/dev/null || stat -c%s "$raw_file" 2>/dev/null || echo 0)
                     if [[ $file_size -eq 0 ]]; then
                         log_error "  Data integrity check FAILED: $run_scenario_id has 0-byte file!"
@@ -876,11 +1528,12 @@ for s in manifest['scenarios']:
                     COMPLETED_SCENARIOS=$((COMPLETED_SCENARIOS + 1))
                     # Update progress with completed count after successful run
                     update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id"
-                else
-                    log_error "  Failed: $run_scenario_id"
-                    add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
-                    env_failed=$((env_failed + 1))
-                    FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
+                fi  # End of else block for non-parallel GCP jobs
+            else
+                log_error "  Failed: $run_scenario_id"
+                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                env_failed=$((env_failed + 1))
+                FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
                     
                     if [[ "$CONTINUE_ON_ERROR" != "true" ]]; then
                         log_error "Stopping due to failure (use --continue-on-error to ignore)"
@@ -909,6 +1562,25 @@ for s in manifest['scenarios']:
         FAILED_JOBS=0
         
         while IFS='|' read -r job_name scenario_id output_dir; do
+            # Extract algorithm, payload, rate, and replica count from scenario_id or output_dir
+            # Format: <algorithm>_p<payload>_r<rate>_run<N>_<hash> or <algorithm>_p<payload>_r<rate>_run<N>_<hash>_r<replicas>
+            algorithm="unknown"
+            payload=0
+            rate=0
+            replica_count=1
+            
+            # Parse scenario_id: <algorithm>_p<payload>_r<rate>_run<N>_<hash>
+            if [[ "$scenario_id" =~ ^([^_]+)_p([0-9]+)_r([0-9]+)_ ]]; then
+                algorithm="${BASH_REMATCH[1]}"
+                payload="${BASH_REMATCH[2]}"
+                rate="${BASH_REMATCH[3]}"
+            fi
+            
+            # Check if output_dir has replica suffix: _r<replicas>
+            if [[ "$output_dir" =~ _r([0-9]+)$ ]]; then
+                replica_count="${BASH_REMATCH[1]}"
+            fi
+            
             # Wait for job to complete
             while true; do
                 STATUS=$(kubectl get job "$job_name" -n "$GCP_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "")
@@ -920,13 +1592,41 @@ for s in manifest['scenarios']:
                         --exp-id "$scenario_id" \
                         --bucket "$BUCKET" \
                         --out "$output_dir" 2>&1; then
-                        COMPLETED_JOBS=$((COMPLETED_JOBS + 1))
-                        env_completed=$((env_completed + 1))
-                        log_success "  Completed: $scenario_id"
+                        # Validate data integrity after download
+                        raw_file="$output_dir/raw/run.jsonl"
+                        if [[ -f "$raw_file" ]]; then
+                            file_size=$(stat -f%z "$raw_file" 2>/dev/null || stat -c%s "$raw_file" 2>/dev/null || echo 0)
+                            if [[ $file_size -gt 0 ]]; then
+                                line_count=$(wc -l < "$raw_file" 2>/dev/null || echo 0)
+                                if [[ $line_count -gt 0 ]]; then
+                                    COMPLETED_JOBS=$((COMPLETED_JOBS + 1))
+                                    env_completed=$((env_completed + 1))
+                                    log_success "  Completed: $scenario_id - $file_size bytes, $line_count events"
+                                    # Add to index with success status
+                                    add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "success" "$replica_count"
+                                else
+                                    FAILED_JOBS=$((FAILED_JOBS + 1))
+                                    env_failed=$((env_failed + 1))
+                                    log_error "  Data integrity check FAILED: $scenario_id has no JSONL lines!"
+                                    add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                                fi
+                            else
+                                FAILED_JOBS=$((FAILED_JOBS + 1))
+                                env_failed=$((env_failed + 1))
+                                log_error "  Data integrity check FAILED: $scenario_id has 0-byte file!"
+                                add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                            fi
+                        else
+                            FAILED_JOBS=$((FAILED_JOBS + 1))
+                            env_failed=$((env_failed + 1))
+                            log_error "  Data integrity check FAILED: $scenario_id - raw file not found after download!"
+                            add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                        fi
                     else
                         FAILED_JOBS=$((FAILED_JOBS + 1))
                         env_failed=$((env_failed + 1))
                         log_error "  Failed to download results for: $scenario_id"
+                        add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
                     fi
                     break
                 elif [[ "$FAILED_STATUS" == "True" ]]; then

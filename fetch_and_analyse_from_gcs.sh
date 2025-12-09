@@ -216,8 +216,9 @@ else
         log_success "Downloaded merged.jsonl"
     else
         log_warn "merged.jsonl not found, trying raw data..."
-        # Download raw data instead
-        gsutil -m cp -r "$GCS_PATH/raw/*" "$OUT_DIR/raw/" 2>/dev/null || true
+        # Download raw data instead (use direct file path to avoid wildcard issues)
+        gsutil -m cp "$GCS_PATH/raw/run.jsonl" "$OUT_DIR/raw/run.jsonl" 2>/dev/null || \
+        gsutil -m rsync -r "$GCS_PATH/raw" "$OUT_DIR/raw" 2>/dev/null || true
     fi
     
     # Download manifest
@@ -250,8 +251,12 @@ else
     
     # Download raw data
     log_info "Downloading raw data..."
-    if ! gsutil -m cp -r "$GCS_PATH/raw/*" "$OUT_DIR/raw/" 2>&1; then
-        log_warn "Some raw data files may have failed to download"
+    # Use gsutil rsync or cp without trailing slash to avoid "InvalidUrlError"
+    if ! gsutil -m cp "$GCS_PATH/raw/run.jsonl" "$OUT_DIR/raw/run.jsonl" 2>&1; then
+        # Fallback: try with rsync if direct copy fails
+        if ! gsutil -m rsync -r "$GCS_PATH/raw" "$OUT_DIR/raw" 2>&1; then
+            log_warn "Some raw data files may have failed to download"
+        fi
     fi
     
     log_success "Download complete"

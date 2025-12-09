@@ -45,6 +45,7 @@ SEED=""
 SKIP_TERRAFORM=false
 SKIP_BUILD=false
 SKIP_AGGREGATION=false
+SKIP_JOB=false
 DESTROY_AFTER=false
 SMOKE_TEST=false
 EPHEMERAL=false
@@ -109,6 +110,7 @@ OPTIONS:
     --skip-terraform      Skip Terraform apply (use existing cluster)
     --skip-build          Skip container image build
     --skip-aggregation    Skip aggregation across runs
+    --skip-job            Skip job deployment (only build image)
     --destroy-after       Destroy infrastructure after experiment
     --timeout SEC         Job timeout in seconds (default: 900)
     --smoke-test          Enable smoke-test mode (minimal infrastructure)
@@ -212,6 +214,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-aggregation)
             SKIP_AGGREGATION=true
+            shift
+            ;;
+        --skip-job)
+            SKIP_JOB=true
             shift
             ;;
         --destroy-after)
@@ -723,6 +729,12 @@ fi
 # =============================================================================
 # Step 5: Apply Kubernetes manifests
 # =============================================================================
+if [[ "$SKIP_JOB" == "true" ]]; then
+    log_warn "Skipping job deployment (--skip-job), image build complete"
+    log_success "Image ready: $IMAGE_NAME"
+    exit 0
+fi
+
 log_step "Step 5/8: Deploying Kubernetes resources"
 
 # Set namespace based on smoke-test mode
@@ -1184,8 +1196,12 @@ if gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/merged.jsonl" "$LOCAL_OUTP
     log_success "Downloaded merged.jsonl"
 else
     log_warn "merged.jsonl not found, trying raw data..."
-    if ! gsutil -m cp -r "gs://${BUCKET}/experiments/${EXP_ID}/raw/*" "$LOCAL_OUTPUT_DIR/raw/" 2>&1; then
-        log_error "Failed to download raw data from GCS"
+    # Use direct file copy to avoid wildcard/trailing slash issues with gsutil
+    if ! gsutil -m cp "gs://${BUCKET}/experiments/${EXP_ID}/raw/run.jsonl" "$LOCAL_OUTPUT_DIR/raw/run.jsonl" 2>&1; then
+        # Fallback: try rsync if direct copy fails
+        if ! gsutil -m rsync -r "gs://${BUCKET}/experiments/${EXP_ID}/raw" "$LOCAL_OUTPUT_DIR/raw" 2>&1; then
+            log_error "Failed to download raw data from GCS"
+        fi
     fi
 fi
 
@@ -1196,8 +1212,12 @@ gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/cloud_metadata.json" "$LOCAL_
 gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/summary.json" "$LOCAL_OUTPUT_DIR/stats/summary.json" 2>/dev/null || log_warn "summary.json not found"
 
 # Download raw data if available
-if ! gsutil -m cp -r "gs://${BUCKET}/experiments/${EXP_ID}/raw/*" "$LOCAL_OUTPUT_DIR/raw/" 2>&1; then
-    log_warn "Failed to download some raw data files"
+# Use direct file copy to avoid wildcard/trailing slash issues with gsutil
+if ! gsutil -m cp "gs://${BUCKET}/experiments/${EXP_ID}/raw/run.jsonl" "$LOCAL_OUTPUT_DIR/raw/run.jsonl" 2>&1; then
+    # Fallback: try rsync if direct copy fails
+    if ! gsutil -m rsync -r "gs://${BUCKET}/experiments/${EXP_ID}/raw" "$LOCAL_OUTPUT_DIR/raw" 2>&1; then
+        log_warn "Failed to download some raw data files"
+    fi
 fi
 
 # Validate downloaded data integrity

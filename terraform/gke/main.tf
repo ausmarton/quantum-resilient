@@ -134,6 +134,41 @@ resource "google_container_cluster" "primary" {
   network    = "default"
   subnetwork = "default"
 
+  # Private cluster configuration (removes external IPs from nodes)
+  # 
+  # IMPORTANT: This configuration removes external IPs from GKE nodes, which:
+  # 1. Is more representative of enterprise production environments
+  # 2. Eliminates network overhead (NAT routing) that could affect benchmarking
+  # 3. Reduces security exposure
+  # 4. Does NOT affect experiment validity since we measure CPU/crypto performance,
+  #    not network latency
+  #
+  # Nodes can still access:
+  # - Artifact Registry (via Private Google Access)
+  # - GCS (via Private Google Access)
+  # - GKE control plane (via private endpoint)
+  #
+  # NOTE: Ensure Private Google Access is enabled on the default subnet:
+  #   gcloud compute networks subnets update default \
+  #     --region=<region> \
+  #     --enable-private-ip-google-access
+  #
+  # If using a custom VPC, also configure Cloud NAT for outbound internet access.
+  private_cluster_config {
+    enable_private_nodes    = true  # Nodes have no external IPs
+    enable_private_endpoint = false # Keep public endpoint for kubectl access
+    master_ipv4_cidr_block  = "172.16.0.0/28" # Private range for master
+  }
+
+  # Master authorized networks (allow kubectl access from anywhere)
+  # In production, restrict this to specific IP ranges
+  master_authorized_networks_config {
+    cidr_blocks {
+      cidr_block   = "0.0.0.0/0"
+      display_name = "All (for benchmarking)"
+    }
+  }
+
   # Workload Identity (must be enabled for Workload Identity to work)
   workload_identity_config {
     workload_pool = var.enable_workload_identity ? "${var.project_id}.svc.id.goog" : null
