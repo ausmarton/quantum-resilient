@@ -96,6 +96,11 @@ research-drafts/
 downloaded-logs-*.csv
 logs/
 
+# Data collection run artifacts (logs, manifests, summaries from failed/successful runs)
+# These are temporary artifacts created by run_full_scale_data_collection.sh
+data-collection-*/
+**/data-collection-*/
+
 # Large binary data files (but keep JSONL which is text-based)
 *.h5
 *.hdf5
