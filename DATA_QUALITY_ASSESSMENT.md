@@ -113,24 +113,13 @@ find results -name "summary.json" | wc -l
 
 ## Recommended Actions
 
-### Immediate Actions (Before Re-running Experiments)
+**Note**: All action items have been moved to `OUTSTANDING_WORK.md` for centralized tracking.
 
-1. **Fix Aggregation Logic** ⚡ **CRITICAL**
-   - Update `aggregate_results.py` to accept `p50=0.0` as valid
-   - Distinguish between missing data and zero values
-   - **Time**: 30 minutes
-   - **Impact**: May recover 20-30 "missing" entries
+### Status Summary
 
-2. **Regenerate Summary Files**
-   - Run `compute_statistics.py` on all experiments missing summary.json
-   - **Time**: 1-2 hours
-   - **Impact**: May recover remaining missing entries
-
-3. **Data Quality Audit**
-   - Run comprehensive validation on all experiments
-   - Identify experiments with actual data quality issues
-   - **Time**: 2-3 hours
-   - **Impact**: Clear picture of what needs re-running
+- ✅ **Aggregation Logic**: Fixed (zero values now accepted as valid)
+- ⚠️ **Missing Summaries**: See `OUTSTANDING_WORK.md` item #4
+- ⚠️ **Data Validation**: See `OUTSTANDING_WORK.md` item #5
 
 ### If Re-running is Required
 
@@ -149,27 +138,9 @@ find results -name "summary.json" | wc -l
 
 ### Enhanced Data Validation
 
-**Add to `validate_experiment_data.sh`**:
+**Note**: Detailed implementation steps moved to `OUTSTANDING_WORK.md` item #5.
 
-1. **Statistical Validation**:
-   ```bash
-   # Check if summary.json exists and has valid percentiles
-   # Check if p50/p95/p99 are within expected ranges
-   # Check if event count matches expected
-   ```
-
-2. **Data Completeness Check**:
-   ```bash
-   # Verify expected events vs actual events
-   # Check for gaps in timestamps
-   # Verify all workers contributed data
-   ```
-
-3. **Cross-Environment Consistency**:
-   ```bash
-   # Compare data completeness across native/minikube/gcp
-   # Flag experiments missing in any environment
-   ```
+See `OUTSTANDING_WORK.md` for complete validation enhancement requirements.
 
 ---
 
@@ -196,11 +167,13 @@ find results -name "summary.json" | wc -l
 
 ## Next Steps
 
-1. **Fix aggregation script** (30 min) → Re-run analysis
-2. **Regenerate missing summary files** (1-2 hours) → Re-run analysis
-3. **Validate data quality** (2-3 hours) → Identify gaps
-4. **Decide on re-running** → Based on validation results
-5. **Enhance validation scripts** → Prevent future issues
+**Note**: All action items have been moved to `OUTSTANDING_WORK.md` for centralized tracking.
+
+1. ✅ **Aggregation script**: Fixed (zero values accepted)
+2. ⚠️ **Generate missing summaries**: See `OUTSTANDING_WORK.md` item #4
+3. ⚠️ **Enhance validation**: See `OUTSTANDING_WORK.md` item #5
+4. **Re-run analysis**: After generating missing summaries
+5. **Decide on re-running**: Based on validation results
 
 ---
 

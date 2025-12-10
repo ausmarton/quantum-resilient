@@ -419,7 +419,11 @@ experiments:
 
 ## Action Items
 
-### Immediate (Before Dissertation Submission)
+**Note**: Implementation-related action items have been moved to `OUTSTANDING_WORK.md` for centralized tracking.
+
+### Dissertation Writing Tasks (External to Codebase)
+
+These are documentation and writing tasks for the dissertation itself:
 
 1. **Review all claims** in dissertation for accuracy
 2. **Add limitations section** to methodology
@@ -427,14 +431,15 @@ experiments:
 4. **Add caveats** to results discussion
 5. **Clarify scope** in conclusion
 
-### Short-Term (If Time Permits)
+### Implementation Status
 
-1. **Add burst pattern experiments** (+50-100 experiments)
-2. **Increase max rate to 10K msg/s** (+100 experiments)
-3. **Add 5-minute duration subset** (+20-30 experiments)
-4. **Update claims** to reflect enhanced framework
+- ✅ **Burst pattern experiments**: Already implemented in `experiment_matrix.yaml`
+- ✅ **10K msg/s rates**: Already implemented in `experiment_matrix.yaml`
+- ✅ **5-minute duration**: Already implemented in `experiment_matrix.yaml`
 
-### Long-Term (Future Work)
+### Long-Term (Future Work - Not Tracked in OUTSTANDING_WORK.md)
+
+These are future research directions beyond the current dissertation scope:
 
 1. **Trace-driven workloads** (real transaction patterns)
 2. **Multi-hour sustained load tests**

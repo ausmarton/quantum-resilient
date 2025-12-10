@@ -125,37 +125,11 @@ python3 analysis/aggregate_results.py \
 
 ## Recommended Actions
 
-### Immediate (Before Dissertation)
+**Note**: All action items have been moved to `OUTSTANDING_WORK.md` for centralized tracking.
 
-1. **Generate Missing Summaries** (1-2 hours)
-   ```bash
-   ./scripts/generate_missing_summaries.sh
-   python3 analysis/aggregate_results.py --index final-results/index.json --output final-results
-   ```
-
-2. **Re-run Analysis Pipeline** (30 minutes)
-   ```bash
-   python3 analysis/plot_combined_cdfs.py --index final-results/index.json --output final-results/figures
-   python3 analysis/hypothesis_tests.py --index final-results/index.json --matrix orchestration/experiment_matrix.yaml --output final-results
-   ```
-
-3. **Verify All Data** (30 minutes)
-   ```bash
-   # Check that all experiments have summaries
-   find results -name "summary.json" | wc -l
-   # Should match number of experiments with raw data
-   ```
-
-### Enhanced Validation (Optional)
-
-1. **Update Validation Script**
-   - Add summary.json existence check
-   - Add statistical validity checks
-   - Add cross-environment consistency check
-
-2. **Document Zero Values**
-   - Add note in dissertation about measurement precision
-   - Explain that `p50=0.0` is valid for fast operations
+- **Generate Missing Summaries**: See `OUTSTANDING_WORK.md` item #4
+- **Enhance Validation**: See `OUTSTANDING_WORK.md` item #5
+- **Documentation**: See `OUTSTANDING_WORK.md` item #7
 
 ---
 
@@ -191,8 +165,8 @@ python3 analysis/aggregate_results.py \
 ---
 
 **Next Steps**:
-1. Run `./scripts/generate_missing_summaries.sh`
-2. Re-run aggregation and analysis
+1. See `OUTSTANDING_WORK.md` item #4 for generating missing summaries
+2. Re-run aggregation and analysis after generating summaries
 3. Verify all figures include complete data
-4. Document zero latency values in dissertation methodology
+4. See `OUTSTANDING_WORK.md` item #7 for documentation requirements
 

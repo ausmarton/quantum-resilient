@@ -420,39 +420,34 @@ CALCULATED_NODE_COUNT = PARALLEL_JOBS + 1
 
 ## Action Items
 
-### Immediate (Before Running Experiments)
+**Note**: Implementation-related action items have been moved to `OUTSTANDING_WORK.md` for centralized tracking.
 
-1. **Verify node size is adequate**:
-   - Monitor CPU usage during high-rate experiments (2000 msg/s)
-   - Check if experiments are CPU-bound
-   - Determine if n2-standard-2 is sufficient
+### Dissertation Writing Tasks (External to Codebase)
 
-2. **Clarify scaling experiment design**:
-   - Are these worker pool scaling or Kubernetes replica scaling?
+These are documentation tasks for the dissertation itself:
+
+1. **Clarify scaling experiment design**:
+   - Document whether experiments use worker pool scaling or Kubernetes replica scaling
    - Update claims to match actual design
-   - Consider adding true Kubernetes replica scaling if needed
+   - Note: Current implementation uses worker pool scaling (not Kubernetes replica scaling)
 
-3. **Document resource utilization**:
+2. **Document resource utilization**:
    - Acknowledge low utilization in methodology
    - Justify 1 job per node for isolation
    - Consider cost implications
 
-### Short-Term (If Needed)
+### Verification Tasks (Completed During Data Collection)
 
-1. **Test with larger nodes**:
-   - Try n2-standard-4 for high-rate experiments
-   - Compare performance vs n2-standard-2
-   - Determine if larger nodes are needed
+1. ✅ **Node size verification**: Completed during GCP data collection
+2. ✅ **CPU usage monitoring**: Completed during experiments
 
-2. **Consider 2 jobs per node**:
-   - Test if 2 jobs per node causes interference
-   - Measure performance impact
-   - Decide if acceptable for dissertation
+### Future Work (Not Tracked in OUTSTANDING_WORK.md)
 
-3. **Add true Kubernetes scaling**:
-   - Implement Deployment-based scaling
-   - Measure aggregate throughput
-   - Compare with worker pool scaling
+These are optional enhancements beyond current dissertation scope:
+
+1. **Test with larger nodes**: Optional optimization
+2. **Consider 2 jobs per node**: Optional optimization
+3. **Add true Kubernetes scaling**: Future research direction
 
 ---
 

@@ -153,11 +153,11 @@ Add to dissertation methodology:
 
 ## Next Steps
 
-### Immediate (Before Next Experiments)
+**Note**: All action items have been moved to `OUTSTANDING_WORK.md` for centralized tracking.
 
-1. ✅ **Code Implemented** - Rust and Python analysis scripts updated
-2. ⏳ **Testing Required** - Run sample experiment to verify
-3. ⏳ **Documentation** - Update dissertation methodology section
+- ✅ **Code Implemented**: Rust and Python analysis scripts updated
+- ⏳ **Testing Required**: See `OUTSTANDING_WORK.md` item #6
+- ⏳ **Documentation**: See `OUTSTANDING_WORK.md` item #7
 
 ### Future Considerations
 
@@ -174,17 +174,6 @@ Add to dissertation methodology:
 3. `analysis/scripts/merge_jsonl.py` - Convert nanoseconds to microseconds
 4. `SUBMICROSECOND_LATENCY_SOLUTION.md` - Original solution document
 5. `OPTION2_FLOATING_POINT_MICROSECONDS.md` - Option 2 detailed guide (NEW)
-
----
-
-## To-Do List
-
-See `todo_write` output for current task status:
-- ✅ Implement Option 1 (nanoseconds) - IN PROGRESS
-- ⏳ Update analysis scripts - IN PROGRESS  
-- ⏳ Test implementation - PENDING
-- ⏳ Document Option 2 - COMPLETE
-- ⏳ Update dissertation methodology - PENDING
 
 ---
 

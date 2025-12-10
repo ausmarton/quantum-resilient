@@ -281,11 +281,12 @@
 
 ## Action Items
 
-1. ✅ **Implementation Complete** - Nanosecond precision implemented
-2. ⏳ **Testing Required** - Verify with sample experiment
-3. ⏳ **Documentation** - Update dissertation methodology section
-4. ⏳ **Methodology Update** - Add precision documentation
-5. ✅ **Assessment Complete** - This document confirms precision adequacy
+**Note**: All action items have been moved to `OUTSTANDING_WORK.md` for centralized tracking.
+
+- ✅ **Implementation Complete**: Nanosecond precision implemented
+- ⏳ **Testing Required**: See `OUTSTANDING_WORK.md` item #6
+- ⏳ **Documentation**: See `OUTSTANDING_WORK.md` item #7
+- ✅ **Assessment Complete**: This document confirms precision adequacy
 
 ---
 
