@@ -1,6 +1,8 @@
-# Outstanding Work Items
+# TODO: Outstanding Work Items
 
 This document tracks all outstanding work items identified across the codebase, with sufficient detail to investigate and implement as separate tasks. Action items from other documentation files have been consolidated here to avoid duplication.
+
+**⚠️ IMPORTANT**: Before working on any TODO item, read **[DEVELOPMENT_GUIDELINES.md](DEVELOPMENT_GUIDELINES.md)** for ground rules on making changes safely and reliably.
 
 **Last Updated**: 2025-12-10
 
@@ -1510,3 +1512,17 @@ When investigating each item:
 
 **Last Review**: 2025-12-10  
 **Next Review**: After dependency installation and full testing
+
+---
+
+## Development Guidelines
+
+**Before working on any TODO item, please read:**
+- **[DEVELOPMENT_GUIDELINES.md](DEVELOPMENT_GUIDELINES.md)** - Ground rules for safe and reliable changes
+
+**Key Requirements:**
+1. ✅ TODO items must have sufficient context (problem, current state, expected outcome, testing requirements)
+2. ✅ All changes must be thoroughly tested before marking complete
+3. ✅ All changes must comply with [REQUIREMENTS_SPECIFICATION.md](docs/REQUIREMENTS_SPECIFICATION.md)
+4. ✅ Impact analysis must be performed before making changes
+5. ✅ Documentation must be updated when changes are made

@@ -190,7 +190,7 @@ Add to dissertation methodology:
 > recorded in nanoseconds and converted to microseconds (with decimal precision) 
 > for analysis. This ensures no data loss for very fast cryptographic operations.
 
-**Action Items**: See `OUTSTANDING_WORK.md` item #7 for documentation updates.
+**Action Items**: See `TODO.md` item #7 for documentation updates.
 
 ---
 
@@ -206,14 +206,14 @@ Add to dissertation methodology:
 ## Status
 
 ✅ **Implementation Complete**: Nanosecond precision implemented and tested  
-⏳ **Testing Required**: See `OUTSTANDING_WORK.md` item #6 for verification steps  
-⏳ **Documentation**: See `OUTSTANDING_WORK.md` item #7 for methodology updates
+⏳ **Testing Required**: See `TODO.md` item #6 for verification steps  
+⏳ **Documentation**: See `TODO.md` item #7 for methodology updates
 
 ---
 
 ## Related Documents
 
-- `OUTSTANDING_WORK.md` - Action items for testing and documentation
+- `TODO.md` - Action items for testing and documentation
 - `docs/reference/option2-precision.md` - Alternative approach (Option 2)
 - `docs/analysis/telemetry-assessment.md` - Telemetry precision assessment
 

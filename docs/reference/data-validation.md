@@ -12,7 +12,7 @@
 ⚠️ **1 minor data quality issue** - Missing event ID in one experiment (negligible impact)  
 ✅ **Dissertation validation script bug fixed** - Algorithm parsing corrected
 
-**Note**: All action items have been moved to `OUTSTANDING_WORK.md` for centralized tracking.
+**Note**: All action items have been moved to `TODO.md` for centralized tracking.
 
 ---
 
@@ -156,7 +156,7 @@ The script now correctly identifies all experiments.
 
 **Result**: All 86 aggregated entries now have valid data (zero values included).
 
-**Action Items**: See `OUTSTANDING_WORK.md` item #4 for generating missing summary files.
+**Action Items**: See `TODO.md` item #4 for generating missing summary files.
 
 ---
 
@@ -171,7 +171,7 @@ The script now correctly identifies all experiments.
 
 **Solution**: Run `scripts/generate_missing_summaries.sh` to generate missing summaries.
 
-**Action Items**: See `OUTSTANDING_WORK.md` item #4.
+**Action Items**: See `TODO.md` item #4.
 
 ---
 
@@ -218,7 +218,7 @@ All critical experiments are complete, and the single data quality issue is stat
 
 **No experiments need to be re-run required** (except for generating 14 missing summary files).
 
-**Action Items**: See `OUTSTANDING_WORK.md` items #4 and #5 for remaining tasks.
+**Action Items**: See `TODO.md` items #4 and #5 for remaining tasks.
 
 ---
 
@@ -243,6 +243,6 @@ To generate missing summaries:
 
 ## Related Documents
 
-- `OUTSTANDING_WORK.md` - Action items for data quality improvements
+- `TODO.md` - Action items for data quality improvements
 - `docs/analysis/telemetry-assessment.md` - Telemetry data quality assessment
 

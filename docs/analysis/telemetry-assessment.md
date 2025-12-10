@@ -195,7 +195,7 @@ throughput_per_second = df.groupby("second").size()
 
 **Effort**: 2-4 hours
 
-**Action Items**: See `OUTSTANDING_WORK.md` items #2 and #3
+**Action Items**: See `TODO.md` items #2 and #3
 
 ---
 
@@ -222,7 +222,7 @@ throughput_per_second = df.groupby("second").size()
 
 **Effort**: 1-2 hours (investigation)
 
-**Action Items**: See `OUTSTANDING_WORK.md` item #1
+**Action Items**: See `TODO.md` item #1
 
 ---
 
@@ -245,7 +245,7 @@ throughput_per_second = df.groupby("second").size()
 
 **Priority**: **LOW** (optional consistency improvement)
 
-**Action Items**: See `OUTSTANDING_WORK.md` item #8
+**Action Items**: See `TODO.md` item #8
 
 ---
 
@@ -263,7 +263,7 @@ throughput_per_second = df.groupby("second").size()
 
 **Priority**: **LOW** (Prometheus is supplementary)
 
-**Action Items**: See `OUTSTANDING_WORK.md` item #9
+**Action Items**: See `TODO.md` item #9
 
 ---
 
@@ -275,7 +275,7 @@ throughput_per_second = df.groupby("second").size()
 
 **Priority**: **MEDIUM**
 
-**Action Items**: See `OUTSTANDING_WORK.md` item #7
+**Action Items**: See `TODO.md` item #7
 
 ---
 
@@ -287,7 +287,7 @@ throughput_per_second = df.groupby("second").size()
 
 **Priority**: **LOW**
 
-**Action Items**: See `OUTSTANDING_WORK.md` item #7
+**Action Items**: See `TODO.md` item #7
 
 ---
 
@@ -379,15 +379,15 @@ throughput_per_second = df.groupby("second").size()
 
 ## Recommendations
 
-**Note**: All action items have been moved to `OUTSTANDING_WORK.md` for centralized tracking.
+**Note**: All action items have been moved to `TODO.md` for centralized tracking.
 
 ### Summary
 
-- **Investigate CPU Sampling**: See `OUTSTANDING_WORK.md` item #1
-- **Add Memory Analysis**: See `OUTSTANDING_WORK.md` item #2
-- **Add CPU Analysis**: See `OUTSTANDING_WORK.md` item #3
-- **Documentation Updates**: See `OUTSTANDING_WORK.md` item #7
-- **Optional Improvements**: See `OUTSTANDING_WORK.md` items #8 and #9
+- **Investigate CPU Sampling**: See `TODO.md` item #1
+- **Add Memory Analysis**: See `TODO.md` item #2
+- **Add CPU Analysis**: See `TODO.md` item #3
+- **Documentation Updates**: See `TODO.md` item #7
+- **Optional Improvements**: See `TODO.md` items #8 and #9
 
 ---
 
@@ -418,6 +418,6 @@ throughput_per_second = df.groupby("second").size()
 **Status**: ⚠️ **GAP IDENTIFIED - FIX REQUIRED FOR RESOURCE CLAIMS**
 
 **Related Documents**:
-- `OUTSTANDING_WORK.md` - Action items and implementation steps
+- `TODO.md` - Action items and implementation steps
 - `docs/reference/precision-implementation.md` - Implementation details for nanosecond precision
 

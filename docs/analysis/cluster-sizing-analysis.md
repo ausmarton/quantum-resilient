@@ -420,7 +420,7 @@ CALCULATED_NODE_COUNT = PARALLEL_JOBS + 1
 
 ## Action Items
 
-**Note**: Implementation-related action items have been moved to `OUTSTANDING_WORK.md` for centralized tracking.
+**Note**: Implementation-related action items have been moved to `TODO.md` for centralized tracking.
 
 ### Dissertation Writing Tasks (External to Codebase)
 
@@ -441,7 +441,7 @@ These are documentation tasks for the dissertation itself:
 1. ✅ **Node size verification**: Completed during GCP data collection
 2. ✅ **CPU usage monitoring**: Completed during experiments
 
-### Future Work (Not Tracked in OUTSTANDING_WORK.md)
+### Future Work (Not Tracked in TODO.md)
 
 These are optional enhancements beyond current dissertation scope:
 

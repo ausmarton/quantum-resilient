@@ -91,7 +91,7 @@ This documentation was consolidated and reorganized on 2025-12-10 to:
 - ✅ Organize by category (guides, reference, analysis, troubleshooting)
 - ✅ Update outdated information (removed completed TODOs, archived outdated docs)
 - ✅ Improve discoverability (clear structure, updated index)
-- ✅ Centralize action items (all in `OUTSTANDING_WORK.md`)
+- ✅ Centralize action items (all in `TODO.md`)
 
 ### Consolidated Documents
 
@@ -112,7 +112,7 @@ This documentation was consolidated and reorganized on 2025-12-10 to:
 ### Active Work Tracking
 
 All outstanding work items are tracked in:
-- **[OUTSTANDING_WORK.md](../OUTSTANDING_WORK.md)** - Single source of truth for all action items
+- **[TODO.md](../TODO.md)** - Single source of truth for all action items
 
 If you find outdated information or have suggestions, please update the relevant document or create an issue.
 

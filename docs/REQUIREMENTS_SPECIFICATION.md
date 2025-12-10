@@ -107,10 +107,10 @@ This document defines the **requirements** for the codebase to support dissertat
 **Goal**: Analyze CPU and memory utilization across algorithms and environments
 
 **Required Capabilities**:
-- ⚠️ Memory data captured but not analyzed (see OUTSTANDING_WORK.md #2)
+- ⚠️ Memory data captured but not analyzed (see TODO.md #2)
 - ✅ **FIXED**: CPU data now uses cumulative CPU time from `/proc/self/stat` (Linux)
 - ✅ CPU data should be valid (cumulative CPU time since process start)
-- ❌ CPU analysis not implemented (see OUTSTANDING_WORK.md #3)
+- ❌ CPU analysis not implemented (see TODO.md #3)
 
 **Dissertation Claims Supported** (if implemented):
 - "Algorithm X uses Y% more memory than baseline Z"
@@ -273,13 +273,13 @@ This document defines the **requirements** for the codebase to support dissertat
 **Memory**:
 - ✅ Data captured (`memory_rss_bytes: u64`)
 - ✅ Data validated (9-10MB native, 6-7MB minikube)
-- ✅ **Analysis implemented** (see OUTSTANDING_WORK.md #2 - COMPLETED)
+- ✅ **Analysis implemented** (see TODO.md #2 - COMPLETED)
 
 **CPU**:
 - ✅ Data captured (`cpu_user_seconds: f64`)
 - ✅ **FIXED**: Now uses `/proc/self/stat` for cumulative CPU time (Linux)
 - ✅ Data should be valid (cumulative CPU time since process start)
-- ❌ Analysis not implemented (see OUTSTANDING_WORK.md #3)
+- ❌ Analysis not implemented (see TODO.md #3)
 
 **Gap**: 
 - **Critical**: Memory analysis missing (HIGH priority)
@@ -297,7 +297,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Raw data collection (JSONL format)
 - ✅ Merged data generation
 - ✅ Summary statistics generation
-- ⚠️ 14 experiments missing `summary.json` (see OUTSTANDING_WORK.md #4)
+- ⚠️ 14 experiments missing `summary.json` (see TODO.md #4)
 
 **Gap**: 
 - **Medium**: Missing summary files for 14 experiments (can be regenerated)
@@ -323,7 +323,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ❌ Cross-environment consistency
 
 **Gap**: 
-- **Medium**: Enhanced validation needed (see OUTSTANDING_WORK.md #5)
+- **Medium**: Enhanced validation needed (see TODO.md #5)
 
 ---
 
@@ -461,7 +461,7 @@ This document defines the **requirements** for the codebase to support dissertat
 
 **Capabilities**:
 - ✅ Analysis scripts exist
-- ✅ Containerized analysis pipeline (OUTSTANDING_WORK.md #11 - COMPLETED)
+- ✅ Containerized analysis pipeline (TODO.md #11 - COMPLETED)
 - ✅ Dependencies included in container (no host installation needed)
 - ✅ Graceful fallback to host Python if containerization disabled
 
@@ -492,7 +492,7 @@ This document defines the **requirements** for the codebase to support dissertat
 **Resource Precision**:
 - ⚠️ **Required**: CPU and memory utilization metrics
 - ⚠️ **Implemented**: Data captured, analysis incomplete
-- ⚠️ **Status**: Gap identified (see OUTSTANDING_WORK.md)
+- ⚠️ **Status**: Gap identified (see TODO.md)
 
 ---
 
@@ -542,7 +542,7 @@ This document defines the **requirements** for the codebase to support dissertat
 
 **Capabilities**:
 - ✅ Python requirements file exists (`analysis/requirements.txt`)
-- ✅ Containerized analysis pipeline (OUTSTANDING_WORK.md #11 - COMPLETED)
+- ✅ Containerized analysis pipeline (TODO.md #11 - COMPLETED)
 - ✅ Dependencies included in container (no host installation needed)
 - ✅ Missing dependencies handled via containerization
 - ✅ Consistent environment across all machines
@@ -735,17 +735,17 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ### Critical Gaps (Must Fix)
 
-1. **CPU Sampling Issue** (OUTSTANDING_WORK.md #1)
+1. **CPU Sampling Issue** (TODO.md #1)
    - **Impact**: Cannot make CPU utilization claims
    - **Priority**: CRITICAL
    - **Status**: ✅ **FIXED** - Now uses `/proc/self/stat` for cumulative CPU time
 
-2. **Memory Analysis Missing** (OUTSTANDING_WORK.md #2)
+2. **Memory Analysis Missing** (TODO.md #2)
    - **Impact**: Cannot make memory utilization claims
    - **Priority**: HIGH
    - **Status**: ✅ **COMPLETED** - Memory analysis implemented
 
-3. **CPU Analysis Missing** (OUTSTANDING_WORK.md #3)
+3. **CPU Analysis Missing** (TODO.md #3)
    - **Impact**: Cannot make CPU efficiency claims
    - **Priority**: HIGH (conditional on #1)
    - **Status**: Implementation required (1-2 hours)
@@ -754,12 +754,12 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ### Medium Priority Gaps
 
-4. **Missing Summary Files** (OUTSTANDING_WORK.md #4)
+4. **Missing Summary Files** (TODO.md #4)
    - **Impact**: Incomplete data for 14 experiments
    - **Priority**: MEDIUM
    - **Status**: Can be regenerated (1-2 hours)
 
-5. **Enhanced Data Validation** (OUTSTANDING_WORK.md #5)
+5. **Enhanced Data Validation** (TODO.md #5)
    - **Impact**: May miss data quality issues
    - **Priority**: MEDIUM
    - **Status**: Implementation required (2-3 hours)
@@ -768,12 +768,12 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ### Low Priority Gaps (Optional)
 
-6. **Queue Delay Nanosecond Precision** (OUTSTANDING_WORK.md #8)
+6. **Queue Delay Nanosecond Precision** (TODO.md #8)
    - **Impact**: Consistency improvement only
    - **Priority**: LOW
    - **Status**: Optional
 
-7. **Prometheus Histogram Buckets** (OUTSTANDING_WORK.md #9)
+7. **Prometheus Histogram Buckets** (TODO.md #9)
    - **Impact**: Monitoring improvement only
    - **Priority**: LOW
    - **Status**: Optional
@@ -858,21 +858,21 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ### Pre-Dissertation Validation
 
-- [x] **CPU Sampling**: ✅ **FIXED** - Uses `/proc/self/stat` for cumulative CPU time (OUTSTANDING_WORK.md #1) - **COMPLETED**
-- [x] **Memory Analysis**: ✅ **COMPLETED** - Implemented in compute_statistics.py (OUTSTANDING_WORK.md #2) - **COMPLETED**
-- [x] **CPU Analysis**: ✅ **COMPLETED** - Implemented in compute_statistics.py (OUTSTANDING_WORK.md #3) - **COMPLETED**
-- [x] **Test Coverage**: ✅ **PARTIALLY COMPLETED** - Smoke tests and integration tests created (OUTSTANDING_WORK.md #4) - **INFRASTRUCTURE READY**
-- [ ] **Missing Summaries**: Script ready, requires pandas (OUTSTANDING_WORK.md #5) - **BLOCKED BY PANDAS**
-- [x] **Data Validation**: ✅ **COMPLETED** - Enhanced validation with summary checks, statistical validity, and cross-environment consistency (OUTSTANDING_WORK.md #6) - **COMPLETED**
-- [x] **Nanosecond Precision**: ✅ **COMPLETED** - Verified implementation and analysis compatibility (OUTSTANDING_WORK.md #7) - **COMPLETED**
-- [ ] **Dependency Verification**: Add dependency check before analysis (NFR5) - **MEDIUM** (OUTSTANDING_WORK.md #12)
-- [ ] **Containerization**: Containerize analysis pipeline (OUTSTANDING_WORK.md #11) - **MEDIUM** (alternative to dependency verification)
-- [ ] **Documentation**: Update methodology section (OUTSTANDING_WORK.md #7) - **MEDIUM**
-- [ ] **Payload Impact Documentation**: Document payload size impact analysis (FR10) - **LOW** (OUTSTANDING_WORK.md #12)
-- [ ] **Pattern Impact Documentation**: Document workload pattern impact analysis (FR11) - **LOW** (OUTSTANDING_WORK.md #13)
-- [ ] **Error Rate Documentation**: Document error rate analysis (FR12) - **LOW** (OUTSTANDING_WORK.md #14)
-- [ ] **Cost Efficiency**: Implement cost efficiency metrics (FR13) - **LOW** (OUTSTANDING_WORK.md #15)
-- [ ] **Report Generation**: Implement automated report generation (NFR8) - **LOW** (OUTSTANDING_WORK.md #16)
+- [x] **CPU Sampling**: ✅ **FIXED** - Uses `/proc/self/stat` for cumulative CPU time (TODO.md #1) - **COMPLETED**
+- [x] **Memory Analysis**: ✅ **COMPLETED** - Implemented in compute_statistics.py (TODO.md #2) - **COMPLETED**
+- [x] **CPU Analysis**: ✅ **COMPLETED** - Implemented in compute_statistics.py (TODO.md #3) - **COMPLETED**
+- [x] **Test Coverage**: ✅ **PARTIALLY COMPLETED** - Smoke tests and integration tests created (TODO.md #4) - **INFRASTRUCTURE READY**
+- [ ] **Missing Summaries**: Script ready, requires pandas (TODO.md #5) - **BLOCKED BY PANDAS**
+- [x] **Data Validation**: ✅ **COMPLETED** - Enhanced validation with summary checks, statistical validity, and cross-environment consistency (TODO.md #6) - **COMPLETED**
+- [x] **Nanosecond Precision**: ✅ **COMPLETED** - Verified implementation and analysis compatibility (TODO.md #7) - **COMPLETED**
+- [ ] **Dependency Verification**: Add dependency check before analysis (NFR5) - **MEDIUM** (TODO.md #12)
+- [ ] **Containerization**: Containerize analysis pipeline (TODO.md #11) - **MEDIUM** (alternative to dependency verification)
+- [ ] **Documentation**: Update methodology section (TODO.md #7) - **MEDIUM**
+- [ ] **Payload Impact Documentation**: Document payload size impact analysis (FR10) - **LOW** (TODO.md #12)
+- [ ] **Pattern Impact Documentation**: Document workload pattern impact analysis (FR11) - **LOW** (TODO.md #13)
+- [ ] **Error Rate Documentation**: Document error rate analysis (FR12) - **LOW** (TODO.md #14)
+- [ ] **Cost Efficiency**: Implement cost efficiency metrics (FR13) - **LOW** (TODO.md #15)
+- [ ] **Report Generation**: Implement automated report generation (NFR8) - **LOW** (TODO.md #16)
 
 ### Dissertation Claims Validation
 
@@ -939,7 +939,7 @@ This document defines the **requirements** for the codebase to support dissertat
 1. ✅ **Experimental Design**: Documented in `docs/analysis/experimental-design.md`
 2. ✅ **Telemetry Assessment**: Documented in `docs/analysis/telemetry-assessment.md`
 3. ✅ **Data Validation**: Documented in `docs/reference/data-validation.md`
-4. ✅ **Methodology Documentation**: Complete (OUTSTANDING_WORK.md #7 - COMPLETED)
+4. ✅ **Methodology Documentation**: Complete (TODO.md #7 - COMPLETED)
 5. ✅ **Analysis Guide**: Documented in `docs/analysis/dissertation-guide.md`
 
 ---
@@ -1021,7 +1021,7 @@ This document defines the **requirements** for the codebase to support dissertat
 
 | Document | Purpose | Relationship |
 |----------|---------|--------------|
-| `OUTSTANDING_WORK.md` | Action items and gaps | **Gaps from this document** |
+| `TODO.md` | Action items and gaps | **Gaps from this document** |
 | `docs/analysis/experimental-design.md` | Experimental design details | **Design requirements** |
 | `docs/analysis/telemetry-assessment.md` | Telemetry capabilities | **Measurement requirements** |
 | `docs/analysis/enterprise-representativeness.md` | Claim validation | **Claim boundaries** |
@@ -1110,10 +1110,10 @@ This document defines the **requirements** for the codebase to support dissertat
   - NFR8: Report Generation (automated reports missing)
 
 **Critical Path to "Fit for Purpose"**:
-1. ✅ Investigate CPU sampling (OUTSTANDING_WORK.md #1) - **COMPLETED** - Fixed to use cumulative CPU time
-2. ✅ Add memory analysis (OUTSTANDING_WORK.md #2) - **COMPLETED** - Memory stats implemented
-3. Add CPU analysis (OUTSTANDING_WORK.md #3) - **HIGH** (now unblocked by #1)
-4. Regenerate missing summaries (OUTSTANDING_WORK.md #4) - **MEDIUM**
+1. ✅ Investigate CPU sampling (TODO.md #1) - **COMPLETED** - Fixed to use cumulative CPU time
+2. ✅ Add memory analysis (TODO.md #2) - **COMPLETED** - Memory stats implemented
+3. Add CPU analysis (TODO.md #3) - **HIGH** (now unblocked by #1)
+4. Regenerate missing summaries (TODO.md #4) - **MEDIUM**
 5. Add dependency verification (NFR5) - **MEDIUM**
 6. Document payload/pattern impact analysis (FR10, FR11) - **LOW**
 

@@ -286,6 +286,6 @@ The refactored code structure is validated, but **actual functionality is not te
 
 - **Test Implementation**: `tests/` directory
 - **Requirements**: `docs/REQUIREMENTS_SPECIFICATION.md` (Part 9: Validation Checklist)
-- **Outstanding Work**: `OUTSTANDING_WORK.md` (test gaps - item #4)
+- **Outstanding Work**: `TODO.md` (test gaps - item #4)
 - **Refactoring Plan**: `docs/guides/refactoring-plan.md` (Phase 0: Test Suite Implementation)
 
