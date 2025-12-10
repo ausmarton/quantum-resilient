@@ -543,7 +543,8 @@ async fn process_event(
     context: &ExecutionContext,
 ) -> ProcessedEvent {
     let dequeue_ts = Instant::now();
-    let queue_delay_us = dequeue_ts.duration_since(event.enqueue_ts).as_micros();
+    let queue_delay_ns = dequeue_ts.duration_since(event.enqueue_ts).as_nanos();
+    let queue_delay_us = queue_delay_ns / 1000;  // Convert to microseconds for compatibility
 
     let span = info_span!(
         "crypto_op",
@@ -651,7 +652,12 @@ async fn process_event(
             _ => Err(CryptoError::NotImplemented),
         };
 
-        let latency_us = start.elapsed().as_micros();
+        // Measure latency in nanoseconds for sub-microsecond precision
+        let latency_ns = start.elapsed().as_nanos();
+        // Compute microseconds for backward compatibility (Prometheus metrics, etc.)
+        let latency_us = latency_ns / 1000;
+        let latency_us_f64 = latency_ns as f64 / 1000.0;
+        
         let (success, output_size, _ct_kem_size, error_msg) = match op_result {
             Ok((size, kem_size)) => (true, size, kem_size, None),
             Err(e) => (false, None, None, Some(e.to_string())),
@@ -660,8 +666,8 @@ async fn process_event(
         // Sample system metrics
         let (cpu_user, memory_rss) = sampler.sample();
 
-        // Update Prometheus metrics
-        metrics.observe_latency(&context.algorithm, &context.operation, latency_us as f64);
+        // Update Prometheus metrics (using floating-point microseconds for precision)
+        metrics.observe_latency(&context.algorithm, &context.operation, latency_us_f64);
         metrics.observe_queue_delay(queue_delay_us as f64);
         metrics.inc_ops(&context.algorithm, &context.operation, success);
         metrics.set_memory_bytes(memory_rss);
@@ -683,7 +689,8 @@ async fn process_event(
             timestamp_monotonic_ns: event.timestamp_ns,
             operation: context.operation.clone(),
             algorithm: context.algorithm.clone(),
-            latency_us,
+            latency_ns,  // Primary: nanosecond precision
+            latency_us,  // Computed: microsecond precision (for backward compatibility)
             queue_delay_us,
             worker_id,
             payload_size_bytes: event.payload.len(),
@@ -701,7 +708,7 @@ async fn process_event(
 
         ProcessedEvent {
             event_id: event.event_id,
-            latency_us,
+            latency_us,  // Keep as u128 microseconds for internal state tracking
             queue_delay_us,
             success,
             output_size,
@@ -724,7 +731,8 @@ struct EventRowWithQueueDelay {
     pub timestamp_monotonic_ns: u128,
     pub operation: String,
     pub algorithm: String,
-    pub latency_us: u128,
+    pub latency_ns: u128,  // Primary: nanosecond precision for sub-microsecond measurements
+    pub latency_us: u128,  // Computed: microsecond precision (for backward compatibility)
     pub queue_delay_us: u128,
     pub worker_id: usize,
     pub payload_size_bytes: usize,

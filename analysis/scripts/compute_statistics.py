@@ -131,6 +131,12 @@ def plot_latency_histogram(
     title: str = "Latency Distribution",
 ) -> None:
     """Plot latency histogram."""
+    # Handle both nanosecond (new) and microsecond (old) formats
+    if column == "latency_us" and "latency_ns" in df.columns:
+        # Use nanoseconds converted to microseconds for better precision
+        df = df.copy()
+        df["latency_us"] = df["latency_ns"] / 1000.0
+    
     if column not in df.columns:
         console.print(f"[yellow]Column {column} not found, skipping histogram[/yellow]")
         return
@@ -270,8 +276,14 @@ def compute_statistics(
         "total_events": len(df),
     }
 
-    # Latency stats
-    if "latency_us" in df.columns:
+    # Latency stats - handle both nanosecond (new) and microsecond (old) formats
+    if "latency_ns" in df.columns:
+        # New format: convert nanoseconds to microseconds for analysis
+        df["latency_us"] = df["latency_ns"] / 1000.0
+        summary["latency"] = compute_basic_stats(df["latency_us"])
+        summary["latency_ns"] = compute_basic_stats(df["latency_ns"])  # Also store nanosecond stats
+    elif "latency_us" in df.columns:
+        # Old format: already in microseconds
         summary["latency"] = compute_basic_stats(df["latency_us"])
 
     # Queue delay stats
@@ -296,7 +308,12 @@ def compute_statistics(
         summary["per_algorithm"] = {}
         for algo in df["algorithm"].unique():
             algo_df = df[df["algorithm"] == algo]
-            if "latency_us" in algo_df.columns:
+            # Handle both nanosecond (new) and microsecond (old) formats
+            if "latency_ns" in algo_df.columns:
+                algo_df = algo_df.copy()
+                algo_df["latency_us"] = algo_df["latency_ns"] / 1000.0
+                summary["per_algorithm"][algo] = compute_basic_stats(algo_df["latency_us"])
+            elif "latency_us" in algo_df.columns:
                 summary["per_algorithm"][algo] = compute_basic_stats(algo_df["latency_us"])
 
     # Per-operation stats
@@ -304,7 +321,11 @@ def compute_statistics(
         summary["per_operation"] = {}
         for op in df["operation"].unique():
             op_df = df[df["operation"] == op]
-            if "latency_us" in op_df.columns:
+            # Handle both formats
+            if "latency_ns" in op_df.columns:
+                op_df["latency_us"] = op_df["latency_ns"] / 1000.0
+                summary["per_operation"][op] = compute_basic_stats(op_df["latency_us"])
+            elif "latency_us" in op_df.columns:
                 summary["per_operation"][op] = compute_basic_stats(op_df["latency_us"])
 
     # Save summary

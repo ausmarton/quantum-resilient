@@ -72,6 +72,13 @@ def compute_derived_columns(df: pd.DataFrame) -> pd.DataFrame:
     if "timestamp_utc_iso" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp_utc_iso"])
 
+    # Handle both nanosecond (new) and microsecond (old) formats
+    if "latency_ns" in df.columns:
+        # New format: convert nanoseconds to microseconds
+        df["latency_us"] = df["latency_ns"] / 1000.0
+    elif "latency_us" not in df.columns:
+        console.print("[yellow]Warning: No latency_us or latency_ns column found[/yellow]")
+    
     # Compute end-to-end latency (same as latency_us for now)
     if "latency_us" in df.columns:
         df["end_to_end_latency_us"] = df["latency_us"]

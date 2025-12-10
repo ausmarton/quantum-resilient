@@ -176,10 +176,12 @@ def aggregate_results(results: list[ExperimentResult]) -> AggregatedStats:
     )
     
     # Collect values
-    p50_vals = [r.p50 for r in results if r.p50 > 0]
-    p95_vals = [r.p95 for r in results if r.p95 > 0]
-    p99_vals = [r.p99 for r in results if r.p99 > 0]
-    tput_vals = [r.mean_throughput for r in results if r.mean_throughput > 0]
+    # Note: p50/p95/p99 can be 0.0 for very fast operations (<1μs)
+    # We only exclude experiments with no data (total_events == 0), not zero percentile values
+    p50_vals = [r.p50 for r in results if r.total_events > 0]
+    p95_vals = [r.p95 for r in results if r.total_events > 0]
+    p99_vals = [r.p99 for r in results if r.total_events > 0]
+    tput_vals = [r.mean_throughput for r in results if r.total_events > 0]
     
     # Compute aggregates for p50
     if p50_vals:

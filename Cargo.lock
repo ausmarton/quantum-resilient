@@ -3213,7 +3213,6 @@ dependencies = [
  "clap",
  "ecdsa 0.16.9",
  "futures",
- "generic-array",
  "hkdf",
  "http-body-util",
  "hyper 1.8.1",
