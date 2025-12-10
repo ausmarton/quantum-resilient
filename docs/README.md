@@ -27,6 +27,7 @@ User-facing guides for running experiments and using the framework:
 
 Technical reference documentation:
 
+- **[Requirements Specification](REQUIREMENTS_SPECIFICATION.md)** - **Single source of truth** for dissertation requirements and codebase capabilities
 - **[System Requirements](reference/system-requirements.md)** - System load and variability handling
 - **[GCP Deployment](reference/gcp-deployment.md)** - Complete GCP/GKE deployment guide
 - **[Scaling Experiments](reference/scaling-experiments.md)** - Horizontal scaling experiments guide
@@ -65,6 +66,7 @@ The main project README is located at the repository root:
 
 ### By Task
 
+- **"What are the requirements for the dissertation?"** → [Requirements Specification](REQUIREMENTS_SPECIFICATION.md) ⭐ **START HERE**
 - **"How do I run experiments?"** → [Data Collection Guide](guides/data-collection.md)
 - **"Where are my results?"** → [Storage and Output Guide](guides/storage-and-output.md)
 - **"How do I deploy to GCP?"** → [GCP Deployment Guide](reference/gcp-deployment.md)
