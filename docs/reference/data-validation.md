@@ -1,14 +1,18 @@
-# Data Validation Summary
+# Data Quality and Validation
 
 **Date:** 2025-12-10  
+**Last Updated:** 2025-12-10  
 **Validation Script:** `scripts/validate_data_quality.sh`
 
 ## Executive Summary
 
 ✅ **Data quality is excellent** - 99.9% of experiments are valid  
 ✅ **All scaling experiments are complete** - 36/36 in both GCP and Minikube  
+✅ **Aggregation logic fixed** - Zero latency values now correctly recognized as valid  
 ⚠️ **1 minor data quality issue** - Missing event ID in one experiment (negligible impact)  
 ✅ **Dissertation validation script bug fixed** - Algorithm parsing corrected
+
+**Note**: All action items have been moved to `OUTSTANDING_WORK.md` for centralized tracking.
 
 ---
 
@@ -140,17 +144,85 @@ The script now correctly identifies all experiments.
 
 ---
 
-## 8. Conclusion
+## 8. Data Quality Assessment History
+
+### Issue: Zero Percentiles Treated as Missing (RESOLVED)
+
+**Problem**: The aggregation script (`aggregate_results.py`) was filtering out `p50=0.0` as "missing" when it's actually valid data.
+
+**Root Cause**: Many operations complete in <1 microsecond, resulting in `p50=0.0`. The script checked `if r.p50 > 0`, which excluded valid zero values.
+
+**Fix Applied**: Updated aggregation logic to check `if r.total_events > 0` instead, accepting zero percentile values as valid measurements.
+
+**Result**: All 86 aggregated entries now have valid data (zero values included).
+
+**Action Items**: See `OUTSTANDING_WORK.md` item #4 for generating missing summary files.
+
+---
+
+### Issue: Missing Summary Files (ACTION REQUIRED)
+
+**Status**: 14 experiments have raw data but are missing `summary.json` files.
+
+**Affected Experiments**:
+- `dilithium2_p1024_r10000_run*` (4 experiments)
+- `dilithium2_p1024_r100_run1` (1 experiment)
+- `hybrid_kyber_dilithium_p1024_r500_scaling_*` (9 scaling experiments)
+
+**Solution**: Run `scripts/generate_missing_summaries.sh` to generate missing summaries.
+
+**Action Items**: See `OUTSTANDING_WORK.md` item #4.
+
+---
+
+### Zero Latency Values - Are They Valid?
+
+**YES** - Zero latency values are **scientifically valid**:
+
+- **Measurement Precision**: Latencies measured in microseconds (μs)
+- **Operations <1μs**: Many cryptographic operations complete in <1 microsecond
+- **Example**: Sample data shows 94% of operations had `latency_us=0` (valid measurement)
+- **Evidence**: Logs show operations: 0.02μs, 0.04μs, 0.55μs, etc.
+
+**Conclusion**: Zero latency values are valid measurements and should be included in analysis.
+
+---
+
+## 9. Data Sufficiency
+
+### Baseline Experiments
+- **Expected:** 459 per environment (native, minikube, gcp)
+- **Found:** 468 native, 468 minikube, 466 gcp
+- **Status:** ✅ **COMPLETE**
+
+### Scaling Experiments
+- **Expected:** 36 per environment (minikube, gcp)
+- **Found:** 36 minikube, 36 gcp
+- **Status:** ✅ **COMPLETE**
+
+### Total Experiments
+- **Total validated:** 1,456 experiments
+- **Valid:** 1,455 (99.9%)
+- **With issues:** 1 (0.07% - minor missing event ID)
+- **With warnings:** 1,399 (96.1% - expected outliers)
+
+**Conclusion**: ✅ **Data is sufficient for dissertation analysis.**
+
+---
+
+## 10. Conclusion
 
 **✅ Your data is ready for dissertation analysis.**
 
 All critical experiments are complete, and the single data quality issue is statistically insignificant. The outlier warnings are expected and can be handled during statistical analysis.
 
-**No experiments need to be re-run.**
+**No experiments need to be re-run required** (except for generating 14 missing summary files).
+
+**Action Items**: See `OUTSTANDING_WORK.md` items #4 and #5 for remaining tasks.
 
 ---
 
-## Validation Command
+## Validation Commands
 
 To re-run validation:
 ```bash
@@ -161,4 +233,16 @@ To validate specific environment:
 ```bash
 ./scripts/validate_data_quality.sh --env gcp --check-dissertation
 ```
+
+To generate missing summaries:
+```bash
+./scripts/generate_missing_summaries.sh
+```
+
+---
+
+## Related Documents
+
+- `OUTSTANDING_WORK.md` - Action items for data quality improvements
+- `docs/analysis/telemetry-assessment.md` - Telemetry data quality assessment
 

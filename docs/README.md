@@ -19,6 +19,9 @@ User-facing guides for running experiments and using the framework:
 - **[Storage and Output](guides/storage-and-output.md)** - Directory structure and overwrite behavior
 - **[Stop and Resume](guides/stop-and-resume.md)** - Safely interrupting and resuming experiments
 - **[Re-running Experiments](guides/re-running-experiments.md)** - How to delete and re-run experiments
+- **[Researcher Guide](guides/researcher-guide.md)** - Comprehensive guide for researchers
+- **[Horizontal Scaling Guide](guides/horizontal-scaling-guide.md)** - Horizontal scaling experiments guide
+- **[Parallel Execution](guides/parallel-execution.md)** - Running experiments in parallel
 
 ### 📖 Reference (`reference/`)
 
@@ -28,6 +31,8 @@ Technical reference documentation:
 - **[GCP Deployment](reference/gcp-deployment.md)** - Complete GCP/GKE deployment guide
 - **[Scaling Experiments](reference/scaling-experiments.md)** - Horizontal scaling experiments guide
 - **[Data Validation](reference/data-validation.md)** - Data quality validation and status
+- **[Precision Implementation](reference/precision-implementation.md)** - Sub-microsecond latency measurement implementation
+- **[Option 2 Precision](reference/option2-precision.md)** - Alternative floating-point microseconds approach
 
 ### 🔬 Analysis (`analysis/`)
 
@@ -37,6 +42,12 @@ Research analysis and experimental design documents:
 - **[Hardware Consistency](analysis/hardware-consistency.md)** - Cross-environment hardware analysis
 - **[Cost Analysis](analysis/cost-analysis.md)** - Cost and time analysis
 - **[Enterprise Representativeness](analysis/enterprise-representativeness.md)** - Enterprise deployment analysis
+- **[Telemetry Assessment](analysis/telemetry-assessment.md)** - Comprehensive telemetry assessment for dissertation objectives
+- **[Workflow](analysis/workflow.md)** - Analysis workflow guide
+- **[Dissertation Guide](analysis/dissertation-guide.md)** - Guide for dissertation analysis
+- **[Cluster Sizing Analysis](analysis/cluster-sizing-analysis.md)** - Cluster sizing analysis
+- **[Horizontal Scaling Analysis](analysis/horizontal-scaling-analysis.md)** - Horizontal scaling analysis
+- **[GCP Optimization](analysis/gcp-optimization.md)** - GCP optimization analysis
 
 ### 🔧 Troubleshooting (`troubleshooting/`)
 
@@ -69,11 +80,33 @@ The main project README is located at the repository root:
 
 ## Documentation Status
 
-This documentation was reorganized on 2025-12-10 to:
-- ✅ Eliminate redundancies
-- ✅ Organize by category
-- ✅ Update outdated information
-- ✅ Improve discoverability
+This documentation was consolidated and reorganized on 2025-12-10 to:
+- ✅ Eliminate redundancies (consolidated 38+ root-level files)
+- ✅ Organize by category (guides, reference, analysis, troubleshooting)
+- ✅ Update outdated information (removed completed TODOs, archived outdated docs)
+- ✅ Improve discoverability (clear structure, updated index)
+- ✅ Centralize action items (all in `OUTSTANDING_WORK.md`)
+
+### Consolidated Documents
+
+**Telemetry Documents** (5 → 1):
+- Consolidated into `analysis/telemetry-assessment.md`
+
+**Data Quality Documents** (6 → 1):
+- Consolidated into `reference/data-validation.md`
+
+**Implementation Documents** (3 → 1):
+- Consolidated into `reference/precision-implementation.md`
+- Option 2 preserved as `reference/option2-precision.md`
+
+**Archived Documents**:
+- See `archive/documentation-2025-12-10/` for archived files
+- See `ARCHIVE.md` for archive index
+
+### Active Work Tracking
+
+All outstanding work items are tracked in:
+- **[OUTSTANDING_WORK.md](../OUTSTANDING_WORK.md)** - Single source of truth for all action items
 
 If you find outdated information or have suggestions, please update the relevant document or create an issue.
 
