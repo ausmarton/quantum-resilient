@@ -108,7 +108,8 @@ This document defines the **requirements** for the codebase to support dissertat
 
 **Required Capabilities**:
 - ⚠️ Memory data captured but not analyzed (see OUTSTANDING_WORK.md #2)
-- ❌ CPU data may be invalid (all zeros, see OUTSTANDING_WORK.md #1)
+- ✅ **FIXED**: CPU data now uses cumulative CPU time from `/proc/self/stat` (Linux)
+- ✅ CPU data should be valid (cumulative CPU time since process start)
 - ❌ CPU analysis not implemented (see OUTSTANDING_WORK.md #3)
 
 **Dissertation Claims Supported** (if implemented):
@@ -272,11 +273,12 @@ This document defines the **requirements** for the codebase to support dissertat
 **Memory**:
 - ✅ Data captured (`memory_rss_bytes: u64`)
 - ✅ Data validated (9-10MB native, 6-7MB minikube)
-- ❌ Analysis not implemented (see OUTSTANDING_WORK.md #2)
+- ✅ **Analysis implemented** (see OUTSTANDING_WORK.md #2 - COMPLETED)
 
 **CPU**:
-- ⚠️ Data captured (`cpu_user_seconds: f64`)
-- ❌ Data may be invalid (all zeros, see OUTSTANDING_WORK.md #1)
+- ✅ Data captured (`cpu_user_seconds: f64`)
+- ✅ **FIXED**: Now uses `/proc/self/stat` for cumulative CPU time (Linux)
+- ✅ Data should be valid (cumulative CPU time since process start)
 - ❌ Analysis not implemented (see OUTSTANDING_WORK.md #3)
 
 **Gap**: 
@@ -731,12 +733,12 @@ This document defines the **requirements** for the codebase to support dissertat
 1. **CPU Sampling Issue** (OUTSTANDING_WORK.md #1)
    - **Impact**: Cannot make CPU utilization claims
    - **Priority**: CRITICAL
-   - **Status**: Investigation required
+   - **Status**: ✅ **FIXED** - Now uses `/proc/self/stat` for cumulative CPU time
 
 2. **Memory Analysis Missing** (OUTSTANDING_WORK.md #2)
    - **Impact**: Cannot make memory utilization claims
    - **Priority**: HIGH
-   - **Status**: Implementation required (1-2 hours)
+   - **Status**: ✅ **COMPLETED** - Memory analysis implemented
 
 3. **CPU Analysis Missing** (OUTSTANDING_WORK.md #3)
    - **Impact**: Cannot make CPU efficiency claims
@@ -851,8 +853,8 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ### Pre-Dissertation Validation
 
-- [ ] **CPU Sampling**: Investigate and fix if possible (OUTSTANDING_WORK.md #1) - **CRITICAL**
-- [ ] **Memory Analysis**: Implement analysis (OUTSTANDING_WORK.md #2) - **HIGH**
+- [x] **CPU Sampling**: ✅ **FIXED** - Uses `/proc/self/stat` for cumulative CPU time (OUTSTANDING_WORK.md #1) - **COMPLETED**
+- [x] **Memory Analysis**: ✅ **COMPLETED** - Implemented in compute_statistics.py (OUTSTANDING_WORK.md #2) - **COMPLETED**
 - [ ] **CPU Analysis**: Implement if CPU data valid (OUTSTANDING_WORK.md #3) - **HIGH**
 - [ ] **Missing Summaries**: Regenerate 14 missing summaries (OUTSTANDING_WORK.md #4) - **MEDIUM**
 - [ ] **Data Validation**: Enhance validation (OUTSTANDING_WORK.md #5) - **MEDIUM**
@@ -1096,9 +1098,9 @@ This document defines the **requirements** for the codebase to support dissertat
   - NFR8: Report Generation (automated reports missing)
 
 **Critical Path to "Fit for Purpose"**:
-1. Investigate CPU sampling (OUTSTANDING_WORK.md #1) - **CRITICAL**
-2. Add memory analysis (OUTSTANDING_WORK.md #2) - **HIGH**
-3. Add CPU analysis (OUTSTANDING_WORK.md #3) - **HIGH** (conditional)
+1. ✅ Investigate CPU sampling (OUTSTANDING_WORK.md #1) - **COMPLETED** - Fixed to use cumulative CPU time
+2. ✅ Add memory analysis (OUTSTANDING_WORK.md #2) - **COMPLETED** - Memory stats implemented
+3. Add CPU analysis (OUTSTANDING_WORK.md #3) - **HIGH** (now unblocked by #1)
 4. Regenerate missing summaries (OUTSTANDING_WORK.md #4) - **MEDIUM**
 5. Add dependency verification (NFR5) - **MEDIUM**
 6. Document payload/pattern impact analysis (FR10, FR11) - **LOW**

@@ -302,6 +302,23 @@ def compute_statistics(
     # Throughput stats
     summary["throughput"] = compute_throughput_stats(df)
 
+    # Memory utilization stats
+    if "memory_rss_bytes" in df.columns:
+        memory_series = df["memory_rss_bytes"]
+        summary["memory"] = {
+            "mean_rss_bytes": float(memory_series.mean()),
+            "max_rss_bytes": int(memory_series.max()),
+            "min_rss_bytes": int(memory_series.min()),
+            "std_rss_bytes": float(memory_series.std()),
+            "p50_rss_bytes": float(memory_series.quantile(0.50)),
+            "p95_rss_bytes": float(memory_series.quantile(0.95)),
+            "p99_rss_bytes": float(memory_series.quantile(0.99)),
+            "mean_rss_mb": float(memory_series.mean() / 1_000_000.0),
+            "max_rss_mb": float(memory_series.max() / 1_000_000.0),
+        }
+    else:
+        summary["memory"] = {"note": "Memory data not available"}
+
     # Worker skew detection
     summary["worker_skew"] = detect_worker_skew(df)
 
@@ -313,13 +330,26 @@ def compute_statistics(
         summary["per_algorithm"] = {}
         for algo in df["algorithm"].unique():
             algo_df = df[df["algorithm"] == algo]
+            algo_stats = {}
+            
             # Expect latency_ns to be present
             if "latency_ns" in algo_df.columns:
                 algo_df = algo_df.copy()
                 algo_df["latency_us"] = algo_df["latency_ns"] / 1000.0
-                summary["per_algorithm"][algo] = compute_basic_stats(algo_df["latency_us"])
+                algo_stats["latency"] = compute_basic_stats(algo_df["latency_us"])
             else:
                 raise ValueError(f"Missing latency_ns column for algorithm {algo}")
+            
+            # Per-algorithm memory stats
+            if "memory_rss_bytes" in algo_df.columns:
+                memory_series = algo_df["memory_rss_bytes"]
+                algo_stats["memory"] = {
+                    "mean_rss_bytes": float(memory_series.mean()),
+                    "max_rss_bytes": int(memory_series.max()),
+                    "mean_rss_mb": float(memory_series.mean() / 1_000_000.0),
+                }
+            
+            summary["per_algorithm"][algo] = algo_stats
 
     # Per-operation stats
     if "operation" in df.columns:
@@ -355,6 +385,9 @@ def compute_statistics(
     if "throughput" in summary and "mean_msgs_per_sec" in summary["throughput"]:
         tput = summary["throughput"]
         console.print(f"  Throughput: {tput['mean_msgs_per_sec']:.0f} msg/s (mean)")
+    if "memory" in summary and "mean_rss_mb" in summary["memory"]:
+        mem = summary["memory"]
+        console.print(f"  Memory: mean={mem['mean_rss_mb']:.2f} MB, max={mem['max_rss_mb']:.2f} MB")
 
     return summary
 

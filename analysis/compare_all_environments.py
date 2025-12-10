@@ -45,6 +45,8 @@ class EnvironmentMetrics:
     mean_throughput: float = 0.0
     max_throughput: float = 0.0
     total_events: int = 0
+    mean_memory_mb: float = 0.0
+    max_memory_mb: float = 0.0
     
     def to_dict(self) -> dict:
         return {
@@ -60,6 +62,8 @@ class EnvironmentMetrics:
             "mean_throughput": self.mean_throughput,
             "max_throughput": self.max_throughput,
             "total_events": self.total_events,
+            "mean_memory_mb": self.mean_memory_mb,
+            "max_memory_mb": self.max_memory_mb,
         }
 
 
@@ -139,6 +143,13 @@ def extract_metrics(summary: dict, name: str, path: str) -> EnvironmentMetrics:
         tput = summary["throughput"]
         metrics.mean_throughput = tput.get("mean_msgs_per_sec", 0)
         metrics.max_throughput = tput.get("max_msgs_per_sec", 0)
+    
+    # Memory metrics
+    if "memory" in summary:
+        mem = summary["memory"]
+        if "mean_rss_mb" in mem:
+            metrics.mean_memory_mb = mem.get("mean_rss_mb", 0)
+            metrics.max_memory_mb = mem.get("max_rss_mb", 0)
     
     metrics.total_events = summary.get("total_events", 0)
     
@@ -333,6 +344,8 @@ def print_table_plain(
         ("Mean Latency (μs)", "mean_latency_us"),
         ("Std Dev (μs)", "std_latency_us"),
         ("Mean Throughput (ops/s)", "mean_throughput"),
+        ("Mean Memory (MB)", "mean_memory_mb"),
+        ("Max Memory (MB)", "max_memory_mb"),
         ("Total Events", "total_events"),
     ]
     
