@@ -1869,20 +1869,23 @@ Reports Cohen's d with interpretations:
 
 ## Documentation
 
-### User Guides
+All documentation has been reorganized into the `docs/` directory. See **[docs/README.md](docs/README.md)** for the complete documentation index.
 
-- **[RESEARCHER_GUIDE.md](RESEARCHER_GUIDE.md)** - Complete guide for researchers running experiments
-- **[FULL_SCALE_DATA_COLLECTION_GUIDE.md](FULL_SCALE_DATA_COLLECTION_GUIDE.md)** - Complete guide for full-scale data collection (includes quick start, resume, and validation)
-- **[STOP_AND_RESUME_GUIDE.md](STOP_AND_RESUME_GUIDE.md)** - How to safely stop and resume long-running experiments
+### Quick Links
 
-### Reference Guides
+- **[Data Collection Guide](docs/guides/data-collection.md)** - Complete guide for full-scale data collection
+- **[GCP Deployment Guide](docs/reference/gcp-deployment.md)** - Complete GCP/GKE deployment guide
+- **[Storage and Output Guide](docs/guides/storage-and-output.md)** - Where results are stored and overwrite behavior
+- **[System Requirements](docs/reference/system-requirements.md)** - System load and variability handling
+- **[Scaling Experiments](docs/reference/scaling-experiments.md)** - Horizontal scaling experiments guide
+- **[Data Validation](docs/reference/data-validation.md)** - Data quality validation and status
 
-- **[STORAGE_AND_OUTPUT_GUIDE.md](STORAGE_AND_OUTPUT_GUIDE.md)** - Complete guide to storage locations, directory structure, and overwrite behavior
-- **[SYSTEM_LOAD_AND_VARIABILITY.md](SYSTEM_LOAD_AND_VARIABILITY.md)** - System load requirements and how variability is handled
+### Documentation Structure
 
-### Reference
-
-- **[SMOKE_TEST_DATA_FLOW.md](SMOKE_TEST_DATA_FLOW.md)** - Smoke test execution flow and data collection
+- **`docs/guides/`** - User guides (how to use the framework)
+- **`docs/reference/`** - Technical reference documentation
+- **`docs/analysis/`** - Research analysis and experimental design
+- **`docs/troubleshooting/`** - Historical fixes and troubleshooting
 
 ## License
 

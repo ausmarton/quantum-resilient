@@ -278,6 +278,8 @@ def main():
         
         # Try alternative paths
         if not summary_path.exists():
+            summary_path = output_dir / 'merged' / 'stats' / 'summary.json'
+        if not summary_path.exists():
             summary_path = output_dir / 'summary.json'
         
         summary = load_summary(summary_path)
