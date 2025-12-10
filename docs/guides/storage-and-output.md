@@ -7,17 +7,15 @@ This guide explains where experiment results are stored, how the directory struc
 | What | Where | Overwrites? |
 |------|-------|-------------|
 | Individual experiment data | `results/<env>/<scenario-id>/` | ✅ Yes (same scenario ID) |
-| Smoke test outputs | `final-results-smoke/` | ✅ Yes (each run) |
-| Full scale outputs | `final-results/` | ✅ Yes (each run) |
-| Smoke vs Full | Different directories | ❌ No (separate) |
+| All outputs | `final-results/` | ✅ Yes (each run, unified) |
+| Smoke vs Full | Same directory | ✅ Yes (unified) |
 
 ### Key Points
 
 **✅ Safe (Won't Overwrite)**
-- **Smoke test** and **full scale** runs use **different directories**
-  - Smoke: `final-results-smoke/`
-  - Full: `final-results/`
-- Running smoke test today and full scale tomorrow → **Both preserved**
+- **Smoke test** and **full scale** runs use the **same unified directory** (`final-results/`)
+- Both modes use identical structure and can be run independently
+- Running smoke test today and full scale tomorrow → **Both use same directory structure**
 
 **⚠️ Will Overwrite**
 - **Same scenario ID** run twice → Individual results overwritten
@@ -74,9 +72,7 @@ quantum-resilient/
 │   │   └── environment_deltas.json
 │   └── tables/                     # CSV tables for dissertation
 │
-└── final-results-smoke/       # Smoke-test run outputs (separate!)
-    ├── index.json
-    ├── aggregated_stats.json
+# Note: final-results/ is unified for both smoke-test and full-scale runs
     ├── figures/                     # All figures (overwritten each run)
     └── stats/
 ```
@@ -152,16 +148,16 @@ mv results/native/rsa2048-smoketest-p256-r50 \
 
 ### 2. Smoke Test vs Full Scale Runs
 
-**Separate directories - NO OVERWRITE between them:**
+**Unified directory - Same structure for both:**
 
-- **Smoke test**: `final-results-smoke/`
-- **Full scale**: `final-results/`
+- **Smoke test**: `final-results/` (unified)
+- **Full scale**: `final-results/` (unified)
 
 **Example:**
 ```bash
 # Run smoke test
 ./run_all_experiments.sh --smoke-test --envs native
-# Creates: final-results-smoke/
+# Creates: final-results/ (unified)
 
 # Run full scale (later)
 ./run_all_experiments.sh --envs native  # (no --smoke-test)
@@ -180,7 +176,7 @@ If you run the full suite twice with the same:
 - Replicas
 - Smoke-test flag
 
-→ The `final-results/` (or `final-results-smoke/`) directory will be **overwritten**.
+→ The `final-results/` directory will be **overwritten**.
 
 **What gets overwritten:**
 - `index.json` - Completely rewritten
@@ -223,11 +219,11 @@ Every time you run `run_all_experiments.sh`, the analysis phase:
 ```bash
 # Day 1: Generate figures
 ./run_all_experiments.sh --smoke-test
-# Creates: final-results-smoke/figures/combined_ecdf.png
+# Creates: final-results/figures/combined_ecdf.png
 
 # Day 2: Re-run (even with different experiments)
 ./run_all_experiments.sh --smoke-test
-# OVERWRITES: final-results-smoke/figures/combined_ecdf.png
+# OVERWRITES: final-results/figures/combined_ecdf.png
 ```
 
 ## Common Scenarios
@@ -236,7 +232,7 @@ Every time you run `run_all_experiments.sh`, the analysis phase:
 ```bash
 # Today
 ./run_all_experiments.sh --smoke-test --envs native
-# → Creates: final-results-smoke/
+# → Creates: final-results/ (unified)
 
 # Tomorrow  
 ./run_all_experiments.sh --envs native  # (no --smoke-test)
@@ -277,33 +273,33 @@ Every time you run `run_all_experiments.sh`, the analysis phase:
 ```bash
 # After each run
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-mv final-results-smoke "final-results-smoke-${TIMESTAMP}"
+mv final-results "final-results-${TIMESTAMP}"
 ```
 
 **Option B: Use version control**
 ```bash
 # Commit results after each run
-git add final-results-smoke/
-git commit -m "Results from smoke test run $(date)"
+git add final-results/
+git commit -m "Results from run $(date)"
 ```
 
 **Option C: Archive script**
 ```bash
 # Create archive after run
-tar -czf "results-$(date +%Y%m%d).tar.gz" final-results-smoke/
+tar -czf "results-$(date +%Y%m%d).tar.gz" final-results/
 ```
 
 ### 2. Compare Smoke Test vs Full Scale
 
 Since they use different directories, you can compare them:
 ```bash
-# Compare aggregated stats
-diff final-results-smoke/aggregated_stats.json \
-     final-results/aggregated_stats.json
+# Compare aggregated stats (if you have timestamped directories)
+diff final-results-run1/aggregated_stats.json \
+     final-results-run2/aggregated_stats.json
 
 # Compare figures
-diff final-results-smoke/figures/ \
-     final-results/figures/
+diff final-results-run1/figures/ \
+     final-results-run2/figures/
 ```
 
 ### 3. Re-run Individual Experiments
@@ -343,7 +339,7 @@ cp -r final-results archive/final-results-$TIMESTAMP 2>/dev/null || true
 
 # Then delete
 rm -rf results/native/* results/minikube/* results/gcp/*
-rm -rf final-results/* final-results-smoke/*
+rm -rf final-results/*
 
 # Re-run
 ./run_full_scale_data_collection.sh --env native
@@ -382,7 +378,7 @@ mv results/native/* archive/2025-12-06/
    ```
 
 **Required Directories (Keep These)**
-- `final-results/` or `final-results-smoke/` - **Main output for dissertation**
+- `final-results/` - **Main output for dissertation** (unified for both smoke-test and full-scale)
 - `results/<env>/<scenario-id>/merged/` - Raw data (needed for re-analysis)
 - `results/<env>/<scenario-id>/stats/` - Individual experiment stats
 - `generated-scenarios/` - Scenario definitions
@@ -392,7 +388,6 @@ mv results/native/* archive/2025-12-06/
 | Location | Overwrites? | When | How to Preserve |
 |----------|-------------|------|-----------------|
 | `results/<env>/<scenario-id>/` | ✅ Yes (same scenario ID) | Same parameters | Rename directory before re-run |
-| `final-results-smoke/` vs `final-results/` | ❌ No | Different smoke-test flag | Already separate |
 | `final-results/` (multiple runs) | ✅ Yes | Same parameters | Rename/timestamp directory |
 | `final-results/figures/` | ✅ Yes | Every analysis run | Copy/archive before re-run |
 | `final-results/index.json` | ✅ Yes | Every run | Archive before re-run |
@@ -402,7 +397,7 @@ mv results/native/* archive/2025-12-06/
 | Action | What Overwrites |
 |--------|----------------|
 | Re-run same scenario | `results/<env>/<scenario-id>/` (but script skips if exists) |
-| Re-run with same parameters | `final-results/` or `final-results-smoke/` (entire directory) |
+| Re-run with same parameters | `final-results/` (entire directory, unified) |
 | Re-run analysis phase | All files in `figures/` and `stats/` |
 | Run smoke then full | Nothing (different directories) |
 
@@ -418,15 +413,15 @@ mv results/native/* archive/2025-12-06/
 ```bash
 # Day 1: Smoke test
 ./run_all_experiments.sh --smoke-test --envs native,minikube
-mv final-results-smoke final-results-smoke-day1
+mv final-results final-results-smoke-day1
 
 # Day 2: Full scale run
-./run_all_experiments.sh --envs native,minikube
-mv final-results final-results-day2
+./run_all_experiments.sh --envs native,minikube,gcp
+mv final-results final-results-full-day2
 
 # Day 3: Re-run smoke test (different parameters)
 ./run_all_experiments.sh --smoke-test --envs native
-mv final-results-smoke final-results-smoke-day3
+mv final-results final-results-smoke-day3
 
 # All three runs are preserved!
 ```
@@ -434,10 +429,10 @@ mv final-results-smoke final-results-smoke-day3
 ## Workflow Summary
 
 1. **Run experiments**: `./run_all_experiments.sh --smoke-test --envs native,minikube`
-2. **Check results**: Look in `final-results-smoke/` (or `final-results/`)
-3. **Use figures**: Copy from `final-results-smoke/figures/` to your dissertation
-4. **Use tables**: Copy from `final-results-smoke/tables/` (if generated)
-5. **Use stats**: Reference `final-results-smoke/aggregated_stats.json`
+2. **Check results**: Look in `final-results/` (unified for both modes)
+3. **Use figures**: Copy from `final-results/figures/` to your dissertation
+4. **Use tables**: Copy from `final-results/tables/` (if generated)
+5. **Use stats**: Reference `final-results/aggregated_stats.json`
 
 ## Verification
 

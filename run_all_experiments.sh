@@ -1,17 +1,33 @@
 #!/usr/bin/env bash
 # =============================================================================
-# run_all_experiments.sh - Master orchestration script
+# run_all_experiments.sh - Unified Benchmark Orchestration Script
 #
-# Executes all benchmarking scenarios across all environments (native, Minikube,
-# GCP), runs multiple repeats, collects data, and produces dissertation-ready
-# final-results/ directory.
+# Executes benchmarking scenarios across all environments (native, Minikube, GCP),
+# runs multiple repeats, collects data, and produces dissertation-ready results.
+#
+# This script handles both smoke-test and full-scale benchmarks using the same flow:
+# - Same scenario generation (orchestration/generate_scenarios.py)
+# - Same results structure (results/<env>/<scenario-id>/)
+# - Same analysis pipeline
+# - Only differs in experiment matrix filtering and parameters (controlled by --smoke-test)
 #
 # Usage:
+#   # Full-scale benchmarks
 #   ./run_all_experiments.sh \
 #     --project <gcp-project> \
 #     --bucket <gcs-bucket> \
 #     --matrix orchestration/experiment_matrix.yaml \
 #     --envs native,minikube,gcp
+#
+#   # Smoke-test benchmarks (same command, add --smoke-test)
+#   ./run_all_experiments.sh \
+#     --smoke-test \
+#     --envs native,minikube,gcp
+#
+# Results Structure (same for both smoke-test and full-scale):
+#   - Individual experiments: results/<env>/<scenario-id>/
+#   - Final results: final-results/ (unified for both modes)
+#   - Scenario IDs are identical format regardless of mode
 #
 # Requirements:
 #   - Python 3.10+ with analysis dependencies
@@ -118,6 +134,10 @@ OPTIONS:
     --continue-on-error     Continue if individual experiments fail (default: true)
     --max-retries N         Max retries per failed experiment (default: 2)
     --smoke-test            Enable smoke-test mode (reduced scale, minimal cost)
+                            Uses exact same flow as full-scale, only differs in:
+                            - Experiment matrix filtering (subset of algorithms/experiments)
+                            - Reduced parameters (2 payloads, 2 rates, 1 run, 5s duration)
+                            Scenario IDs, results structure, and directories are identical.
     -h, --help              Show this help message
 
 EXAMPLE:
@@ -534,18 +554,24 @@ if [[ -f "$GENERATED_SCENARIOS_DIR/manifest.json" ]]; then
     log_info "Total scenarios: $TOTAL_SCENARIOS"
 fi
 
-# Set final results directory based on smoke-test mode
+# Unified final results directory (same for both smoke-test and full-scale)
+FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results"
+
+# Force replicas to 1 in smoke-test mode
 if [[ "$SMOKE_TEST" == "true" ]]; then
-    FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results-smoke"
-    REPLICAS="1"  # Force replicas to 1 in smoke-test mode
-else
-    FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results"
+    REPLICAS="1"
 fi
 
 # =============================================================================
 # Phase 2: Create Output Directories
 # =============================================================================
 log_phase "2. Initialize Output Directories"
+
+# Determine final results directory based on smoke-test mode
+# Use same structure: final-results/ for both smoke-test and full-scale
+# Unified final results directory (same for both smoke-test and full-scale)
+# The distinction comes from scenario filtering, not directory structure
+FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results"
 
 mkdir -p "$FINAL_RESULTS_DIR/figures"
 mkdir -p "$FINAL_RESULTS_DIR/stats"

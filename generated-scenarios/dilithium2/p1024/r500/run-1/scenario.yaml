@@ -1,10 +1,10 @@
-id: dilithium2_p1024_r500_scaling_run1_d72d741a
-description: Dilithium-2 horizontal scaling (replicas 1,2,4,8) - 1024B @ 500 msg/s (run 1)
+id: dilithium2-smoketest-p1024-r500-a40c
+description: Dilithium-2 digital signature - 1024B @ 500 msg/s (run 1)
 rng_seed: 2920924717784405479
 workload:
   msgs_per_sec: 500
   msg_size_bytes: 1024
-  duration_sec: 30
+  duration_sec: 5
   pattern: constant
 algorithm:
   adapter: dilithium
@@ -18,20 +18,21 @@ execution:
 metrics:
   jsonl_out: /results/raw/run.jsonl
 metadata:
-  scenario_id: dilithium2_p1024_r500_scaling_run1_d72d741a
+  scenario_id: dilithium2-smoketest-p1024-r500-a40c
   algorithm: dilithium2
   adapter: dilithium
   operation: sign
   category: pqc
   payload_size_bytes: 1024
   msgs_per_sec: 500
-  duration_sec: 30
+  duration_sec: 5
   workload_pattern: constant
   run_index: 1
-  total_runs: 3
+  total_runs: 1
+  scaling_experiment: false
   seed: 2920924717784405479
   seed_hash: f2cfac27
-  generated_at: '2025-12-10T00:12:45.029715+00:00'
+  generated_at: '2025-12-10T16:07:08.338849+00:00'
   generator_version: 2.0.0
-  mode: full
+  mode: smoke-test
   sig_paramset: dilithium2

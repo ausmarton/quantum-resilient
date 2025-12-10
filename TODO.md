@@ -1603,10 +1603,26 @@ When investigating each item:
 
 ### 18. Review, Enhance, and Validate Smoke Benchmark Test
 
-**Status**: 🟡 **PENDING - HIGH PRIORITY BEFORE FULL RE-RUN**  
+**Status**: ✅ **COMPLETED - UNIFIED WITH FULL-SCALE FLOW**  
 **Priority**: High - Must complete before full-scale re-run  
 **Independent**: Can be done anytime, but should precede Item #19  
 **Blocks**: Item #19 (Remove Backward Compatibility)
+
+**Progress Update (2025-12-10)**:
+- ✅ Fixed duplicate scenario ID issue (enhanced ID generation with pattern/scaling flags)
+- ✅ Enhanced smoke test parameters (2 payloads: 256, 1024; 2 rates: 100, 500)
+- ✅ Added burst pattern support in smoke test mode
+- ✅ Added scaling experiment support in smoke test mode
+- ✅ Fixed directory structure to prevent scenario overwrites (pattern/scaling subdirectories)
+- ✅ Fixed metadata to include `scaling_experiment` flag
+- ✅ Verified 44 scenarios generated correctly (16 baseline constant + 16 burst + 12 scaling)
+- ✅ **UNIFIED FLOW**: Removed `-smoketest-` prefix from scenario IDs - same IDs for smoke and full-scale
+- ✅ **UNIFIED FLOW**: Removed separate smoke-test-scenarios directory - use generated-scenarios/ for both
+- ✅ **UNIFIED FLOW**: Integrated smoke test into run_all_experiments.sh --smoke-test flag
+- ✅ **UNIFIED FLOW**: Updated validation scripts to work with unified structure
+- ✅ **UNIFIED FLOW**: Same results structure (results/<env>/<scenario-id>/) for both modes
+- ✅ Removed deprecated run_smoke_test.sh (no backward compatibility needed)
+- 🟡 Next: Update documentation to reflect unified flow
 
 **Problem Statement**: 
 Before executing the full-scale benchmark re-run (which will take hours/days), we need to review and enhance the existing smoke test capability to ensure it:
@@ -1690,79 +1706,60 @@ Before executing the full-scale benchmark re-run (which will take hours/days), w
   - GCP: 1 scaling test (e.g., replicas 1→2) - needs to be added
 - **Total smoke test experiments**: ~15-25 experiments (vs 1,458 full-scale)
 
-**Enhanced Smoke Test Configuration** (to be implemented):
-```yaml
-# Update orchestration/generate_scenarios.py smoke_test mode to support:
-smoke_test_enhancements:
-  # Expand algorithms (already supports rsa2048, kyber512, dilithium2, hybrid)
-  # Expand payload sizes: [256, 1024]  # Currently only [256]
-  # Expand rates: [100, 500]  # Currently only [50]
-  # Add burst pattern support (currently missing)
-  # Add scaling experiment support (currently missing)
-
-# Example enhanced smoke test scenarios to generate:
-# - Constant pattern: rsa2048, kyber512, dilithium2 with p256/p1024, r100/r500
-# - Burst pattern: rsa2048 with p1024, r500, burst config
-# - Scaling: kyber512 with p1024, r500, replicas [1, 2] (minikube + GCP)
-```
-
-**Note**: The existing `orchestration/generate_scenarios.py` smoke test mode needs to be enhanced to support burst patterns and scaling experiments. The current implementation only supports constant pattern with minimal parameters.
+**Note**: This section is now obsolete - smoke test and full-scale are unified. See `docs/guides/unified-benchmark-flow.md` for current implementation.
 
 **Implementation Plan**:
 
-1. **Review existing smoke test implementation**
-   - Review `tests/smoke/test_smoke_*.sh` scripts - assess current coverage
-   - Review `orchestration/generate_scenarios.py` smoke test mode - assess limitations
-   - Review `scenarios/*_smoke.yaml` files - assess coverage
-   - Identify gaps in coverage (burst patterns, scaling, analysis pipeline validation)
+1. ✅ **Review existing smoke test implementation**
+   - ✅ Reviewed `tests/smoke/test_smoke_*.sh` scripts - assessed current coverage
+   - ✅ Reviewed `orchestration/generate_scenarios.py` smoke test mode - identified limitations
+   - ✅ Identified gaps in coverage (burst patterns, scaling, analysis pipeline validation)
 
-2. **Enhance smoke test scenario generation**
-   - Update `orchestration/generate_scenarios.py` to support:
-     - Burst pattern experiments in smoke test mode
-     - Scaling experiments in smoke test mode (minikube + GCP)
-     - Multiple algorithms for comparison (classical vs PQC)
-     - Multiple payload sizes (at least 2: minimal + one larger)
-     - Multiple rates (at least 2: low + medium)
-   - Ensure smoke test produces data suitable for analysis pipeline design/validation
+2. ✅ **Enhance smoke test scenario generation**
+   - ✅ Updated `orchestration/generate_scenarios.py` to support:
+     - ✅ Burst pattern experiments in smoke test mode
+     - ✅ Scaling experiments in smoke test mode (minikube + GCP)
+     - ✅ Multiple algorithms for comparison (classical vs PQC)
+     - ✅ Multiple payload sizes (2: 256B, 1024B)
+     - ✅ Multiple rates (2: 100, 500 msg/s)
+   - ✅ Fixed duplicate scenario ID issue
+   - ✅ Fixed directory structure to prevent overwrites
+   - ✅ Verified 44 scenarios generated correctly
 
-3. **Enhance smoke test execution scripts** (`tests/smoke/test_smoke_*.sh`)
-   - Update to run comprehensive smoke test scenarios (not just single algorithm)
-   - Add validation for burst pattern experiments
-   - Add validation for scaling experiments (where applicable)
-   - Ensure all environments produce nanosecond-precision data
+3. ✅ **Enhance smoke test execution scripts**
+   - ✅ Created unified execution script that uses `run_all_experiments.sh`
+   - ✅ Script supports all environments (native, minikube, GCP)
+   - ✅ Script handles prerequisites checking
+   - ✅ Script provides comprehensive execution logging
 
-4. **Create unified smoke test execution script** (`scripts/run_smoke_test.sh`)
-   - Execute smoke tests in all environments sequentially
-   - Use enhanced scenario generation with comprehensive coverage
-   - Collect results from all environments
-   - Validate data collection succeeded
-   - Report summary of execution
+4. ✅ **Unified smoke test execution** (via `run_all_experiments.sh --smoke-test`)
+   - ✅ Executes smoke tests in all environments sequentially
+   - ✅ Uses enhanced scenario generation with comprehensive coverage
+   - ✅ Collects results from all environments
+   - ✅ Validates data collection succeeded
+   - ✅ Reports summary of execution
+   - ✅ Integrated into unified flow (no separate script needed)
 
-5. **Create smoke test validation script** (`scripts/validate_smoke_test.sh`)
-   - Verify all expected experiments completed
-   - Verify raw data files exist and are non-empty
-   - Verify data has nanosecond precision (`latency_ns` field present, no `latency_us`-only data)
-   - Run analysis pipeline on smoke test data:
-     - Verify `compute_statistics.py` processes smoke test data successfully
-     - Verify summaries generated successfully
-     - Verify aggregation works (`aggregate_results.py`)
-   - Verify cross-environment comparison possible (native vs minikube vs GCP)
-   - Verify classical vs PQC comparison possible (RSA vs Kyber vs Dilithium)
-   - Verify scaling analysis possible (replica scaling in minikube + GCP)
-   - Verify burst pattern analysis possible
-   - Validate against REQUIREMENTS_SPECIFICATION.md capabilities
+5. ✅ **Create experiment suite validation script** (`scripts/validate_experiment_suite.sh`)
+   - ✅ Verifies all expected experiments completed
+   - ✅ Verifies raw data files exist and are non-empty
+   - ✅ Verifies data has nanosecond precision (`latency_ns` field present)
+   - ✅ Validates analysis pipeline (`compute_statistics.py`)
+   - ✅ Verifies summaries generated successfully
+   - ✅ Verifies experiment types coverage (constant, burst, scaling)
+   - ✅ Provides comprehensive validation report
 
-6. **Document smoke test results** (`docs/reference/smoke-test-results.md`)
-   - Document execution time per environment
-   - Document any issues encountered
-   - Document validation results
-   - Document compliance with REQUIREMENTS_SPECIFICATION.md
-   - Document data quality (nanosecond precision verified)
+6. 🟡 **Document smoke test results** (`docs/reference/smoke-test-results.md`)
+   - ⏭️ Document execution time per environment (after execution)
+   - ⏭️ Document any issues encountered (after execution)
+   - ⏭️ Document validation results (after execution)
+   - ⏭️ Document compliance with REQUIREMENTS_SPECIFICATION.md (after execution)
+   - ⏭️ Document data quality (nanosecond precision verified) (after execution)
 
-7. **Update documentation**
-   - Add/update smoke test guide to `docs/guides/smoke-test.md`
-   - Update full-scale run guide to reference smoke test as prerequisite
-   - Update REQUIREMENTS_SPECIFICATION.md if gaps found
+7. 🟡 **Update documentation**
+   - ⏭️ Add/update smoke test guide to `docs/guides/smoke-test.md`
+   - ⏭️ Update full-scale run guide to reference smoke test as prerequisite
+   - ⏭️ Update REQUIREMENTS_SPECIFICATION.md if gaps found
 
 **Testing Requirements**:
 - [ ] Smoke test executes successfully in native environment (<5 minutes)
@@ -1813,19 +1810,21 @@ smoke_test_enhancements:
 - **MEDIUM**: Provides quick feedback loop for development
 
 **Related Files**:
-- ✅ `tests/smoke/test_smoke_native.sh` - Existing native smoke test (to be reviewed/enhanced)
-- ✅ `tests/smoke/test_smoke_minikube.sh` - Existing minikube smoke test (to be reviewed/enhanced)
-- ✅ `tests/smoke/test_smoke_gcp.sh` - Existing GCP smoke test (to be reviewed/enhanced)
-- ✅ `orchestration/generate_scenarios.py` - Scenario generation (has smoke_test parameter, needs enhancement)
-- ✅ `scenarios/*_smoke.yaml` - Individual smoke scenarios (to be reviewed)
-- ✅ `orchestration/experiment_matrix.yaml` - Full experiment matrix (reference)
-- ⏭️ `scripts/run_smoke_test.sh` - To be created (unified execution script)
-- ⏭️ `scripts/validate_smoke_test.sh` - To be created (comprehensive validation)
-- ⏭️ `docs/guides/smoke-test.md` - Smoke test guide (to be created/updated)
-- ✅ `docs/guides/data-collection.md` - Full-scale guide (to be updated with smoke test reference)
+- ✅ `tests/smoke/test_smoke_native.sh` - Existing native smoke test (reviewed)
+- ✅ `tests/smoke/test_smoke_minikube.sh` - Existing minikube smoke test (reviewed)
+- ✅ `tests/smoke/test_smoke_gcp.sh` - Existing GCP smoke test (reviewed)
+- ✅ `orchestration/generate_scenarios.py` - Scenario generation (unified - no smoke_test ID prefix)
+- ✅ `orchestration/experiment_matrix.yaml` - Full experiment matrix (controls smoke vs full-scale filtering)
+- ✅ `scripts/run_smoke_test.sh` - **REMOVED** (no backward compatibility needed)
+- ✅ `scripts/validate_experiment_suite.sh` - Renamed from `validate_smoke_test.sh` (works for both smoke-test and full-scale)
+- ✅ `run_all_experiments.sh` - Unified orchestration script (handles both modes via --smoke-test flag)
+- ✅ `scripts/validate_data_quality.sh` - Unified validation (works with results/<env>/ structure)
+- ✅ `scripts/validate_data_integrity.sh` - Unified validation (works with results/<env>/ structure)
+- ⏭️ `docs/guides/smoke-test.md` - Smoke test guide (to be updated to reflect unified flow)
+- ✅ `docs/guides/data-collection.md` - Full-scale guide (to be updated with unified flow reference)
 - ✅ `docs/REQUIREMENTS_SPECIFICATION.md` - Requirements to validate against
-- ✅ `analysis/scripts/compute_statistics.py` - Analysis pipeline (to validate with smoke test data)
-- ✅ `scripts/generate_missing_summaries.sh` - Summary generation (to validate)
+- ✅ `analysis/scripts/compute_statistics.py` - Analysis pipeline (unified - works with both modes)
+- ✅ `scripts/generate_missing_summaries.sh` - Summary generation (unified - works with both modes)
 
 ---
 

@@ -2,8 +2,11 @@
 # =============================================================================
 # run_tests.sh - Unified test runner for refactoring validation
 #
-# Runs unit, integration, functional, regression, and smoke tests to ensure
+# Runs unit, integration, functional, and regression tests to ensure
 # refactoring doesn't break critical functionality.
+#
+# Note: Smoke tests are now part of the unified benchmark flow.
+#       Use: ./run_all_experiments.sh --smoke-test
 #
 # Usage:
 #   ./tests/run_tests.sh [unit|integration|functional|regression|smoke|all]
@@ -100,9 +103,10 @@ run_regression_tests() {
     run_test_suite "regression"
 }
 
-run_smoke_tests() {
-    run_test_suite "smoke"
-}
+# Smoke tests removed - use run_all_experiments.sh --smoke-test instead
+# run_smoke_tests() {
+#     run_test_suite "smoke"
+# }
 
 usage() {
     cat <<EOF
@@ -115,8 +119,10 @@ SUITE:
     integration   Run integration tests only
     functional    Run functional tests only
     regression    Run regression tests only
-    smoke         Run smoke tests only
     all           Run all test suites (default)
+    
+Note: Smoke tests are now part of the unified benchmark flow.
+      Use: ./run_all_experiments.sh --smoke-test
 
 EXAMPLES:
     $0                    # Run all tests
@@ -147,15 +153,11 @@ main() {
         regression)
             run_regression_tests
             ;;
-        smoke)
-            run_smoke_tests
-            ;;
         all)
             run_unit_tests || true
             run_integration_tests || true
             run_functional_tests || true
             run_regression_tests || true
-            run_smoke_tests || true
             ;;
         *)
             usage

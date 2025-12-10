@@ -64,12 +64,13 @@ build/
 *.whl
 
 # Generated scenarios (can be regenerated from experiment_matrix.yaml)
+# Note: Unified flow uses generated-scenarios/ for both smoke-test and full-scale
 generated-scenarios/
 **/generated-scenarios/
+smoke-test-scenarios/  # Deprecated - use generated-scenarios/ instead
 
 # Analysis outputs (can be regenerated from raw data)
 final-results/
-final-results-smoke/
 **/figures/
 **/stats/
 *.parquet

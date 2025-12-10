@@ -11,7 +11,7 @@
 # Usage:
 #   ./scripts/verify_experiments.sh [results_dir]
 #
-# Default: final-results-smoke (or final-results if it exists)
+# Default: final-results (unified for both smoke-test and full-scale)
 # =============================================================================
 
 set -euo pipefail
@@ -46,10 +46,8 @@ log_error() {
 if [[ $# -ge 1 ]]; then
     RESULTS_DIR="$1"
 else
-    # Default to smoke-test results if it exists, otherwise final-results
-    if [[ -d "$SCRIPT_DIR/final-results-smoke" ]]; then
-        RESULTS_DIR="$SCRIPT_DIR/final-results-smoke"
-    elif [[ -d "$SCRIPT_DIR/final-results" ]]; then
+    # Default to unified final-results directory
+    if [[ -d "$SCRIPT_DIR/final-results" ]]; then
         RESULTS_DIR="$SCRIPT_DIR/final-results"
     else
         log_error "No results directory found. Specify one or run experiments first."

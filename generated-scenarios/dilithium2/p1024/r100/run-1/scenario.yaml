@@ -1,10 +1,10 @@
-id: dilithium2_p1024_r100_run1_57eb86f2
+id: dilithium2-smoketest-p1024-r100-9530
 description: Dilithium-2 digital signature - 1024B @ 100 msg/s (run 1)
 rng_seed: 3031582303178177075
 workload:
   msgs_per_sec: 100
   msg_size_bytes: 1024
-  duration_sec: 30
+  duration_sec: 5
   pattern: constant
 algorithm:
   adapter: dilithium
@@ -18,20 +18,21 @@ execution:
 metrics:
   jsonl_out: /results/raw/run.jsonl
 metadata:
-  scenario_id: dilithium2_p1024_r100_run1_57eb86f2
+  scenario_id: dilithium2-smoketest-p1024-r100-9530
   algorithm: dilithium2
   adapter: dilithium
   operation: sign
   category: pqc
   payload_size_bytes: 1024
   msgs_per_sec: 100
-  duration_sec: 30
+  duration_sec: 5
   workload_pattern: constant
   run_index: 1
-  total_runs: 5
+  total_runs: 1
+  scaling_experiment: false
   seed: 3031582303178177075
   seed_hash: 57eb86f2
-  generated_at: '2025-12-10T00:12:45.029715+00:00'
+  generated_at: '2025-12-10T16:07:08.338849+00:00'
   generator_version: 2.0.0
-  mode: full
+  mode: smoke-test
   sig_paramset: dilithium2

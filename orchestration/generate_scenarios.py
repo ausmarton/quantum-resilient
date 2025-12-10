@@ -54,20 +54,21 @@ def compute_scenario_hash(algorithm: str, payload: int, rate: int, run: int, pat
     return hashlib.sha256(seed_str.encode()).hexdigest()[:8]
 
 
-def generate_scenario_id(algorithm: str, payload: int, rate: int, run: int, smoke_test: bool = False, pattern: str = "constant", duration: int = None, is_scaling: bool = False) -> str:
+def generate_scenario_id(algorithm: str, payload: int, rate: int, run: int, pattern: str = "constant", duration: int = None, is_scaling: bool = False) -> str:
     """
     Generate globally unique scenario ID.
     
     Format: <algorithm>_p<payload>_r<rate>_run<N>_<hash>
     With pattern: <algorithm>_p<payload>_r<rate>_<pattern>_run<N>_<hash>
     With duration: <algorithm>_p<payload>_r<rate>_<duration>m_run<N>_<hash>
-    In smoke-test mode: <algorithm>-smoketest-p<payload>-r<rate>
+    
+    Note: Scenario IDs are the same regardless of smoke-test vs full-scale mode.
+    The distinction comes from the experiment matrix filtering and parameters, not the ID.
     """
     hash_suffix = compute_scenario_hash(algorithm, payload, rate, run, pattern, duration, is_scaling)
-    if smoke_test:
-        return f"{algorithm}-smoketest-p{payload}-r{rate}"
     
     # Build ID with optional pattern, duration, and scaling suffixes
+    # Same format for both smoke-test and full-scale
     parts = [algorithm, f"p{payload}", f"r{rate}"]
     
     if pattern and pattern != "constant":
@@ -119,7 +120,8 @@ def generate_scenario_yaml(
     rng_seed = compute_rng_seed(algorithm, payload_size, rate, run_index)
     
     # Generate globally unique ID (include pattern, duration, and scaling flag)
-    scenario_id = generate_scenario_id(algorithm, payload_size, rate, run_index, smoke_test, workload_pattern, duration_sec, is_scaling)
+    # Note: ID is the same regardless of smoke_test mode - distinction comes from matrix filtering
+    scenario_id = generate_scenario_id(algorithm, payload_size, rate, run_index, workload_pattern, duration_sec, is_scaling)
     
     # Map adapter name for hybrid operations
     # Hybrid operations use 'kyber' adapter with special operations
@@ -185,11 +187,13 @@ def generate_scenario_yaml(
             'workload_pattern': workload_pattern,
             'run_index': run_index,
             'total_runs': 1 if smoke_test else experiment.get('runs', defaults.get('runs', 5)),
+            'scaling_experiment': is_scaling,  # Include scaling flag in metadata
             'seed': rng_seed,
             'seed_hash': compute_scenario_hash(algorithm, payload_size, rate, run_index),
             'generated_at': generation_timestamp,
             'generator_version': '2.0.0',
-            'mode': 'smoke-test' if smoke_test else 'full',
+            # Note: No 'mode' field - scenarios are the same regardless of smoke-test flag
+            # The distinction comes from experiment matrix filtering and parameters
         },
     }
     
@@ -258,7 +262,7 @@ def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = Fa
     errors = []
     seen_ids = set()
     
-    # Smoke-test mode: restrict to subset of algorithms
+    # Smoke-test mode: restrict to subset of algorithms and experiment types
     smoke_test_algorithms = ['rsa2048', 'kyber512', 'dilithium2', 'hybrid_kyber_dilithium']
     
     for experiment in experiments:
@@ -268,11 +272,33 @@ def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = Fa
         if smoke_test and algorithm not in smoke_test_algorithms:
             continue
         
-        # In smoke-test mode, use reduced parameters (horizontal scaling only)
+        # In smoke-test mode, filter experiments to avoid duplicates and reduce scope
+        # Include: baseline constant experiments, burst experiments, scaling experiments
+        if smoke_test:
+            workload_pattern = experiment.get('workload_pattern', 'constant')
+            is_scaling_exp = experiment.get('scaling_experiment', False)
+            rates_orig = experiment.get('rates', [])
+            
+            # Skip 10K msg/s experiments (too high for smoke test)
+            if 10000 in rates_orig:
+                continue
+            
+            # Skip 5-minute duration experiments (too long for smoke test)
+            if experiment.get('duration_sec') == 300:
+                continue
+            
+            # Include all remaining experiments:
+            # - Baseline constant experiments (will use smoke test parameters)
+            # - Burst experiments (will use smoke test parameters but keep burst pattern)
+            # - Scaling experiments (will use smoke test parameters but keep scaling flag)
+            # They'll be distinguished by pattern and scaling flag in scenario ID
+        
+        # In smoke-test mode, use reduced parameters
         # CRITICAL: Hardware (machine_type, CPU, memory, disk) MUST stay identical
         if smoke_test:
-            payload_sizes = [256]
-            rates = [50]  # Reduced rate for smoke test
+            # Enhanced smoke test: use 2 payload sizes and 2 rates for better coverage
+            payload_sizes = [256, 1024]  # Minimal + common size
+            rates = [100, 500]  # Low + medium rate
             runs = 1
         else:
             payload_sizes = experiment.get('payload_sizes', [1024])
@@ -301,13 +327,29 @@ def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = Fa
                     seen_ids.add(scenario['id'])
                     
                     # Create directory structure: <algo>/<payload>/<rate>/run-<N>/
-                    scenario_dir = (
-                        output_dir / 
-                        algorithm / 
-                        f"p{payload_size}" / 
-                        f"r{rate}" / 
+                    # Include pattern and scaling in directory path to avoid overwrites
+                    # Format: <algo>/<pattern>[-scaling]/<payload>/<rate>/run-<N>/
+                    workload_pattern = experiment.get('workload_pattern', 'constant')
+                    is_scaling_exp = experiment.get('scaling_experiment', False)
+                    
+                    # Build directory path components
+                    dir_parts = [algorithm]
+                    
+                    # Add pattern subdirectory if not constant (to distinguish burst)
+                    if workload_pattern != 'constant':
+                        dir_parts.append(workload_pattern)
+                    elif is_scaling_exp:
+                        # Add 'scaling' subdirectory for scaling experiments
+                        dir_parts.append('scaling')
+                    # Otherwise, constant non-scaling goes in algorithm root
+                    
+                    dir_parts.extend([
+                        f"p{payload_size}",
+                        f"r{rate}",
                         f"run-{run_index}"
-                    )
+                    ])
+                    
+                    scenario_dir = output_dir / Path(*dir_parts)
                     scenario_dir.mkdir(parents=True, exist_ok=True)
                     
                     # Write scenario file

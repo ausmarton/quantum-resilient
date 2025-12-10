@@ -15,6 +15,7 @@ This directory contains all documentation for the Quantum-Resilient Cryptography
 
 User-facing guides for running experiments and using the framework:
 
+- **[Unified Benchmark Flow](guides/unified-benchmark-flow.md)** - **Single unified flow for smoke-test and full-scale benchmarks**
 - **[Data Collection](guides/data-collection.md)** - Complete guide for full-scale data collection
 - **[Storage and Output](guides/storage-and-output.md)** - Directory structure and overwrite behavior
 - **[Stop and Resume](guides/stop-and-resume.md)** - Safely interrupting and resuming experiments

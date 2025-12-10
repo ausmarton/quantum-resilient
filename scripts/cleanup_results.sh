@@ -28,7 +28,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RESULTS_BASE="$SCRIPT_DIR/results"
 FINAL_RESULTS="$SCRIPT_DIR/final-results"
-FINAL_RESULTS_SMOKE="$SCRIPT_DIR/final-results-smoke"
+# Unified final-results directory (removed separate smoke directory)
+# FINAL_RESULTS_SMOKE="$SCRIPT_DIR/final-results-smoke"  # Deprecated - now unified
 
 # Options
 ENV=""
@@ -55,7 +56,7 @@ Safely delete experiment results for re-running.
 OPTIONS:
     --env ENV              Delete specific environment: native, minikube, or gcp
     --all                  Delete all environments (native, minikube, gcp)
-    --analysis-only        Delete only analysis outputs (final-results/, final-results-smoke/)
+    --analysis-only        Delete only analysis outputs (final-results/)
     --archive              Archive before deleting (default: true)
     --no-archive           Don't archive before deleting (use with caution!)
     --dry-run              Show what would be deleted without actually deleting
@@ -192,13 +193,11 @@ if [[ "$ANALYSIS_ONLY" == "true" ]]; then
     if [[ "$ARCHIVE" == "true" ]]; then
         echo -e "${BLUE}Archiving before deletion...${NC}"
         [[ -d "$FINAL_RESULTS" ]] && archive_data "$FINAL_RESULTS" "final-results"
-        [[ -d "$FINAL_RESULTS_SMOKE" ]] && archive_data "$FINAL_RESULTS_SMOKE" "final-results-smoke"
         echo ""
     fi
     
     echo -e "${BLUE}Deleting analysis outputs...${NC}"
-    delete_data "$FINAL_RESULTS" "Full-scale analysis outputs"
-    delete_data "$FINAL_RESULTS_SMOKE" "Smoke-test analysis outputs"
+    delete_data "$FINAL_RESULTS" "Analysis outputs (unified)"
     
 elif [[ "$DELETE_ALL" == "true" ]]; then
     echo -e "${MAGENTA}Deleting All Environments${NC}"
@@ -210,7 +209,6 @@ elif [[ "$DELETE_ALL" == "true" ]]; then
         [[ -d "$RESULTS_BASE/minikube" ]] && archive_data "$RESULTS_BASE/minikube" "results-minikube"
         [[ -d "$RESULTS_BASE/gcp" ]] && archive_data "$RESULTS_BASE/gcp" "results-gcp"
         [[ -d "$FINAL_RESULTS" ]] && archive_data "$FINAL_RESULTS" "final-results"
-        [[ -d "$FINAL_RESULTS_SMOKE" ]] && archive_data "$FINAL_RESULTS_SMOKE" "final-results-smoke"
         echo ""
     fi
     
@@ -218,8 +216,7 @@ elif [[ "$DELETE_ALL" == "true" ]]; then
     delete_data "$RESULTS_BASE/native" "Native results"
     delete_data "$RESULTS_BASE/minikube" "Minikube results"
     delete_data "$RESULTS_BASE/gcp" "GCP results"
-    delete_data "$FINAL_RESULTS" "Full-scale analysis outputs"
-    delete_data "$FINAL_RESULTS_SMOKE" "Smoke-test analysis outputs"
+    delete_data "$FINAL_RESULTS" "Analysis outputs (unified)"
     
 else
     # Specific environment
