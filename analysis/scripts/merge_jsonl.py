@@ -72,28 +72,32 @@ def compute_derived_columns(df: pd.DataFrame) -> pd.DataFrame:
     if "timestamp_utc_iso" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp_utc_iso"])
 
-    # Handle both nanosecond (new) and microsecond (old) formats
-    if "latency_ns" in df.columns:
-        # New format: convert nanoseconds to microseconds
-        df["latency_us"] = df["latency_ns"] / 1000.0
-    elif "latency_us" not in df.columns:
-        console.print("[yellow]Warning: No latency_us or latency_ns column found[/yellow]")
+    # Expect nanosecond precision format (latency_ns, queue_delay_ns)
+    if "latency_ns" not in df.columns:
+        console.print("[red]Error: latency_ns column not found. Data must be in nanosecond precision format.[/red]")
+        raise ValueError("Missing required column: latency_ns")
+    
+    # Convert nanoseconds to microseconds for analysis
+    df["latency_us"] = df["latency_ns"] / 1000.0
     
     # Compute end-to-end latency (same as latency_us for now)
-    if "latency_us" in df.columns:
-        df["end_to_end_latency_us"] = df["latency_us"]
+    df["end_to_end_latency_us"] = df["latency_us"]
 
-    # Crypto latency = latency - queue_delay
-    if "latency_us" in df.columns and "queue_delay_us" in df.columns:
-        df["crypto_latency_us"] = df["latency_us"] - df["queue_delay_us"].fillna(0)
+    # Handle queue delay (expect queue_delay_ns, convert to microseconds)
+    if "queue_delay_ns" in df.columns:
+        df["queue_delay_us"] = df["queue_delay_ns"] / 1000.0
+    elif "queue_delay_us" in df.columns:
+        # Legacy: if only queue_delay_us exists, keep it (shouldn't happen with new data)
+        console.print("[yellow]Warning: queue_delay_ns not found, using queue_delay_us[/yellow]")
+    else:
+        df["queue_delay_us"] = 0.0
+        df["queue_delay_ns"] = 0
 
-    # Ensure queue_delay_us exists
-    if "queue_delay_us" not in df.columns:
-        df["queue_delay_us"] = 0
+    # Crypto latency = latency - queue_delay (in microseconds)
+    df["crypto_latency_us"] = df["latency_us"] - df["queue_delay_us"].fillna(0)
 
     # Add latency in milliseconds for convenience
-    if "latency_us" in df.columns:
-        df["latency_ms"] = df["latency_us"] / 1000.0
+    df["latency_ms"] = df["latency_us"] / 1000.0
 
     return df
 

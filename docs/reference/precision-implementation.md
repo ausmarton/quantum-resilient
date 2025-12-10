@@ -24,7 +24,7 @@ let latency_us = start.elapsed().as_micros();  // Truncates <1μs to 0
 
 ### Overview
 
-Store latency in nanoseconds (`u128`), convert to microseconds during analysis. This preserves full precision while maintaining backward compatibility.
+Store latency in nanoseconds (`u128`), convert to microseconds during analysis. This preserves full precision for sub-microsecond measurements.
 
 ### Implementation
 
@@ -37,7 +37,7 @@ let latency_us = start.elapsed().as_micros();  // Truncates <1μs to 0
 
 // After:
 let latency_ns = start.elapsed().as_nanos();
-let latency_us = latency_ns / 1000;  // For backward compatibility
+let latency_us = latency_ns / 1000;  // Convert to microseconds for analysis
 let latency_us_f64 = latency_ns as f64 / 1000.0;  // For Prometheus
 ```
 
@@ -56,7 +56,7 @@ let queue_delay_us = queue_delay_ns / 1000;
 pub struct EventRowWithQueueDelay {
     // ... existing fields ...
     pub latency_ns: u128,  // Primary: nanosecond precision
-    pub latency_us: u128,  // Computed: microsecond precision (backward compatibility)
+    pub latency_us: u128,  // Computed: microsecond precision (derived from latency_ns)
     pub queue_delay_ns: u128, // Primary: nanosecond precision
     pub queue_delay_us: u128, // Computed: microsecond precision
     // ... existing fields ...
@@ -66,31 +66,32 @@ pub struct EventRowWithQueueDelay {
 #### Analysis Script Updates
 
 **`analysis/scripts/compute_statistics.py`**:
-- Handles both `latency_ns` (new) and `latency_us` (old) formats
+- **Requires** `latency_ns` field (raises `ValueError` if missing)
 - Converts nanoseconds to microseconds during analysis
 - Stores both nanosecond and microsecond stats in summary
 
 **`analysis/scripts/merge_jsonl.py`**:
-- Detects `latency_ns` field and converts to `latency_us` for analysis
-- Maintains backward compatibility with old data
+- **Requires** `latency_ns` field (raises `ValueError` if missing)
+- Converts `latency_ns` to `latency_us` for analysis
+- Expects `queue_delay_ns` (converts to `queue_delay_us`)
 
 **`analysis/scripts/plot_latency_histogram`**:
-- Automatically uses `latency_ns` if available for better precision
-- Converts to microseconds for plotting
+- Uses `latency_ns` converted to microseconds for plotting
+- Provides nanosecond precision in analysis
 
-### Backward Compatibility
+### Data Format Requirements
 
-✅ **Existing Data**: Still works - analysis scripts check for `latency_us` first  
-✅ **New Data**: Includes both `latency_ns` and `latency_us` fields  
-✅ **Analysis**: Automatically handles both formats
+✅ **Required**: `latency_ns` (nanoseconds, `u128`)  
+✅ **Required**: `queue_delay_ns` (nanoseconds, `u128`)  
+✅ **Derived**: `latency_us` (microseconds, `f64`) - computed from `latency_ns / 1000.0`  
+✅ **Derived**: `queue_delay_us` (microseconds, `f64`) - computed from `queue_delay_ns / 1000.0`
 
 ### Benefits
 
 - ✅ Preserves full precision (nanosecond resolution)
 - ✅ No data loss
-- ✅ Backward compatible (can convert existing data)
-- ✅ Minimal code changes
-- ✅ Captures 800ns differences accurately
+- ✅ Clear expectations (scripts fail fast if format is wrong)
+- ✅ Captures sub-microsecond differences accurately
 
 ---
 

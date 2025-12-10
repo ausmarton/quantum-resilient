@@ -40,7 +40,7 @@ let latency_us_f64 = latency_ns as f64 / 1000.0;
 **Data Structure**:
 ```rust
 pub latency_ns: u128,  // Primary: nanosecond precision
-pub latency_us: u128,  // Computed: microsecond precision (backward compatibility)
+pub latency_us: u128,  // Computed: microsecond precision (derived from latency_ns)
 ```
 
 **Analysis**: ✅ Fully implemented

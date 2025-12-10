@@ -131,9 +131,8 @@ def plot_latency_histogram(
     title: str = "Latency Distribution",
 ) -> None:
     """Plot latency histogram."""
-    # Handle both nanosecond (new) and microsecond (old) formats
+    # Expect latency_ns to be present, convert to microseconds for plotting
     if column == "latency_us" and "latency_ns" in df.columns:
-        # Use nanoseconds converted to microseconds for better precision
         df = df.copy()
         df["latency_us"] = df["latency_ns"] / 1000.0
     
@@ -276,19 +275,25 @@ def compute_statistics(
         "total_events": len(df),
     }
 
-    # Latency stats - handle both nanosecond (new) and microsecond (old) formats
-    if "latency_ns" in df.columns:
-        # New format: convert nanoseconds to microseconds for analysis
-        df["latency_us"] = df["latency_ns"] / 1000.0
-        summary["latency"] = compute_basic_stats(df["latency_us"])
-        summary["latency_ns"] = compute_basic_stats(df["latency_ns"])  # Also store nanosecond stats
-    elif "latency_us" in df.columns:
-        # Old format: already in microseconds
-        summary["latency"] = compute_basic_stats(df["latency_us"])
+    # Latency stats - expect nanosecond precision format
+    if "latency_ns" not in df.columns:
+        raise ValueError("Missing required column: latency_ns. Data must be in nanosecond precision format.")
+    
+    # Convert nanoseconds to microseconds for analysis
+    df["latency_us"] = df["latency_ns"] / 1000.0
+    summary["latency"] = compute_basic_stats(df["latency_us"])
+    summary["latency_ns"] = compute_basic_stats(df["latency_ns"])  # Store nanosecond stats
 
-    # Queue delay stats
-    if "queue_delay_us" in df.columns:
+    # Queue delay stats - expect queue_delay_ns
+    if "queue_delay_ns" in df.columns:
+        df["queue_delay_us"] = df["queue_delay_ns"] / 1000.0
         summary["queue_delay"] = compute_basic_stats(df["queue_delay_us"])
+        summary["queue_delay_ns"] = compute_basic_stats(df["queue_delay_ns"])
+    elif "queue_delay_us" in df.columns:
+        # Legacy fallback (shouldn't happen with new data)
+        summary["queue_delay"] = compute_basic_stats(df["queue_delay_us"])
+    else:
+        summary["queue_delay"] = {"count": len(df), "mean": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
 
     # Crypto latency stats
     if "crypto_latency_us" in df.columns:
@@ -308,25 +313,26 @@ def compute_statistics(
         summary["per_algorithm"] = {}
         for algo in df["algorithm"].unique():
             algo_df = df[df["algorithm"] == algo]
-            # Handle both nanosecond (new) and microsecond (old) formats
+            # Expect latency_ns to be present
             if "latency_ns" in algo_df.columns:
                 algo_df = algo_df.copy()
                 algo_df["latency_us"] = algo_df["latency_ns"] / 1000.0
                 summary["per_algorithm"][algo] = compute_basic_stats(algo_df["latency_us"])
-            elif "latency_us" in algo_df.columns:
-                summary["per_algorithm"][algo] = compute_basic_stats(algo_df["latency_us"])
+            else:
+                raise ValueError(f"Missing latency_ns column for algorithm {algo}")
 
     # Per-operation stats
     if "operation" in df.columns:
         summary["per_operation"] = {}
         for op in df["operation"].unique():
             op_df = df[df["operation"] == op]
-            # Handle both formats
+            # Expect latency_ns to be present
             if "latency_ns" in op_df.columns:
+                op_df = op_df.copy()
                 op_df["latency_us"] = op_df["latency_ns"] / 1000.0
                 summary["per_operation"][op] = compute_basic_stats(op_df["latency_us"])
-            elif "latency_us" in op_df.columns:
-                summary["per_operation"][op] = compute_basic_stats(op_df["latency_us"])
+            else:
+                raise ValueError(f"Missing latency_ns column for operation {op}")
 
     # Save summary
     summary_path = output_dir / "summary.json"

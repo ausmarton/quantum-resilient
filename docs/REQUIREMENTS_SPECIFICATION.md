@@ -158,7 +158,7 @@ This document defines the **requirements** for the codebase to support dissertat
 
 **Current Status**: ✅ **IMPLEMENTED**
 - Nanosecond precision (`latency_ns: u128`)
-- Backward compatible (`latency_us: u128`)
+- Nanosecond precision (`latency_ns: u128`) with microsecond conversion for analysis
 - Supports operations from 0.01μs to 1000μs+
 
 **Precision Requirements**:
@@ -1014,6 +1014,8 @@ This document defines the **requirements** for the codebase to support dissertat
 | `docs/guides/horizontal-scaling-guide.md` | Scaling analysis guide | **Scaling requirements** |
 | `docs/reference/data-validation.md` | Data quality | **Data requirements** |
 | `docs/reference/precision-implementation.md` | Precision implementation | **Precision requirements** |
+| `docs/reference/test-coverage.md` | Test coverage and gaps | **Validation requirements** |
+| `docs/guides/refactoring-plan.md` | Refactoring plan | **Code quality requirements** |
 
 ### How to Use This Document
 

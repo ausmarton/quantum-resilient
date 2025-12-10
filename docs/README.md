@@ -22,6 +22,7 @@ User-facing guides for running experiments and using the framework:
 - **[Researcher Guide](guides/researcher-guide.md)** - Comprehensive guide for researchers
 - **[Horizontal Scaling Guide](guides/horizontal-scaling-guide.md)** - Horizontal scaling experiments guide
 - **[Parallel Execution](guides/parallel-execution.md)** - Running experiments in parallel
+- **[Refactoring Plan](guides/refactoring-plan.md)** - Code refactoring plan and progress
 
 ### 📖 Reference (`reference/`)
 
@@ -34,6 +35,7 @@ Technical reference documentation:
 - **[Data Validation](reference/data-validation.md)** - Data quality validation and status
 - **[Precision Implementation](reference/precision-implementation.md)** - Sub-microsecond latency measurement implementation
 - **[Option 2 Precision](reference/option2-precision.md)** - Alternative floating-point microseconds approach
+- **[Test Coverage](reference/test-coverage.md)** - Test coverage, gaps, and strategy
 
 ### 🔬 Analysis (`analysis/`)
 

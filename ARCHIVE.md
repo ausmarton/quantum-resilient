@@ -3,6 +3,43 @@
 **Date**: 2025-12-10  
 **Archive Location**: `archive/documentation-2025-12-10/`
 
+## Latest Consolidation (2025-12-10)
+
+### Test-Related Documents (Consolidated)
+**Consolidated into**: `docs/reference/test-coverage.md`
+
+**Removed Files**:
+- `TEST_COVERAGE_ANALYSIS.md` → Consolidated
+- `CRITICAL_TEST_GAPS.md` → Consolidated
+- `TEST_STATUS_SUMMARY.md` → Consolidated
+- `TEST_EXPECTATIONS.md` → Consolidated
+- `REFACTORING_TEST_SUMMARY.md` → Consolidated
+- `REFACTORING_VALIDATION.md` → Consolidated
+
+**Reason**: All test-related content consolidated into single comprehensive test coverage document.
+
+### Historical Documents (Archived)
+**Archived to**: `archive/documentation-2025-12-10/`
+
+- `BACKWARD_COMPATIBILITY_REMOVAL.md` → Historical record
+- `DOCUMENTATION_CONSOLIDATION_PLAN.md` → Historical record
+
+**Reason**: Completed tasks, no longer needed for active development.
+
+### Moved Documents
+- `REFACTORING_PLAN.md` → `docs/guides/refactoring-plan.md` (if exists)
+
+**Reason**: Active planning document, belongs in guides.
+
+---
+
+## Previous Consolidation (2025-12-10)
+
+# Documentation Archive Index
+
+**Date**: 2025-12-10  
+**Archive Location**: `archive/documentation-2025-12-10/`
+
 ## Overview
 
 This document lists all archived documentation files and explains why they were archived. These files have been consolidated into new documents in `docs/` or are no longer needed.

@@ -25,7 +25,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source common libraries
 source "$SCRIPT_DIR/scripts/lib/common.sh"
-source "$SCRIPT_DIR/scripts/lib/common.sh"
 source "$SCRIPT_DIR/scripts/lib/directories.sh"
 source "$SCRIPT_DIR/scripts/lib/analysis.sh"
 source "$SCRIPT_DIR/scripts/lib/manifest.sh"
@@ -585,7 +584,9 @@ log_step "Step 6/9: Waiting for Job completion"
 
 # Use unified job waiting function
 if ! wait_for_job "$JOB_NAME" "$NAMESPACE" "$JOB_TIMEOUT" "true"; then
-    exit 1
+    log_error "Job failed or timed out"
+    FAILED_RUNS=$((FAILED_RUNS + 1))
+    continue
 fi
 
 # =============================================================================

@@ -268,7 +268,69 @@ if "cpu_user_seconds" in df.columns and "timestamp" in df.columns:
 
 ## Medium Priority
 
-### 4. Generate Missing Summary Files
+### 4. Address Test Coverage Gaps
+
+**Status**: 🟡 **MEDIUM PRIORITY - TEST COVERAGE**  
+**Priority**: Recommended before re-running experiments  
+**Independent**: Can be done anytime
+
+**Issue**: 
+- 4 critical data format validation tests are skipped (requires pandas)
+- Integration tests missing actual Kubernetes interaction
+- End-to-end smoke tests missing entirely
+- **Why Important**: Cannot validate refactored code works correctly before production runs
+
+**Current State**:
+- ✅ 47 tests passing (code structure validated)
+- ⚠️ 4 tests skipped (data format validation - requires pandas)
+- ❌ ~8 tests missing (integration and end-to-end)
+
+**Implementation Required**:
+
+1. **Install pandas** (5 minutes):
+   ```bash
+   pip install pandas numpy matplotlib seaborn scipy rich tqdm
+   ./tests/run_tests.sh functional  # Should enable 4 skipped tests
+   ```
+
+2. **Create smoke tests** (30 minutes per environment):
+   - `tests/smoke/test_smoke_native.sh` - Run one native experiment, validate outputs
+   - `tests/smoke/test_smoke_minikube.sh` - Run one Minikube experiment, validate outputs
+   - `tests/smoke/test_smoke_gcp.sh` - Run one GCP experiment, validate outputs
+
+3. **Create integration tests** (1 hour per test):
+   - `tests/integration/test_k8s_job_creation.sh` - Actually create job in Kubernetes
+   - `tests/integration/test_result_retrieval_pvc.sh` - Actually retrieve from PVC
+   - `tests/integration/test_result_retrieval_gcs.sh` - Actually retrieve from GCS
+
+**Testing**:
+1. Run full test suite after installing pandas
+2. Verify all 4 skipped tests now pass
+3. Run smoke tests on each environment
+4. Verify integration tests work with actual Kubernetes
+
+**Expected Outcome**:
+- All data format validation tests passing
+- End-to-end workflow validated
+- Actual Kubernetes interaction validated
+- Confidence in refactored code before production runs
+
+**Effort**: 3-4 hours (pandas install + smoke tests + integration tests)
+
+**Dependencies**: None (can be done anytime)
+
+**Impact**: 
+- **MEDIUM**: Validates refactored code works correctly
+- **MEDIUM**: Prevents issues during production runs
+
+**Related Files**:
+- `docs/reference/test-coverage.md` - Comprehensive test coverage documentation
+- `tests/` - Test implementation directory
+- `docs/REQUIREMENTS_SPECIFICATION.md` - Part 9: Validation Checklist
+
+---
+
+### 5. Generate Missing Summary Files
 
 **Status**: 🟡 **MEDIUM PRIORITY - DATA COMPLETENESS**  
 **Priority**: Recommended for complete analysis  
@@ -331,7 +393,7 @@ ls results/gcp/dilithium2_p1024_r10000_run*/stats/summary.json
 
 ---
 
-### 5. Enhance Data Validation
+### 6. Enhance Data Validation
 
 **Status**: 🟡 **MEDIUM PRIORITY - DATA QUALITY**  
 **Priority**: Recommended to prevent future issues  
@@ -430,7 +492,7 @@ ls results/gcp/dilithium2_p1024_r10000_run*/stats/summary.json
 
 ---
 
-### 6. Test Nanosecond Precision Implementation
+### 7. Test Nanosecond Precision Implementation
 
 **Status**: 🟡 **MEDIUM PRIORITY - VERIFICATION REQUIRED**  
 **Priority**: Recommended before dissertation  
@@ -507,7 +569,7 @@ ls results/gcp/dilithium2_p1024_r10000_run*/stats/summary.json
 
 ---
 
-### 7. Update Dissertation Methodology Documentation
+### 8. Update Dissertation Methodology Documentation
 
 **Status**: 🟡 **MEDIUM PRIORITY - DOCUMENTATION**  
 **Priority**: Recommended before dissertation submission  
@@ -583,7 +645,7 @@ detailed time-series analysis if needed.
 
 ## Low Priority (Optional Improvements)
 
-### 8. Add Queue Delay Nanosecond Precision (Consistency)
+### 9. Add Queue Delay Nanosecond Precision (Consistency)
 
 **Status**: 🟢 **LOW PRIORITY - OPTIONAL CONSISTENCY IMPROVEMENT**  
 **Priority**: Optional - no functional impact  
@@ -661,7 +723,7 @@ elif "queue_delay_us" in df.columns:
 
 ---
 
-### 9. Refine Prometheus Histogram Buckets
+### 10. Refine Prometheus Histogram Buckets
 
 **Status**: 🟢 **LOW PRIORITY - OPTIONAL MONITORING IMPROVEMENT**  
 **Priority**: Optional - Prometheus is supplementary  
@@ -768,14 +830,15 @@ vec![0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 100.0, 500.0, 1000.0, 5000.0, 100
 3. 🟡 Add CPU Utilization Analysis (depends on #1)
 
 **Medium** (Recommended):
-4. 🟡 Generate Missing Summary Files
-5. 🟡 Enhance Data Validation
-6. 🟡 Test Nanosecond Precision Implementation
-7. 🟡 Update Dissertation Methodology Documentation (depends on #1, #2, #6)
+4. 🟡 Address Test Coverage Gaps
+5. 🟡 Generate Missing Summary Files
+6. 🟡 Enhance Data Validation
+7. 🟡 Test Nanosecond Precision Implementation
+8. 🟡 Update Dissertation Methodology Documentation (depends on #1, #2, #7)
 
 **Low** (Optional):
-8. 🟢 Add Queue Delay Nanosecond Precision
-9. 🟢 Refine Prometheus Histogram Buckets
+9. 🟢 Add Queue Delay Nanosecond Precision
+10. 🟢 Refine Prometheus Histogram Buckets
 
 ---
 
