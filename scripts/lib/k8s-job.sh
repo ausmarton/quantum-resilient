@@ -225,10 +225,14 @@ copy_results_from_pvc() {
     local pod_phase=$(kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
     log_info "Pod: $pod_name (phase: $pod_phase)"
     
-    # Create a temporary read pod
-    local read_pod_name="pvc-read-$(date +%s)"
+    # Create a temporary read pod with unique name (include job name and timestamp)
+    local job_suffix=$(echo "$job_name" | tr -cd '[:alnum:]' | cut -c1-10)
+    local read_pod_name="pvc-read-${job_suffix}-$(date +%s)-$$"
     local temp_output=$(mktemp)
     local read_pod_yaml=$(mktemp)
+    
+    # Clean up any existing read pods with similar names (from previous failed attempts)
+    kubectl delete pod -n "$namespace" -l "app=pvc-read" --ignore-not-found=true >/dev/null 2>&1 || true
     
     # Generate read pod YAML
     cat > "$read_pod_yaml" <<EOF
@@ -237,12 +241,14 @@ kind: Pod
 metadata:
   name: $read_pod_name
   namespace: $namespace
+  labels:
+    app: pvc-read
 spec:
   restartPolicy: Never
   containers:
   - name: read
     image: busybox:1.36
-    command: ["sh", "-c", "if [ -f /results/raw/run.jsonl ]; then cat /results/raw/run.jsonl; elif [ -d /results/raw ]; then find /results/raw -name '*.jsonl' -type f -exec cat {} \\;; elif [ -d /results/replica-0 ]; then find /results/replica-* -name '*.jsonl' -type f -exec cat {} \\;; else find /results -name '*.jsonl' -type f -exec cat {} \\;; fi"]
+    command: ["sh", "-c", "if [ -f /results/raw/run.jsonl ]; then cat /results/raw/run.jsonl; elif [ -d /results/raw ]; then find /results/raw -name '*.jsonl' -type f -exec cat {} +; elif [ -d /results/replica-0 ]; then find /results/replica-* -name '*.jsonl' -type f -exec cat {} +; else find /results -name '*.jsonl' -type f -exec cat {} +; fi"]
     volumeMounts:
     - name: results
       mountPath: /results
@@ -253,9 +259,50 @@ spec:
       claimName: $pvc_name
 EOF
     
-    # Create read pod
-    if ! kubectl apply --validate=false -f "$read_pod_yaml" >/dev/null 2>&1; then
-        log_error "Failed to create read pod"
+    # Create read pod (retry if it fails due to name conflict)
+    local retries=0
+    local apply_error=""
+    while [[ $retries -lt 3 ]]; do
+        apply_error=$(kubectl apply --validate=false -f "$read_pod_yaml" 2>&1)
+        local apply_exit=$?
+        if [[ $apply_exit -eq 0 ]]; then
+            break
+        fi
+        # If it failed, regenerate YAML with a more unique name
+        if [[ $retries -lt 2 ]]; then
+            read_pod_name="pvc-read-${job_suffix}-$(date +%s)-$$-${retries}"
+            # Regenerate YAML with new name (more reliable than sed)
+            cat > "$read_pod_yaml" <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $read_pod_name
+  namespace: $namespace
+  labels:
+    app: pvc-read
+spec:
+  restartPolicy: Never
+  containers:
+  - name: read
+    image: busybox:1.36
+    command: ["sh", "-c", "if [ -f /results/raw/run.jsonl ]; then cat /results/raw/run.jsonl; elif [ -d /results/raw ]; then find /results/raw -name '*.jsonl' -type f -exec cat {} +; elif [ -d /results/replica-0 ]; then find /results/replica-* -name '*.jsonl' -type f -exec cat {} +; else find /results -name '*.jsonl' -type f -exec cat {} +; fi"]
+    volumeMounts:
+    - name: results
+      mountPath: /results
+      readOnly: true
+  volumes:
+  - name: results
+    persistentVolumeClaim:
+      claimName: $pvc_name
+EOF
+        fi
+        retries=$((retries + 1))
+        sleep 1
+    done
+    
+    if [[ $retries -eq 3 ]]; then
+        log_error "Failed to create read pod after 3 attempts"
+        log_error "Last error: ${apply_error:0:200}"
         rm -f "$read_pod_yaml" "$temp_output"
         return 1
     fi

@@ -85,8 +85,8 @@ create_scenario_configmap() {
         return 1
     fi
     
-    log_success "ConfigMap created: $cm_name"
-    echo "$cm_name"
+    log_success "ConfigMap created: $cm_name" >&2  # Send log to stderr, not stdout
+    echo "$cm_name"  # Only output the name to stdout
     return 0
 }
 
@@ -131,8 +131,8 @@ create_gcp_config_configmap() {
         return 1
     fi
     
-    log_success "GCP ConfigMap created: $cm_name"
-    echo "$cm_name"
+    log_success "GCP ConfigMap created: $cm_name" >&2  # Send log to stderr, not stdout
+    echo "$cm_name"  # Only output the name to stdout
     return 0
 }
 

@@ -149,7 +149,7 @@ for entry in index.get('experiments', []):
                             '--output', str(output_dir / 'merged')]
             else:
                 merge_cmd = ['python3', 'analysis/scripts/merge_jsonl.py',
-                            '--input', str(output_dir / 'raw'),
+                '--input', str(output_dir / 'raw'),
                             '--output', str(output_dir / 'merged')]
             result = subprocess.run(merge_cmd, capture_output=True, text=True, check=False)
             if result.returncode != 0:
@@ -172,8 +172,8 @@ for entry in index.get('experiments', []):
                             '--experiment-id', entry.get('scenario_id', '')]
             else:
                 stats_cmd = ['python3', 'analysis/scripts/compute_statistics.py',
-                            '--input', str(merged_file),
-                            '--output', str(stats_dir),
+                '--input', str(merged_file),
+                '--output', str(stats_dir),
                             '--experiment-id', entry.get('scenario_id', '')]
             result = subprocess.run(stats_cmd, capture_output=True, text=True, check=False)
             if result.returncode != 0:
@@ -195,8 +195,8 @@ for entry in index.get('experiments', []):
                             '--experiment-id', entry.get('scenario_id', '')]
             else:
                 stats_cmd = ['python3', 'analysis/scripts/compute_statistics.py',
-                            '--input', str(output_dir / 'raw' / 'run.jsonl'),
-                            '--output', str(stats_dir),
+                '--input', str(output_dir / 'raw' / 'run.jsonl'),
+                '--output', str(stats_dir),
                             '--experiment-id', entry.get('scenario_id', '')]
             result = subprocess.run(stats_cmd, capture_output=True, text=True, check=False)
             if result.returncode != 0:

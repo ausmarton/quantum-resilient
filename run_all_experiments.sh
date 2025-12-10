@@ -98,6 +98,34 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Get Python command (containerized if available, fallback to host Python)
+get_python_cmd() {
+    if [[ -f "$SCRIPT_DIR/scripts/lib/run-python-container.sh" ]] && \
+       [[ "${QR_USE_CONTAINER:-true}" != "false" ]]; then
+        echo "$SCRIPT_DIR/scripts/lib/run-python-container.sh"
+    else
+        echo "python3"
+    fi
+}
+
+# Convert absolute path to relative path (for containerized scripts)
+# Container mounts project root as /workspace, so absolute paths need to be relative
+to_relative_path() {
+    local path="$1"
+    if [[ "$path" == /* ]]; then
+        # Absolute path - convert to relative if under project root
+        if [[ "$path" == "$SCRIPT_DIR"* ]]; then
+            echo "${path#$SCRIPT_DIR/}"
+        else
+            # Path outside project root - return as-is (might be /tmp, etc.)
+            echo "$path"
+        fi
+    else
+        # Already relative
+        echo "$path"
+    fi
+}
+
 log_step() {
     echo -e "\n${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
     echo -e "${CYAN}  $1${NC}"
@@ -252,12 +280,19 @@ run_experiment() {
                     $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 || exit_code=$?
                 ;;
             minikube)
-                "$SCRIPT_DIR/run_minikube.sh" \
+                # Use --quiet flag to suppress verbose output, allowing progress updates to show
+                # Errors are still logged by run_minikube.sh internally
+                if "$SCRIPT_DIR/run_minikube.sh" \
                     --scenario "$scenario_path" \
                     --out "$output_dir" \
                     --replicas "$replicas" \
                     --exp-id "$scenario_id" \
-                    $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 || exit_code=$?
+                    --quiet \
+                    $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") >/dev/null 2>&1; then
+                    exit_code=0
+                else
+                    exit_code=$?
+                fi
                 ;;
             gcp)
                 # Unified execution: Always use Kubernetes Job submission
@@ -393,7 +428,18 @@ add_to_index() {
     local status=$7
     local replicas=${8:-1}
     
-    MASTER_INDEX+=("{\"scenario_id\":\"$scenario_id\",\"environment\":\"$env\",\"algorithm\":\"$algorithm\",\"payload_size\":$payload,\"rate\":$rate,\"replicas\":$replicas,\"output_dir\":\"$output_dir\",\"status\":\"$status\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}")
+    local entry="{\"scenario_id\":\"$scenario_id\",\"environment\":\"$env\",\"algorithm\":\"$algorithm\",\"payload_size\":$payload,\"rate\":$rate,\"replicas\":$replicas,\"output_dir\":\"$output_dir\",\"status\":\"$status\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+    MASTER_INDEX+=("$entry")
+    
+    # Write progress incrementally to a progress file for resume capability
+    # This allows us to track progress even if the script is interrupted
+    # Ensure FINAL_RESULTS_DIR is set (may not be set on first call, initialize it)
+    if [[ -z "${FINAL_RESULTS_DIR:-}" ]]; then
+        FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results"
+    fi
+    mkdir -p "$FINAL_RESULTS_DIR"
+    local progress_file="$FINAL_RESULTS_DIR/.progress_${env}.jsonl"
+    echo "$entry" >> "$progress_file"
 }
 
 # -----------------------------------------------------------------------------
@@ -532,16 +578,22 @@ if [[ "$SKIP_GENERATION" == "true" ]]; then
 else
     log_info "Generating scenarios from matrix..."
     
+    PYTHON_CMD=$(get_python_cmd)
+    # Convert paths to relative for containerized scripts
+    SCENARIO_SCRIPT=$(to_relative_path "$SCRIPT_DIR/orchestration/generate_scenarios.py")
+    MATRIX_REL=$(to_relative_path "$MATRIX")
+    OUTPUT_REL=$(to_relative_path "$GENERATED_SCENARIOS_DIR")
+    
     if [[ "$DRY_RUN" == "true" ]]; then
-        python3 "$SCRIPT_DIR/orchestration/generate_scenarios.py" \
-            --matrix "$MATRIX" \
-            --output "$GENERATED_SCENARIOS_DIR" \
+        $PYTHON_CMD "$SCENARIO_SCRIPT" \
+            --matrix "$MATRIX_REL" \
+            --output "$OUTPUT_REL" \
             --dry-run \
             $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "")
     else
-        python3 "$SCRIPT_DIR/orchestration/generate_scenarios.py" \
-            --matrix "$MATRIX" \
-            --output "$GENERATED_SCENARIOS_DIR" \
+        $PYTHON_CMD "$SCENARIO_SCRIPT" \
+            --matrix "$MATRIX_REL" \
+            --output "$OUTPUT_REL" \
             $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "")
     fi
     
@@ -550,11 +602,14 @@ fi
 
 # Count scenarios
 if [[ -f "$GENERATED_SCENARIOS_DIR/manifest.json" ]]; then
-    TOTAL_SCENARIOS=$(python3 -c "import json; print(json.load(open('$GENERATED_SCENARIOS_DIR/manifest.json'))['total_scenarios'])")
+    PYTHON_CMD=$(get_python_cmd)
+    MANIFEST_REL=$(to_relative_path "$GENERATED_SCENARIOS_DIR/manifest.json")
+    TOTAL_SCENARIOS=$($PYTHON_CMD -c "import json; print(json.load(open('$MANIFEST_REL'))['total_scenarios'])")
     log_info "Total scenarios: $TOTAL_SCENARIOS"
 fi
 
 # Unified final results directory (same for both smoke-test and full-scale)
+# Initialize early so progress tracking can use it
 FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results"
 
 # Force replicas to 1 in smoke-test mode
@@ -571,7 +626,7 @@ log_phase "2. Initialize Output Directories"
 # Use same structure: final-results/ for both smoke-test and full-scale
 # Unified final results directory (same for both smoke-test and full-scale)
 # The distinction comes from scenario filtering, not directory structure
-FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results"
+# (FINAL_RESULTS_DIR already initialized above)
 
 mkdir -p "$FINAL_RESULTS_DIR/figures"
 mkdir -p "$FINAL_RESULTS_DIR/stats"
@@ -617,9 +672,11 @@ for env in "${ENV_ARRAY[@]}"; do
     LAST_PROGRESS_UPDATE=$(date +%s)
     
     # Count total scenarios for this environment
-    ENV_TOTAL_SCENARIOS=$(python3 -c "
+    PYTHON_CMD=$(get_python_cmd)
+    MANIFEST_REL=$(to_relative_path "$GENERATED_SCENARIOS_DIR/manifest.json")
+    ENV_TOTAL_SCENARIOS=$($PYTHON_CMD -c "
 import json
-with open('$GENERATED_SCENARIOS_DIR/manifest.json') as f:
+with open('$MANIFEST_REL') as f:
     manifest = json.load(f)
 count = sum(1 for s in manifest['scenarios'])
 print(count)
@@ -630,11 +687,13 @@ print(count)
     # - Scaling experiments run with multiple replicas (1, 2, 4, 8)
     # - Non-scaling experiments run with replica 1 only
     # - Native environment only runs with replica 1
-    ENV_TOTAL_EXPERIMENTS=$(python3 -c "
+    PYTHON_CMD=$(get_python_cmd)
+    MANIFEST_REL=$(to_relative_path "$GENERATED_SCENARIOS_DIR/manifest.json")
+    ENV_TOTAL_EXPERIMENTS=$($PYTHON_CMD -c "
 import json
 import sys
 
-with open('$GENERATED_SCENARIOS_DIR/manifest.json') as f:
+with open('$MANIFEST_REL') as f:
     manifest = json.load(f)
 
 env = '$env'
@@ -1330,9 +1389,11 @@ print(total_experiments)
         if [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
             log_info "Building container image once for batch run..."
             # Get first scenario for image build
-            FIRST_SCENARIO=$(python3 -c "
+            PYTHON_CMD=$(get_python_cmd)
+            MANIFEST_REL=$(to_relative_path "$GENERATED_SCENARIOS_DIR/manifest.json")
+            FIRST_SCENARIO=$($PYTHON_CMD -c "
 import json
-with open('$GENERATED_SCENARIOS_DIR/manifest.json') as f:
+with open('$MANIFEST_REL') as f:
     manifest = json.load(f)
 if manifest['scenarios']:
     print(manifest['scenarios'][0]['path'])
@@ -1390,9 +1451,11 @@ if manifest['scenarios']:
     
     # Extract scenarios using Python for reliable JSON parsing
     # Include scaling_experiment flag (defaults to False if not present)
-    scenarios=$(python3 -c "
+    PYTHON_CMD=$(get_python_cmd)
+    MANIFEST_REL=$(to_relative_path "$GENERATED_SCENARIOS_DIR/manifest.json")
+    scenarios=$($PYTHON_CMD -c "
 import json
-with open('$GENERATED_SCENARIOS_DIR/manifest.json') as f:
+with open('$MANIFEST_REL') as f:
     manifest = json.load(f)
 for s in manifest['scenarios']:
     scaling = s.get('scaling_experiment', False)
@@ -1474,11 +1537,15 @@ for s in manifest['scenarios']:
                         is_complete=true
                     fi
                 else
-                    # In full mode: check for analysis outputs
+                    # In full mode: check for analysis outputs first
                     if [[ -f "$stats_file" ]] && [[ -s "$stats_file" ]]; then
                         is_complete=true
                     elif [[ -f "$merged_file" ]] && [[ -s "$merged_file" ]]; then
                         is_complete=true
+                    elif [[ -f "$raw_file" ]] && [[ -s "$raw_file" ]]; then
+                        # Raw data exists but analysis hasn't run - this is OK, we'll run analysis
+                        # Don't mark as complete, but also don't delete - we'll complete the analysis
+                        log_info "  Found raw data for $run_scenario_id, will complete analysis"
                     fi
                 fi
             fi
@@ -1496,8 +1563,14 @@ for s in manifest['scenarios']:
                     log_warn "  Found empty raw data for $run_scenario_id, will re-run"
                     rm -rf "$output_dir"
                 elif [[ "$SKIP_ANALYSIS" != "true" ]] && [[ ! -f "$raw_file" ]]; then
-                    log_warn "  Found incomplete results for $run_scenario_id, will re-run"
+                    # In full mode and no raw file - directory exists but no data at all
+                    log_warn "  Found incomplete results for $run_scenario_id (no raw data), will re-run"
                     rm -rf "$output_dir"
+                elif [[ "$SKIP_ANALYSIS" != "true" ]] && [[ -f "$raw_file" ]] && [[ -s "$raw_file" ]]; then
+                    # Raw data exists but analysis hasn't run - this is OK, we'll run analysis
+                    # Don't delete, just log that we'll complete the analysis
+                    log_info "  Found raw data for $run_scenario_id, will complete analysis (data collection already done)"
+                    # Continue to run_experiment which should detect existing raw data and skip collection
                 fi
             fi
             
@@ -1705,6 +1778,31 @@ log_phase "4. Write Master Index"
 
 # Write index.json
 INDEX_FILE="$FINAL_RESULTS_DIR/index.json"
+
+# If progress files exist, merge them with in-memory index for complete picture
+# This ensures we capture all experiments even if script was interrupted
+for env_item in "${ENV_ARRAY[@]}"; do
+    progress_file="$FINAL_RESULTS_DIR/.progress_${env_item}.jsonl"
+    if [[ -f "$progress_file" ]]; then
+        # Read progress file and add to MASTER_INDEX if not already present
+        while IFS= read -r line; do
+            if [[ -n "$line" ]]; then
+                # Check if this entry is already in MASTER_INDEX
+                found=false
+                for existing in "${MASTER_INDEX[@]}"; do
+                    if [[ "$existing" == "$line" ]]; then
+                        found=true
+                        break
+                    fi
+                done
+                if [[ "$found" == "false" ]]; then
+                    MASTER_INDEX+=("$line")
+                fi
+            fi
+        done < "$progress_file"
+    fi
+done
+
 {
     echo "{"
     echo "  \"generated_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
@@ -1732,6 +1830,12 @@ INDEX_FILE="$FINAL_RESULTS_DIR/index.json"
 
 log_success "Master index: $INDEX_FILE"
 
+# Clean up progress files now that we've written the final index
+for env_item in "${ENV_ARRAY[@]}"; do
+    progress_file="$FINAL_RESULTS_DIR/.progress_${env_item}.jsonl"
+    [[ -f "$progress_file" ]] && rm -f "$progress_file"
+done
+
 # =============================================================================
 # Phase 5: Statistical Aggregation
 # =============================================================================
@@ -1742,9 +1846,13 @@ if [[ "$SKIP_ANALYSIS" == "true" ]] || [[ "$DRY_RUN" == "true" ]]; then
 else
     log_info "Aggregating results across experiments..."
     
-    python3 "$SCRIPT_DIR/analysis/aggregate_results.py" \
-        --index "$INDEX_FILE" \
-        --output "$FINAL_RESULTS_DIR" 2>&1 || log_warn "Aggregation completed with warnings"
+    PYTHON_CMD=$(get_python_cmd)
+    AGGREGATE_SCRIPT=$(to_relative_path "$SCRIPT_DIR/analysis/aggregate_results.py")
+    INDEX_REL=$(to_relative_path "$INDEX_FILE")
+    OUTPUT_REL=$(to_relative_path "$FINAL_RESULTS_DIR")
+    $PYTHON_CMD "$AGGREGATE_SCRIPT" \
+        --index "$INDEX_REL" \
+        --output "$OUTPUT_REL" 2>&1 || log_warn "Aggregation completed with warnings"
     
     log_success "Aggregation complete"
 fi
@@ -1757,15 +1865,18 @@ log_phase "6. Generate Combined Figures"
 if [[ "$SKIP_ANALYSIS" == "true" ]] || [[ "$DRY_RUN" == "true" ]]; then
     log_warn "Skipping figure generation"
 else
+    PYTHON_CMD=$(get_python_cmd)
+    INDEX_REL=$(to_relative_path "$INDEX_FILE")
+    FIGURES_REL=$(to_relative_path "$FINAL_RESULTS_DIR/figures")
     log_info "Generating combined CDF plots..."
-    python3 "$SCRIPT_DIR/analysis/plot_combined_cdfs.py" \
-        --index "$INDEX_FILE" \
-        --output "$FINAL_RESULTS_DIR/figures" 2>&1 || log_warn "CDF plots completed with warnings"
+    $PYTHON_CMD "$(to_relative_path "$SCRIPT_DIR/analysis/plot_combined_cdfs.py")" \
+        --index "$INDEX_REL" \
+        --output "$FIGURES_REL" 2>&1 || log_warn "CDF plots completed with warnings"
     
     log_info "Generating scaling curves..."
-    python3 "$SCRIPT_DIR/analysis/plot_scaling_curves.py" \
-        --index "$INDEX_FILE" \
-        --output "$FINAL_RESULTS_DIR/figures" 2>&1 || log_warn "Scaling plots completed with warnings"
+    $PYTHON_CMD "$(to_relative_path "$SCRIPT_DIR/analysis/plot_scaling_curves.py")" \
+        --index "$INDEX_REL" \
+        --output "$FIGURES_REL" 2>&1 || log_warn "Scaling plots completed with warnings"
     
     log_success "Figures generated"
 fi
@@ -1785,15 +1896,16 @@ else
     log_info "  - Cohen's d with 95% CI (effect size)"
     log_info "  - Holm-Bonferroni correction (multiple comparisons)"
     
-    python3 "$SCRIPT_DIR/analysis/hypothesis_tests.py" \
+    PYTHON_CMD=$(get_python_cmd)
+    $PYTHON_CMD "$SCRIPT_DIR/analysis/hypothesis_tests.py" \
         --index "$INDEX_FILE" \
         --matrix "$MATRIX" \
         --output "$FINAL_RESULTS_DIR" 2>&1 || log_warn "Hypothesis tests completed with warnings"
     
     # Report results
     if [[ -f "$FINAL_RESULTS_DIR/hypothesis_tests.json" ]]; then
-        TOTAL_TESTS=$(python3 -c "import json; print(json.load(open('$FINAL_RESULTS_DIR/hypothesis_tests.json'))['total_comparisons'])" 2>/dev/null || echo "?")
-        SIG_TESTS=$(python3 -c "import json; print(json.load(open('$FINAL_RESULTS_DIR/hypothesis_tests.json'))['significant_comparisons'])" 2>/dev/null || echo "?")
+        TOTAL_TESTS=$($PYTHON_CMD -c "import json; print(json.load(open('$FINAL_RESULTS_DIR/hypothesis_tests.json'))['total_comparisons'])" 2>/dev/null || echo "?")
+        SIG_TESTS=$($PYTHON_CMD -c "import json; print(json.load(open('$FINAL_RESULTS_DIR/hypothesis_tests.json'))['significant_comparisons'])" 2>/dev/null || echo "?")
         log_info "  Total comparisons: $TOTAL_TESTS"
         log_info "  Significant (α=0.05, corrected): $SIG_TESTS"
     fi
@@ -1811,9 +1923,11 @@ if [[ "$SKIP_ANALYSIS" == "true" ]] || [[ "$DRY_RUN" == "true" ]]; then
 else
     log_info "Building dissertation-ready PDF report..."
     
-    python3 "$SCRIPT_DIR/analysis/build_final_report.py" \
-        --results-dir "$FINAL_RESULTS_DIR" \
-        --output "$FINAL_RESULTS_DIR/report.pdf" 2>&1 || log_warn "Report generation completed with warnings"
+    PYTHON_CMD=$(get_python_cmd)
+    OUTPUT_REL=$(to_relative_path "$FINAL_RESULTS_DIR")
+    $PYTHON_CMD "$(to_relative_path "$SCRIPT_DIR/analysis/build_final_report.py")" \
+        --results-dir "$OUTPUT_REL" \
+        --output "$OUTPUT_REL/report.pdf" 2>&1 || log_warn "Report generation completed with warnings"
     
     if [[ -f "$FINAL_RESULTS_DIR/report.pdf" ]]; then
         REPORT_SIZE=$(du -h "$FINAL_RESULTS_DIR/report.pdf" | cut -f1)
@@ -1845,9 +1959,12 @@ else
         
         mkdir -p "$FINAL_RESULTS_DIR/figures/scaling"
         
-        python3 "$SCRIPT_DIR/analysis/plot_replica_scaling.py" \
-            --index "$INDEX_FILE" \
-            --output "$FINAL_RESULTS_DIR/figures/scaling" 2>&1 || log_warn "Scaling plots completed with warnings"
+        PYTHON_CMD=$(get_python_cmd)
+        INDEX_REL=$(to_relative_path "$INDEX_FILE")
+        SCALING_OUTPUT_REL=$(to_relative_path "$FINAL_RESULTS_DIR/figures/scaling")
+        $PYTHON_CMD "$(to_relative_path "$SCRIPT_DIR/analysis/plot_replica_scaling.py")" \
+            --index "$INDEX_REL" \
+            --output "$SCALING_OUTPUT_REL" 2>&1 || log_warn "Scaling plots completed with warnings"
         
         # List generated files
         if [[ -d "$FINAL_RESULTS_DIR/figures/scaling" ]]; then
@@ -1875,9 +1992,63 @@ echo "╚═══════════════════════�
 echo -e "${NC}"
 
 log_info "Duration: ${ELAPSED_MIN}m ${ELAPSED_SEC}s"
-log_info "Total scenarios: $TOTAL_SCENARIOS"
-log_info "Completed: $COMPLETED_SCENARIOS"
-log_info "Failed: $FAILED_SCENARIOS"
+echo ""
+log_phase "Final Summary"
+echo ""
+
+# Calculate completion percentage
+if [[ $TOTAL_SCENARIOS -gt 0 ]]; then
+    COMPLETION_PCT=$((COMPLETED_SCENARIOS * 100 / TOTAL_SCENARIOS))
+else
+    COMPLETION_PCT=0
+fi
+
+log_info "Overall Statistics:"
+echo "  Total scenarios: $TOTAL_SCENARIOS"
+echo "  Completed: $COMPLETED_SCENARIOS ($COMPLETION_PCT%)"
+echo "  Failed: $FAILED_SCENARIOS"
+if [[ $COMPLETED_SCENARIOS -lt $TOTAL_SCENARIOS ]]; then
+    REMAINING=$((TOTAL_SCENARIOS - COMPLETED_SCENARIOS - FAILED_SCENARIOS))
+    if [[ $REMAINING -gt 0 ]]; then
+        echo "  Remaining: $REMAINING"
+    fi
+fi
+echo ""
+
+# Per-environment breakdown
+log_info "Per-Environment Breakdown:"
+for env_item in "${ENV_ARRAY[@]}"; do
+    # Count experiments for this environment from results
+    env_completed=$(find "results/$env_item" -name "run.jsonl" -type f 2>/dev/null | wc -l)
+    env_failed=$(find "results/$env_item" -type d -mindepth 1 -maxdepth 1 2>/dev/null | while read dir; do
+        if [[ ! -f "$dir/raw/run.jsonl" ]] && [[ -d "$dir" ]]; then
+            echo "failed"
+        fi
+    done | wc -l)
+    
+    if [[ $env_completed -gt 0 ]] || [[ $env_failed -gt 0 ]]; then
+        echo "  $env_item: $env_completed completed, $env_failed failed"
+    fi
+done
+echo ""
+
+# Check if all phases completed
+if [[ -f "$FINAL_RESULTS_DIR/index.json" ]]; then
+    INDEX_SIZE=$(stat -c%s "$FINAL_RESULTS_DIR/index.json" 2>/dev/null || stat -f%z "$FINAL_RESULTS_DIR/index.json" 2>/dev/null || echo "0")
+    if [[ $INDEX_SIZE -gt 100 ]]; then
+        INDEX_COUNT=$(python3 -c "import json; data=json.load(open('$FINAL_RESULTS_DIR/index.json')); print(len(data.get('experiments', [])))" 2>/dev/null || echo "0")
+        log_success "✅ All phases completed successfully"
+        echo "  Master index contains $INDEX_COUNT experiments"
+    else
+        log_warn "⚠️  Test did not complete all phases"
+        echo "  Stopped before Phase 4: Write Master Index"
+        echo "  To check what was completed, run: ./scripts/check_progress.sh --env <env>"
+    fi
+else
+    log_warn "⚠️  Test did not complete all phases"
+    echo "  Stopped before Phase 4: Write Master Index"
+    echo "  To check what was completed, run: ./scripts/check_progress.sh --env <env>"
+fi
 echo ""
 
 log_info "Final results location:"

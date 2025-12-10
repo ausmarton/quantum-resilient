@@ -53,6 +53,7 @@ SKIP_ANALYSIS=false
 SKIP_AGGREGATION=false
 KEEP_JOB=false
 SMOKE_TEST=false
+QUIET=false
 
 usage() {
     cat <<EOF
@@ -76,6 +77,7 @@ OPTIONS:
     --keep-job          Don't delete Job after completion
     --timeout SEC       Job timeout in seconds (default: 600)
     --smoke-test        Enable smoke-test mode (reduced duration/scale)
+    --quiet             Reduce output verbosity (for use by run_all_experiments.sh)
     -h, --help          Show this help message
 
 EXAMPLES:
@@ -190,6 +192,10 @@ while [[ $# -gt 0 ]]; do
             SMOKE_TEST=true
             shift
             ;;
+        --quiet)
+            QUIET=true
+            shift
+            ;;
         -h|--help)
             usage
             ;;
@@ -231,20 +237,22 @@ OUT_DIR="$(mkdir -p "$OUT_DIR" && cd "$OUT_DIR" && pwd)"
 START_TIME=$(date +%s)
 START_ISO=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-echo -e "${BLUE}"
-echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║           PQC Benchmark - Minikube Experiment Runner         ║"
-echo "╚══════════════════════════════════════════════════════════════╝"
-echo -e "${NC}"
+if [[ "$QUIET" != "true" ]]; then
+    echo -e "${BLUE}"
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║           PQC Benchmark - Minikube Experiment Runner         ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
 
-log_info "Experiment ID: $EXP_ID"
-log_info "Scenario: $SCENARIO"
-log_info "Output: $OUT_DIR"
-log_info "Runs: $RUNS"
-log_info "Replicas: $REPLICAS"
-[[ "$SMOKE_TEST" == "true" ]] && log_info "Mode: SMOKE-TEST (reduced scale)"
-[[ -n "$SEED" ]] && log_info "Base RNG seed: $SEED"
-log_info "Started: $START_ISO"
+    log_info "Experiment ID: $EXP_ID"
+    log_info "Scenario: $SCENARIO"
+    log_info "Output: $OUT_DIR"
+    log_info "Runs: $RUNS"
+    log_info "Replicas: $REPLICAS"
+    [[ "$SMOKE_TEST" == "true" ]] && log_info "Mode: SMOKE-TEST (reduced scale)"
+    [[ -n "$SEED" ]] && log_info "Base RNG seed: $SEED"
+    log_info "Started: $START_ISO"
+fi
 
 # Determine if we're doing a scaling test
 SCALING_MODE=false
@@ -263,7 +271,9 @@ fi
 # =============================================================================
 # Step 1: Verify prerequisites
 # =============================================================================
-log_step "Step 1/9: Verifying prerequisites"
+if [[ "$QUIET" != "true" ]]; then
+    log_step "Step 1/9: Verifying prerequisites"
+fi
 
 # Check Podman
 if ! command -v podman &> /dev/null; then
@@ -325,7 +335,9 @@ log_success "Minikube cluster is running (context: $CURRENT_CONTEXT)"
 # =============================================================================
 # Step 2: Create output directories
 # =============================================================================
-log_step "Step 2/9: Creating output directories"
+if [[ "$QUIET" != "true" ]]; then
+    log_step "Step 2/9: Creating output directories"
+fi
 
 mkdir -p "$OUT_DIR/raw"
 mkdir -p "$OUT_DIR/merged"
@@ -337,7 +349,9 @@ log_success "Created: $OUT_DIR/{raw,merged,stats,figures}"
 # =============================================================================
 # Step 3: Build container image
 # =============================================================================
-log_step "Step 3/9: Building container image"
+if [[ "$QUIET" != "true" ]]; then
+    log_step "Step 3/9: Building container image"
+fi
 
 # Check if image already exists
 if podman image exists "$IMAGE_NAME:$IMAGE_TAG" 2>/dev/null; then
@@ -395,7 +409,9 @@ fi
 # =============================================================================
 # Step 4: Load image into Minikube
 # =============================================================================
-log_step "Step 4/9: Loading image into Minikube"
+if [[ "$QUIET" != "true" ]]; then
+    log_step "Step 4/9: Loading image into Minikube"
+fi
 
 log_info "Loading image into Minikube..."
 # Tag with localhost/ prefix (Minikube expects this for local images)
@@ -460,7 +476,9 @@ for ((RUN_INDEX = 1; RUN_INDEX <= RUNS; RUN_INDEX++)); do
 # =============================================================================
 # Step 5: Deploy Kubernetes resources
 # =============================================================================
-log_step "Step 5/9: Deploying Kubernetes resources (Run $RUN_INDEX/$RUNS)"
+if [[ "$QUIET" != "true" ]]; then
+    log_step "Step 5/9: Deploying Kubernetes resources (Run $RUN_INDEX/$RUNS)"
+fi
 
 # Determine job name early so cleanup can use it
 if [[ "$SCALING_MODE" == "true" ]]; then
@@ -580,7 +598,9 @@ log_success "Kubernetes resources deployed"
 # =============================================================================
 # Step 6: Wait for Job completion
 # =============================================================================
-log_step "Step 6/9: Waiting for Job completion"
+if [[ "$QUIET" != "true" ]]; then
+    log_step "Step 6/9: Waiting for Job completion"
+fi
 
 # Use unified job waiting function
 if ! wait_for_job "$JOB_NAME" "$NAMESPACE" "$JOB_TIMEOUT" "true"; then
@@ -592,7 +612,9 @@ fi
 # =============================================================================
 # Step 7: Copy results from PVC
 # =============================================================================
-log_step "Step 7/9: Copying results from PVC"
+if [[ "$QUIET" != "true" ]]; then
+    log_step "Step 7/9: Copying results from PVC"
+fi
 
 # Get pod name for later use (manifest generation)
 POD_NAME=$(get_job_pods "$JOB_NAME" "$NAMESPACE" | awk '{print $1}')
@@ -641,7 +663,9 @@ log_success "Verified $JSONL_COUNT JSONL file(s) with valid data"
 # =============================================================================
 # Step 8: Generate manifest
 # =============================================================================
-log_step "Step 8/9: Generating experiment manifest"
+if [[ "$QUIET" != "true" ]]; then
+    log_step "Step 8/9: Generating experiment manifest"
+fi
 
 END_TIME=$(date +%s)
 END_ISO=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -666,7 +690,7 @@ SCENARIO_ID=$(grep -E "^id:" "$SCENARIO" | awk '{print $2}' | tr -d '"' || echo 
 MANIFEST_SEED=${RUN_SEED:-null}
 
 # Generate manifest with Minikube-specific fields
-local extra_fields=",
+extra_fields=",
     \"scaling_mode\": $SCALING_MODE,
     \"kubernetes\": {
         \"node_name\": \"$NODE_NAME\",
@@ -688,7 +712,9 @@ generate_manifest "$RUN_OUT_DIR" "$RUN_EXP_ID" "$SCENARIO" "minikube" "$RUN_INDE
 # =============================================================================
 # Step 9: Run analysis pipeline
 # =============================================================================
-log_step "Step 9/9: Running analysis pipeline"
+if [[ "$QUIET" != "true" ]]; then
+    log_step "Step 9/9: Running analysis pipeline"
+fi
 
 run_analysis_pipeline "$RUN_OUT_DIR" "$RUN_EXP_ID" "$SKIP_ANALYSIS"
 

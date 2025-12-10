@@ -37,6 +37,8 @@ Check progress of data collection across environments.
 OPTIONS:
     --env ENV              Check specific environment: native, minikube, or gcp
     --matrix PATH          Experiment matrix YAML (default: orchestration/experiment_matrix.yaml)
+    --list-missing         List specific missing experiment IDs
+    --check-completion     Check if test completed all phases (Phase 4: Write Master Index)
     -h, --help             Show this help message
 
 EXAMPLES:
@@ -45,6 +47,12 @@ EXAMPLES:
 
     # Check specific environment
     ./scripts/check_progress.sh --env native
+
+    # List missing experiments
+    ./scripts/check_progress.sh --env minikube --list-missing
+
+    # Check completion status
+    ./scripts/check_progress.sh --check-completion
 EOF
     exit 1
 }
@@ -58,6 +66,14 @@ while [[ $# -gt 0 ]]; do
         --matrix)
             MATRIX="$2"
             shift 2
+            ;;
+        --list-missing)
+            LIST_MISSING=true
+            shift
+            ;;
+        --check-completion)
+            CHECK_COMPLETION=true
+            shift
             ;;
         -h|--help)
             usage
@@ -350,6 +366,86 @@ fi
 echo "  Total Expected: $TOTAL_EXPECTED scenarios"
 echo "    - Native: $NATIVE_EXPECTED (baseline only, no scaling)"
 echo "    - Minikube: $MINIKUBE_EXPECTED ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
+echo "    - GCP: $GCP_EXPECTED ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
+echo ""
+
+# Check completion status if requested
+if [[ "${CHECK_COMPLETION:-false}" == "true" ]]; then
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}  Completion Status Check${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    
+    if [[ -f "$SCRIPT_DIR/final-results/index.json" ]]; then
+        INDEX_SIZE=$(stat -c%s "$SCRIPT_DIR/final-results/index.json" 2>/dev/null || stat -f%z "$SCRIPT_DIR/final-results/index.json" 2>/dev/null || echo "0")
+        if [[ $INDEX_SIZE -lt 100 ]]; then
+            echo "❌ INCOMPLETE: Test stopped before Phase 4 (Write Master Index)"
+            echo "   Index file exists but is empty or too small"
+        else
+            INDEX_COUNT=$(python3 -c "import json; data=json.load(open('$SCRIPT_DIR/final-results/index.json')); print(len(data.get('experiments', [])))" 2>/dev/null || echo "0")
+            echo "✅ COMPLETE: All phases finished"
+            echo "   Experiments tracked in index: $INDEX_COUNT"
+        fi
+    else
+        echo "❌ INCOMPLETE: Test stopped before Phase 4 (Write Master Index)"
+        echo "   No index.json file found"
+    fi
+    echo ""
+fi
+
+# List missing experiments if requested
+if [[ "${LIST_MISSING:-false}" == "true" ]] && [[ -n "$ENV" ]]; then
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}  Missing Experiments: ${ENV^^}${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    
+    if [[ -f "$SCRIPT_DIR/generated-scenarios/manifest.json" ]]; then
+        CHECK_ENV="$ENV" python3 << 'PYEOF'
+import json
+import os
+from pathlib import Path
+
+env = os.environ.get('CHECK_ENV', 'minikube')
+
+# Load manifest
+with open('generated-scenarios/manifest.json') as f:
+    manifest = json.load(f)
+
+scenarios = manifest.get('scenarios', [])
+if scenarios:
+    # Get expected IDs
+    if 'scenario_id' in scenarios[0]:
+        expected_ids = {s['scenario_id'] for s in scenarios}
+    elif 'id' in scenarios[0]:
+        expected_ids = {s['id'] for s in scenarios}
+    elif 'path' in scenarios[0]:
+        expected_ids = {s['path'].split('/')[-2] if '/' in s['path'] else '' for s in scenarios}
+        expected_ids = {e for e in expected_ids if e}
+    else:
+        expected_ids = set()
+    
+    # Get completed IDs
+    results_dir = Path(f'results/{env}')
+    completed_ids = set()
+    for jsonl_file in results_dir.rglob('run.jsonl'):
+        parts = jsonl_file.parts
+        if len(parts) >= 3 and parts[-2] == 'raw':
+            completed_ids.add(parts[-3])
+    
+    missing = sorted(expected_ids - completed_ids)
+    if missing:
+        print(f"Missing {len(missing)} experiments:")
+        for exp_id in missing:
+            print(f"  - {exp_id}")
+    else:
+        print("No missing experiments - all completed!")
+PYEOF
+    else
+        echo "No manifest.json found - cannot list missing experiments"
+    fi
+    echo ""
+fi
 echo "    - GCP: $GCP_EXPECTED ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
 echo "  Total Completed: $TOTAL_COMPLETED ($OVERALL_PCT_COMPLETED%)"
 if [[ $TOTAL_INCOMPLETE -gt 0 ]]; then

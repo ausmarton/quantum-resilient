@@ -1,4 +1,4 @@
-id: dilithium2-smoketest-p256-r100-ed3c
+id: dilithium2_p256_r100_5s_run1_ed3c5037
 description: Dilithium-2 digital signature - 256B @ 100 msg/s (run 1)
 rng_seed: 2660080061770808179
 workload:
@@ -18,7 +18,7 @@ execution:
 metrics:
   jsonl_out: /results/raw/run.jsonl
 metadata:
-  scenario_id: dilithium2-smoketest-p256-r100-ed3c
+  scenario_id: dilithium2_p256_r100_5s_run1_ed3c5037
   algorithm: dilithium2
   adapter: dilithium
   operation: sign
@@ -32,7 +32,6 @@ metadata:
   scaling_experiment: false
   seed: 2660080061770808179
   seed_hash: 7ce32d32
-  generated_at: '2025-12-10T16:07:08.338849+00:00'
+  generated_at: '2025-12-10T20:43:18.667932+00:00'
   generator_version: 2.0.0
-  mode: smoke-test
   sig_paramset: dilithium2

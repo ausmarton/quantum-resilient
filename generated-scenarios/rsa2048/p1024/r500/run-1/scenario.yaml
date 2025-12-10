@@ -1,4 +1,4 @@
-id: rsa2048-smoketest-p1024-r500-9f98
+id: rsa2048_p1024_r500_5s_run1_9f98937e
 description: RSA-2048 signature baseline - 1024B @ 500 msg/s (run 1)
 rng_seed: 4015557975754612282
 workload:
@@ -16,7 +16,7 @@ execution:
 metrics:
   jsonl_out: /results/raw/run.jsonl
 metadata:
-  scenario_id: rsa2048-smoketest-p1024-r500-9f98
+  scenario_id: rsa2048_p1024_r500_5s_run1_9f98937e
   algorithm: rsa2048
   adapter: rsa2048
   operation: sign
@@ -30,6 +30,5 @@ metadata:
   scaling_experiment: false
   seed: 4015557975754612282
   seed_hash: 7364fc96
-  generated_at: '2025-12-10T16:07:08.338849+00:00'
+  generated_at: '2025-12-10T20:43:18.667932+00:00'
   generator_version: 2.0.0
-  mode: smoke-test

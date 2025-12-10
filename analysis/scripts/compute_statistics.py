@@ -489,7 +489,7 @@ def compute_statistics(
 
     # Generate plots (non-critical - continue even if plots fail)
     console.print("[cyan]Generating plots...[/cyan]")
-    
+
     try:
         plot_latency_histogram(df, output_dir / "latency_hist.png")
     except Exception as e:

@@ -21,6 +21,9 @@ COPY scripts /app/scripts
 COPY notebooks /app/notebooks
 COPY *.py /app/
 
+# Note: orchestration/ directory is available via volume mount at /workspace/orchestration
+# The container wrapper mounts the entire project root as /workspace
+
 # Set Python path to include scripts directory
 ENV PYTHONPATH=/app:/app/scripts
 
