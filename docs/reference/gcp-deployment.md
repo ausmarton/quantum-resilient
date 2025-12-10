@@ -247,6 +247,11 @@ Job names are generated from experiment IDs with:
 
 ## Troubleshooting
 
+### Node Pool Creation Errors
+
+If node pool creation fails, see the dedicated troubleshooting guide:
+- **[GKE Node Pool Troubleshooting](../troubleshooting/gke-node-pool.md)** - Common node pool creation errors and fixes
+
 ### Jobs Pending
 
 **Symptom**: Jobs stuck in Pending state

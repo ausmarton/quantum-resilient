@@ -59,6 +59,7 @@ Historical fixes and troubleshooting guides:
 
 - **[Git Push Fix](troubleshooting/git-push-fix.md)** - Resolving Git push failures with large files
 - **[Scaling Fix](troubleshooting/scaling-fix.md)** - Fix for scaling experiment execution
+- **[GKE Node Pool Troubleshooting](troubleshooting/gke-node-pool.md)** - Troubleshooting GKE node pool creation errors
 
 ## Main Documentation
 
@@ -77,6 +78,8 @@ The main project README is located at the repository root:
 - **"What about system load?"** → [System Requirements](reference/system-requirements.md)
 - **"How do I validate my data?"** → [Data Validation](reference/data-validation.md)
 - **"How do I use the containerized analysis pipeline?"** → [Containerization Guide](guides/containerization.md)
+- **"How do I download results from GCP?"** → [Data Collection Guide](guides/data-collection.md) - Retrieving Results from GCP section
+- **"GKE node pool creation failed?"** → [GKE Node Pool Troubleshooting](troubleshooting/gke-node-pool.md)
 
 ### By Environment
 

@@ -1,10 +1,12 @@
-# Debugging GKE Node Pool Creation Errors
+# Troubleshooting GKE Node Pool Creation Errors
 
-## When node pool creation fails with "ERROR" state
+## Overview
 
-The error message doesn't show the specific reason. Here's how to diagnose:
+When GKE node pool creation fails with "ERROR" state, the error message doesn't always show the specific reason. This guide helps diagnose and fix common node pool creation issues.
 
-### 1. Check the actual error in GCP Console
+## Diagnosing Node Pool Errors
+
+### 1. Check the Actual Error in GCP Console
 
 ```bash
 # Get the cluster name
@@ -28,12 +30,34 @@ gcloud container node-pools describe pqc-bench-pool \
 4. Click on "pqc-bench-pool"
 5. Look at the "Status" and error messages
 
-### 3. Common Issues and Fixes
+### 3. Check Cluster Status
 
-#### Issue: Machine type not available
+Ensure the cluster itself is healthy:
+
+```bash
+gcloud container clusters describe pqc-smoke-test \
+  --region us-central1 \
+  --project <your-project> \
+  --format="value(status)"
+```
+
+### 4. Check Logs
+
+```bash
+# Check GKE operation logs
+gcloud logging read "resource.type=gke_cluster AND resource.labels.cluster_name=pqc-smoke-test" \
+  --limit 50 \
+  --project <your-project>
+```
+
+## Common Issues and Fixes
+
+### Issue: Machine Type Not Available
+
 **Error:** "Machine type 'e2-small' is not available in zone 'us-central1-a'"
 
 **Fix:** Try a different machine type or zone:
+
 ```bash
 # Check available machine types
 gcloud compute machine-types list --filter="zone:us-central1-a" | grep e2
@@ -42,34 +66,74 @@ gcloud compute machine-types list --filter="zone:us-central1-a" | grep e2
 # Edit terraform/gke/main.tf, change e2-small to e2-medium
 ```
 
-#### Issue: Quota exceeded
+**Solution in Terraform:**
+```hcl
+node_config {
+  machine_type = "e2-medium"  # More reliable than e2-small
+  # ... rest of config
+}
+```
+
+### Issue: Quota Exceeded
+
 **Error:** "Quota 'IN_USE_ADDRESSES' exceeded"
 
 **Fix:** Check quotas:
+
 ```bash
 gcloud compute project-info describe --project <your-project> | grep -A 5 quota
 ```
 
-#### Issue: Service account permissions
+**Solution:**
+- Request quota increase in GCP Console
+- Or reduce node count temporarily
+- Or use a different region with available quota
+
+### Issue: Service Account Permissions
+
 **Error:** "Permission denied" or "Service account does not have required permissions"
 
 **Fix:** For smoke test, we're using default service account (null). If still failing, ensure:
+
 ```bash
 # Check if default compute service account exists
 gcloud iam service-accounts list --project <your-project>
 ```
 
-#### Issue: Disk size too small
+**Solution:**
+- Ensure default compute service account has necessary permissions
+- Or specify a custom service account with proper IAM roles
+
+### Issue: Disk Size Too Small
+
 **Error:** "Disk size must be at least 20GB"
 
 **Fix:** Already fixed - changed from 10GB to 20GB minimum
 
-#### Issue: Shielded VM not supported
+**Solution in Terraform:**
+```hcl
+node_config {
+  disk_size_gb = 20  # Minimum required
+  disk_type    = "pd-standard"
+  # ... rest of config
+}
+```
+
+### Issue: Shielded VM Not Supported
+
 **Error:** "Shielded VM features not supported on this machine type"
 
 **Fix:** Already fixed - disabled shielded VM for smoke test
 
-### 4. Simplified Configuration for Troubleshooting
+**Solution in Terraform:**
+```hcl
+node_config {
+  # No shielded VM configuration
+  # ... rest of config
+}
+```
+
+## Simplified Configuration for Troubleshooting
 
 If still failing, try the absolute minimum configuration:
 
@@ -108,7 +172,7 @@ resource "google_container_node_pool" "primary" {
 }
 ```
 
-### 5. Manual Node Pool Creation (for testing)
+## Manual Node Pool Creation (for Testing)
 
 If Terraform keeps failing, create manually to see the exact error:
 
@@ -125,23 +189,7 @@ gcloud container node-pools create pqc-bench-pool \
 
 This will show the exact error message.
 
-### 6. Check Cluster Status
+## Related Documentation
 
-Ensure the cluster itself is healthy:
-
-```bash
-gcloud container clusters describe pqc-smoke-test \
-  --region us-central1 \
-  --project <your-project> \
-  --format="value(status)"
-```
-
-### 7. Check Logs
-
-```bash
-# Check GKE operation logs
-gcloud logging read "resource.type=gke_cluster AND resource.labels.cluster_name=pqc-smoke-test" \
-  --limit 50 \
-  --project <your-project>
-```
-
+- [GCP Deployment Guide](../reference/gcp-deployment.md) - Complete GCP/GKE deployment guide
+- [Terraform GKE Configuration](../../terraform/gke/) - Terraform configuration files

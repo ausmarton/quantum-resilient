@@ -590,7 +590,7 @@ else
                 --format="table(name,status,operationType)" || true
         fi
         
-        log_error "See terraform/gke/DEBUG_NODE_POOL.md for troubleshooting steps"
+        log_error "See docs/troubleshooting/gke-node-pool.md for troubleshooting steps"
         exit 1
     fi
     

@@ -629,6 +629,162 @@ If analysis fails, you can re-run just the analysis:
 tar -czf "full-scale-results-$(date +%Y%m%d).tar.gz" results/ final-results/
 ```
 
+## Retrieving Results from GCP (GCS)
+
+After running experiments on GCP, results are stored in Google Cloud Storage (GCS). Use the fetch scripts to download results locally for analysis.
+
+### Fetch Scripts Overview
+
+The project provides several scripts for downloading and validating GCP results:
+
+| Script | Purpose | Venv Required? |
+|--------|---------|----------------|
+| `scripts/fetch_all_gcp_results.sh` | Download all experiments from GCS | No (with `--skip-analysis`) |
+| `scripts/fetch_and_analyse_from_gcs.sh` | Download + analyze (optional) | Yes (for analysis) |
+| `scripts/validate_gcp_downloads.sh` | Validate downloaded data | No |
+
+### Quick Answer: Venv Requirements
+
+**For downloading and validation only: NO venv needed** ✅  
+**For full analysis (plots, stats): YES venv needed** ⚠️
+
+### Download Only (No Venv Required)
+
+You can download all GCP results without setting up a Python virtual environment:
+
+```bash
+# Fetch all experiments (downloads only, no analysis)
+./scripts/fetch_all_gcp_results.sh \
+    --bucket YOUR_BUCKET \
+    --skip-analysis
+
+# This will:
+# - Download raw JSONL files
+# - Download metadata files
+# - Validate JSON format (using standard library)
+# - Skip analysis pipeline (no plots/stats)
+```
+
+**Requirements for download only:**
+- ✅ `gsutil` (Google Cloud SDK)
+- ✅ `bash`
+- ✅ `python3` (standard library only - for JSON validation)
+
+**No venv needed** - Uses only standard library (`python3 -m json.tool`)
+
+### Validate Downloads
+
+After downloading, validate the data:
+
+```bash
+# Validate downloaded data (no venv needed)
+./scripts/validate_gcp_downloads.sh
+
+# This uses only standard library Python
+```
+
+**Requirements for validation:**
+- ✅ `bash`
+- ✅ `python3` (standard library only)
+
+**No venv needed** - Uses only `python3 -m json.tool` for JSON validation
+
+### Download + Analysis (Venv Required)
+
+If you want automatic analysis (plots, statistics) during download:
+
+```bash
+# 1. Setup venv (one time)
+python3 -m venv venv
+source venv/bin/activate  # Linux/macOS
+# or: venv\Scripts\activate  # Windows
+
+# Install dependencies
+pip install -r analysis/requirements.txt
+
+# 2. Fetch with analysis (requires venv)
+source venv/bin/activate  # Activate venv first
+./scripts/fetch_all_gcp_results.sh --bucket YOUR_BUCKET
+
+# This will:
+# - Download data
+# - Run analysis pipeline
+# - Generate plots and statistics
+```
+
+**Requirements for analysis:**
+- ⚠️ Python venv with dependencies (pandas, numpy, matplotlib, etc.)
+- Use `--skip-analysis` to skip analysis and avoid venv requirement
+
+### Component Requirements
+
+| Component | Venv Needed? | Dependencies |
+|-----------|--------------|--------------|
+| **Download from GCS** | ❌ No | `gsutil` only |
+| **JSON Validation** | ❌ No | Python standard library |
+| **Data Validation** | ❌ No | Python standard library |
+| **Merge JSONL** | ⚠️ Maybe | Depends on script (may need pandas) |
+| **Compute Statistics** | ✅ Yes | pandas, numpy, scipy |
+| **Generate Plots** | ✅ Yes | matplotlib, seaborn |
+
+### Recommended Workflow
+
+**Option 1: Download Only (No Venv)**
+
+```bash
+# 1. List what's available
+./scripts/list_gcp_experiments.sh --bucket YOUR_BUCKET
+
+# 2. Fetch all (download only, no analysis)
+./scripts/fetch_all_gcp_results.sh \
+    --bucket YOUR_BUCKET \
+    --skip-analysis
+
+# 3. Validate downloads
+./scripts/validate_gcp_downloads.sh
+```
+
+**Benefits:**
+- ✅ No setup needed
+- ✅ Fast (no analysis overhead)
+- ✅ Can run analysis later when needed
+
+**Option 2: Download + Analysis (With Venv)**
+
+```bash
+# 1. Setup venv (one time)
+python3 -m venv venv
+source venv/bin/activate
+pip install -r analysis/requirements.txt
+
+# 2. Fetch with analysis
+./scripts/fetch_all_gcp_results.sh --bucket YOUR_BUCKET
+
+# Analysis happens automatically
+```
+
+**Benefits:**
+- ✅ Complete pipeline in one step
+- ✅ Plots and stats generated immediately
+
+### Summary
+
+**You can use the fetch scripts without a venv** if you:
+- Use `--skip-analysis` flag
+- Only need to download and validate data
+- Will run analysis separately later
+
+**You need a venv** if you:
+- Want automatic analysis (plots, stats)
+- Don't use `--skip-analysis` flag
+- Need to run analysis scripts directly
+
+The validation scripts (`validate_gcp_downloads.sh`) **never need a venv** - they only use Python standard library.
+
+> **Note**: For containerized analysis, see [Containerization Guide](containerization.md) - you can use the containerized analysis pipeline instead of setting up a venv.
+
+---
+
 ## Complete Workflow: From Data Collection to Dissertation
 
 This section provides a step-by-step workflow for collecting all data and generating dissertation-ready analysis.

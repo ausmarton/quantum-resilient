@@ -251,10 +251,12 @@ If you need to keep the cluster running for multiple experiments:
 
 **After completion, fetch results:**
 ```bash
-./fetch_and_analyse_from_gcs.sh \
-  --exp-id gcp-full \
+./scripts/fetch_all_gcp_results.sh \
   --bucket <your-gcs-bucket> \
-  --out results/gcp-full
+  --skip-analysis  # Or omit for automatic analysis (requires venv)
+```
+
+> **Note**: See [Data Collection Guide](data-collection.md#retrieving-results-from-gcp-gcs) for detailed information about fetch scripts and venv requirements.
 ```
 
 **Output location:** `results/gcp-*/`
