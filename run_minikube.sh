@@ -137,7 +137,23 @@ EOF
 
 cleanup() {
     log_info "Cleaning up previous resources..."
-    kubectl delete job "$JOB_NAME" --ignore-not-found=true -n "$NAMESPACE" 2>/dev/null || true
+    
+    # If JOB_NAME is set, try to delete that specific job
+    if [[ -n "${JOB_NAME:-}" ]]; then
+        kubectl delete job "$JOB_NAME" --ignore-not-found=true -n "$NAMESPACE" 2>/dev/null || true
+        # Wait a bit for pods to be terminated
+        sleep 2
+    fi
+    
+    # Also clean up any failed/completed jobs and pods with our labels
+    # This handles cases where JOB_NAME wasn't set or cleanup failed
+    log_info "Cleaning up any leftover jobs and pods..."
+    kubectl delete jobs -l app=pqc-bench,component=worker -n "$NAMESPACE" --ignore-not-found=true 2>/dev/null || true
+    kubectl delete pods -l app=pqc-bench,component=worker -n "$NAMESPACE" --ignore-not-found=true 2>/dev/null || true
+    
+    # Wait for pods to be fully terminated
+    sleep 2
+    
     # Don't delete PVC - we need to keep results across retries
 }
 
@@ -474,7 +490,32 @@ for ((RUN_INDEX = 1; RUN_INDEX <= RUNS; RUN_INDEX++)); do
 # =============================================================================
 log_step "Step 5/9: Deploying Kubernetes resources (Run $RUN_INDEX/$RUNS)"
 
-# Clean up any existing job
+# Determine job name early so cleanup can use it
+if [[ "$SCALING_MODE" == "true" ]]; then
+    # Generate job name for scaling experiments (same logic as below)
+    SANITIZE_K8S_NAME() {
+        echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/_/-/g' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g'
+    }
+    
+    REPLICA_SUFFIX=""
+    if [[ "$RUN_EXP_ID" =~ _r([0-9]+)$ ]]; then
+        REPLICA_SUFFIX="_r${BASH_REMATCH[1]}"
+        BASE_EXP_ID="${RUN_EXP_ID%_r*}"
+    else
+        BASE_EXP_ID="$RUN_EXP_ID"
+        if [[ "$REPLICAS" -gt 1 ]]; then
+            REPLICA_SUFFIX="_r${REPLICAS}"
+        fi
+    fi
+    
+    SANITIZED_BASE=$(SANITIZE_K8S_NAME "$BASE_EXP_ID" | cut -c1-49)
+    SANITIZED_SUFFIX=$(SANITIZE_K8S_NAME "$REPLICA_SUFFIX" | sed 's/^_//')
+    JOB_NAME="pqc-bench-${SANITIZED_BASE}${SANITIZED_SUFFIX}"
+else
+    JOB_NAME="pqc-bench-worker"
+fi
+
+# Clean up any existing job (now JOB_NAME is set)
 cleanup
 
 # Apply PVC (simpler than hostPath - no permission issues)
@@ -497,19 +538,27 @@ mkdir -p "$RUN_OUT_DIR/figures"
 # Create ConfigMap from scenario file
 log_info "Creating ConfigMap from scenario: $SCENARIO"
 
-# Update scenario to write to /results/raw/run.jsonl
+# Update scenario to write to the correct output path
 TEMP_SCENARIO=$(mktemp)
 cp "$SCENARIO" "$TEMP_SCENARIO"
 
-# Ensure jsonl_out points to /results/raw/run.jsonl
+# For scaling experiments, use /results/current/raw/run.jsonl (symlink created by init container)
+# For regular experiments, use /results/raw/run.jsonl
+if [[ "$SCALING_MODE" == "true" ]]; then
+    JSONL_OUT_PATH="/results/current/raw/run.jsonl"
+else
+    JSONL_OUT_PATH="/results/raw/run.jsonl"
+fi
+
+# Ensure jsonl_out points to the correct path
 if grep -q "jsonl_out:" "$TEMP_SCENARIO"; then
-    sed -i 's|jsonl_out:.*|jsonl_out: "/results/raw/run.jsonl"|' "$TEMP_SCENARIO"
+    sed -i "s|jsonl_out:.*|jsonl_out: \"${JSONL_OUT_PATH}\"|" "$TEMP_SCENARIO"
 else
     # Add jsonl_out to metrics section
     if grep -q "metrics:" "$TEMP_SCENARIO"; then
-        sed -i '/metrics:/a\  jsonl_out: "/results/raw/run.jsonl"' "$TEMP_SCENARIO"
+        sed -i "/metrics:/a\  jsonl_out: \"${JSONL_OUT_PATH}\"" "$TEMP_SCENARIO"
     else
-        echo -e "\nmetrics:\n  jsonl_out: \"/results/raw/run.jsonl\"" >> "$TEMP_SCENARIO"
+        echo -e "\nmetrics:\n  jsonl_out: \"${JSONL_OUT_PATH}\"" >> "$TEMP_SCENARIO"
     fi
 fi
 
@@ -545,31 +594,7 @@ if [[ "$SCALING_MODE" == "true" ]]; then
         --from-literal=duration_sec="30" \
         --dry-run=client -o yaml | kubectl apply --validate=false -f - -n "$NAMESPACE"
     
-    # CRITICAL: Generate unique job name to avoid collisions
-    # Kubernetes job names must be RFC 1123 subdomain compliant (max 63 chars)
-    # Format: pqc-bench-<sanitized-exp-id-with-replica>
-    # Sanitize experiment ID: lowercase, replace _ with -, remove invalid chars
-    SANITIZE_K8S_NAME() {
-        echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/_/-/g' | sed 's/[^a-z0-9-]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g'
-    }
-    
-    # Extract replica suffix if present (e.g., _r4, _r8)
-    REPLICA_SUFFIX=""
-    if [[ "$RUN_EXP_ID" =~ _r([0-9]+)$ ]]; then
-        REPLICA_SUFFIX="_r${BASH_REMATCH[1]}"
-        BASE_EXP_ID="${RUN_EXP_ID%_r*}"
-    else
-        BASE_EXP_ID="$RUN_EXP_ID"
-        if [[ "$REPLICAS" -gt 1 ]]; then
-            REPLICA_SUFFIX="_r${REPLICAS}"
-        fi
-    fi
-    
-    # Sanitize base ID and truncate, leaving room for replica suffix
-    # "pqc-bench-" is 10 chars, replica suffix is max 4 chars (_r8), so we have 49 chars for base ID
-    SANITIZED_BASE=$(SANITIZE_K8S_NAME "$BASE_EXP_ID" | cut -c1-49)
-    SANITIZED_SUFFIX=$(SANITIZE_K8S_NAME "$REPLICA_SUFFIX" | sed 's/^_//')
-    JOB_NAME="pqc-bench-${SANITIZED_BASE}${SANITIZED_SUFFIX}"
+    # JOB_NAME was already set in Step 5 before cleanup, so we can use it here
     
     # Create the parallel job with dynamic parallelism and unique name
     cat "$SCRIPT_DIR/k8s/worker-parallel-job.yaml" | \
@@ -580,6 +605,7 @@ if [[ "$SCALING_MODE" == "true" ]]; then
 else
     log_info "Creating Job..."
     # Use original worker-job.yaml with PVC (simpler, no permission issues)
+    JOB_NAME="pqc-bench-worker"
     kubectl apply --validate=false -f "$SCRIPT_DIR/k8s/worker-job.yaml" -n "$NAMESPACE"
 fi
 
@@ -592,19 +618,30 @@ log_step "Step 6/9: Waiting for Job completion"
 
 log_info "Waiting for Job to complete (timeout: $JOB_TIMEOUT)..."
 
-# Get pod name
-sleep 5  # Give time for pod to be created
-POD_NAME=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+# Get pod name(s)
+sleep 5  # Give time for pod(s) to be created
+POD_NAMES=($(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo ""))
 
-if [[ -n "$POD_NAME" ]]; then
-    log_info "Pod: $POD_NAME"
+if [[ ${#POD_NAMES[@]} -gt 0 ]]; then
+    if [[ ${#POD_NAMES[@]} -eq 1 ]]; then
+        log_info "Pod: ${POD_NAMES[0]}"
+        POD_NAME="${POD_NAMES[0]}"
+    else
+        log_info "Pods: ${POD_NAMES[*]} (${#POD_NAMES[@]} replicas)"
+        POD_NAME="${POD_NAMES[0]}"  # Use first pod for single-pod operations
+    fi
     
-    # Stream logs in background
+    # Stream logs from all pods in background
     (
         sleep 10
-        kubectl logs -f "$POD_NAME" -n "$NAMESPACE" 2>/dev/null | while read -r line; do
-            echo "  [pod] $line"
+        for pod in "${POD_NAMES[@]}"; do
+            (
+                kubectl logs -f "$pod" -n "$NAMESPACE" 2>/dev/null | while read -r line; do
+                    echo "  [pod:$pod] $line"
+                done
+            ) &
         done
+        wait
     ) &
     LOG_PID=$!
 fi
@@ -664,7 +701,7 @@ spec:
   containers:
   - name: read
     image: busybox:1.36
-    command: ["sh", "-c", "if [ -f /results/raw/run.jsonl ]; then cat /results/raw/run.jsonl; elif [ -d /results/raw ]; then find /results/raw -name '*.jsonl' -type f -exec cat {} \\;; else find /results -name '*.jsonl' -type f -exec cat {} \\;; fi"]
+    command: ["sh", "-c", "if [ -f /results/raw/run.jsonl ]; then cat /results/raw/run.jsonl; elif [ -d /results/raw ]; then find /results/raw -name '*.jsonl' -type f -exec cat {} \\;; elif [ -d /results/replica-0 ]; then find /results/replica-* -name '*.jsonl' -type f -exec cat {} \\;; else find /results -name '*.jsonl' -type f -exec cat {} \\;; fi"]
     volumeMounts:
     - name: results
       mountPath: /results

@@ -144,28 +144,14 @@ spec:
           imagePullPolicy: Never
           
           # Run benchmark with replica-specific output
-          command:
-            - /bin/sh
-            - -c
-            - |
-              REPLICA_ID="${JOB_COMPLETION_INDEX:-0}"
-              OUTPUT_DIR="/results/replica-${REPLICA_ID}"
-              
-              echo "Starting replica ${REPLICA_ID}"
-              echo "Output directory: ${OUTPUT_DIR}"
-              
-              # Run the benchmark
-              /app/pqc-bench \
-                --scenario /config/scenario.yaml \
-                --out "${OUTPUT_DIR}/raw" \
-                2>&1 | tee "${OUTPUT_DIR}/benchmark.log"
-              
-              EXIT_CODE=$?
-              
-              # Write completion marker
-              echo "{\"replica_id\": \"${REPLICA_ID}\", \"exit_code\": ${EXIT_CODE}, \"completed_at\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > "${OUTPUT_DIR}/completed.json"
-              
-              exit ${EXIT_CODE}
+          # Note: distroless image has no shell, so we use args directly
+          # The output path is specified in the scenario YAML (jsonl_out field)
+          # The init container creates /results/replica-${INDEX}/raw and a symlink
+          # /results/current -> /results/replica-${INDEX}
+          # The scenario YAML should use /results/current/raw/run.jsonl
+          args:
+            - "--scenario"
+            - "/config/scenario.yaml"
           
           env:
             - name: RUST_LOG
