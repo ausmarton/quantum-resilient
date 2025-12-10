@@ -319,6 +319,49 @@ def compute_statistics(
     else:
         summary["memory"] = {"note": "Memory data not available"}
 
+    # CPU utilization stats (if CPU data is valid)
+    if "cpu_user_seconds" in df.columns and "timestamp" in df.columns:
+        # Calculate CPU delta between events
+        df = df.copy()  # Avoid SettingWithCopyWarning
+        df["cpu_delta"] = df["cpu_user_seconds"].diff()
+        df["time_delta"] = df["timestamp"].diff().dt.total_seconds()
+        
+        # Filter out invalid deltas (first row, negative values, zero time deltas)
+        valid_mask = (df["cpu_delta"] > 0) & (df["time_delta"] > 0)
+        df_valid = df[valid_mask].copy()
+        
+        if len(df_valid) > 0:
+            # Calculate CPU utilization (CPU time / wall time)
+            df_valid["cpu_utilization"] = df_valid["cpu_delta"] / df_valid["time_delta"]
+            
+            # Calculate total CPU time and CPU per operation
+            total_cpu_seconds = float(df["cpu_user_seconds"].iloc[-1])
+            total_events = len(df)
+            
+            summary["cpu"] = {
+                "mean_utilization": float(df_valid["cpu_utilization"].mean()),
+                "max_utilization": float(df_valid["cpu_utilization"].max()),
+                "min_utilization": float(df_valid["cpu_utilization"].min()),
+                "std_utilization": float(df_valid["cpu_utilization"].std()),
+                "p50_utilization": float(df_valid["cpu_utilization"].quantile(0.50)),
+                "p95_utilization": float(df_valid["cpu_utilization"].quantile(0.95)),
+                "p99_utilization": float(df_valid["cpu_utilization"].quantile(0.99)),
+                "cpu_per_operation_seconds": float(total_cpu_seconds / total_events) if total_events > 0 else 0.0,
+                "total_cpu_seconds": total_cpu_seconds,
+                "total_events": total_events,
+                "valid_delta_count": len(df_valid),
+            }
+        else:
+            # All zeros or no valid deltas - document limitation
+            summary["cpu"] = {
+                "note": "CPU data unavailable (operations too fast for sampling or all zeros)",
+                "all_zeros": bool((df["cpu_user_seconds"] == 0.0).all()),
+                "total_cpu_seconds": float(df["cpu_user_seconds"].iloc[-1]) if len(df) > 0 else 0.0,
+                "total_events": len(df),
+            }
+    else:
+        summary["cpu"] = {"note": "CPU data not available"}
+
     # Worker skew detection
     summary["worker_skew"] = detect_worker_skew(df)
 
@@ -348,6 +391,24 @@ def compute_statistics(
                     "max_rss_bytes": int(memory_series.max()),
                     "mean_rss_mb": float(memory_series.mean() / 1_000_000.0),
                 }
+            
+            # Per-algorithm CPU stats (if available)
+            if "cpu_user_seconds" in algo_df.columns and "timestamp" in algo_df.columns:
+                algo_df = algo_df.copy()
+                algo_df["cpu_delta"] = algo_df["cpu_user_seconds"].diff()
+                algo_df["time_delta"] = algo_df["timestamp"].diff().dt.total_seconds()
+                valid_mask = (algo_df["cpu_delta"] > 0) & (algo_df["time_delta"] > 0)
+                algo_df_valid = algo_df[valid_mask].copy()
+                
+                if len(algo_df_valid) > 0:
+                    algo_df_valid["cpu_utilization"] = algo_df_valid["cpu_delta"] / algo_df_valid["time_delta"]
+                    total_cpu = float(algo_df["cpu_user_seconds"].iloc[-1])
+                    algo_stats["cpu"] = {
+                        "mean_utilization": float(algo_df_valid["cpu_utilization"].mean()),
+                        "max_utilization": float(algo_df_valid["cpu_utilization"].max()),
+                        "cpu_per_operation_seconds": float(total_cpu / len(algo_df)) if len(algo_df) > 0 else 0.0,
+                        "total_cpu_seconds": total_cpu,
+                    }
             
             summary["per_algorithm"][algo] = algo_stats
 
@@ -388,6 +449,12 @@ def compute_statistics(
     if "memory" in summary and "mean_rss_mb" in summary["memory"]:
         mem = summary["memory"]
         console.print(f"  Memory: mean={mem['mean_rss_mb']:.2f} MB, max={mem['max_rss_mb']:.2f} MB")
+    if "cpu" in summary and "mean_utilization" in summary["cpu"]:
+        cpu = summary["cpu"]
+        console.print(f"  CPU: mean_util={cpu['mean_utilization']:.2%}, max_util={cpu['max_utilization']:.2%}, cpu_per_op={cpu['cpu_per_operation_seconds']*1e6:.2f} μs")
+    elif "cpu" in summary and "note" in summary["cpu"]:
+        cpu = summary["cpu"]
+        console.print(f"  CPU: {cpu['note']}")
 
     return summary
 

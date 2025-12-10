@@ -47,6 +47,9 @@ class EnvironmentMetrics:
     total_events: int = 0
     mean_memory_mb: float = 0.0
     max_memory_mb: float = 0.0
+    mean_cpu_utilization: float = 0.0
+    max_cpu_utilization: float = 0.0
+    cpu_per_operation_us: float = 0.0
     
     def to_dict(self) -> dict:
         return {
@@ -64,6 +67,9 @@ class EnvironmentMetrics:
             "total_events": self.total_events,
             "mean_memory_mb": self.mean_memory_mb,
             "max_memory_mb": self.max_memory_mb,
+            "mean_cpu_utilization": self.mean_cpu_utilization,
+            "max_cpu_utilization": self.max_cpu_utilization,
+            "cpu_per_operation_us": self.cpu_per_operation_us,
         }
 
 
@@ -150,6 +156,15 @@ def extract_metrics(summary: dict, name: str, path: str) -> EnvironmentMetrics:
         if "mean_rss_mb" in mem:
             metrics.mean_memory_mb = mem.get("mean_rss_mb", 0)
             metrics.max_memory_mb = mem.get("max_rss_mb", 0)
+    
+    # CPU metrics
+    if "cpu" in summary:
+        cpu = summary["cpu"]
+        if "mean_utilization" in cpu:
+            metrics.mean_cpu_utilization = cpu.get("mean_utilization", 0)
+            metrics.max_cpu_utilization = cpu.get("max_utilization", 0)
+            cpu_per_op_sec = cpu.get("cpu_per_operation_seconds", 0)
+            metrics.cpu_per_operation_us = cpu_per_op_sec * 1_000_000.0  # Convert to microseconds
     
     metrics.total_events = summary.get("total_events", 0)
     
@@ -285,6 +300,11 @@ def print_table_rich(
         ("Mean Latency (μs)", "mean_latency_us"),
         ("Std Dev (μs)", "std_latency_us"),
         ("Mean Throughput (ops/s)", "mean_throughput"),
+        ("Mean Memory (MB)", "mean_memory_mb"),
+        ("Max Memory (MB)", "max_memory_mb"),
+        ("Mean CPU Util (%)", "mean_cpu_utilization"),
+        ("Max CPU Util (%)", "max_cpu_utilization"),
+        ("CPU per Op (μs)", "cpu_per_operation_us"),
         ("Total Events", "total_events"),
     ]
     
@@ -293,7 +313,11 @@ def print_table_rich(
         for env in envs:
             val = getattr(env, attr)
             if isinstance(val, float):
-                row.append(f"{val:,.2f}")
+                # Format CPU utilization as percentage
+                if "CPU Util" in label:
+                    row.append(f"{val*100:,.2f}%")
+                else:
+                    row.append(f"{val:,.2f}")
             else:
                 row.append(f"{val:,}")
         table1.add_row(*row)
@@ -346,6 +370,9 @@ def print_table_plain(
         ("Mean Throughput (ops/s)", "mean_throughput"),
         ("Mean Memory (MB)", "mean_memory_mb"),
         ("Max Memory (MB)", "max_memory_mb"),
+        ("Mean CPU Util (%)", "mean_cpu_utilization"),
+        ("Max CPU Util (%)", "max_cpu_utilization"),
+        ("CPU per Op (μs)", "cpu_per_operation_us"),
         ("Total Events", "total_events"),
     ]
     
