@@ -1,0 +1,37 @@
+# Quantum-Resilient Analysis Environment
+# Docker Compose configuration for analysis pipeline and Jupyter environment
+version: '3.8'
+
+services:
+  analysis:
+    build:
+      context: ./analysis
+      dockerfile: Dockerfile
+    image: quantum-resilient-analysis:latest
+    volumes:
+      - ./results:/workspace/results:rw
+      - ./analysis:/workspace/analysis:ro
+      - ./final-results:/workspace/final-results:rw
+    working_dir: /workspace
+    environment:
+      - PYTHONPATH=/workspace/analysis:/workspace/analysis/scripts
+    # This service is typically run via run-python-container.sh wrapper
+    # but can be run directly for testing:
+    # docker-compose run --rm analysis python3 analysis/scripts/compute_statistics.py --help
+
+  jupyter:
+    build:
+      context: ./analysis
+      dockerfile: Dockerfile.jupyter
+    image: quantum-resilient-jupyter:latest
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./results:/workspace/results:ro
+      - ./analysis:/workspace/analysis:rw
+      - ./final-results:/workspace/final-results:rw
+    working_dir: /workspace
+    environment:
+      - PYTHONPATH=/workspace/analysis:/workspace/analysis/scripts
+      - JUPYTER_ENABLE_LAB=yes
+    command: jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --notebook-dir=/workspace/analysis/notebooks

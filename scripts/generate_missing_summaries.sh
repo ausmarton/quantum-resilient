@@ -47,6 +47,16 @@ done
 
 echo "Finding experiments missing summary.json files..."
 
+# Use containerized Python if available, fallback to host Python
+PYTHON_CMD="python3"
+PYTHON_WRAPPER=""
+if [[ -f "$SCRIPT_DIR/scripts/lib/run-python-container.sh" ]] && \
+   [[ "${QR_USE_CONTAINER:-true}" != "false" ]]; then
+    PYTHON_WRAPPER="$SCRIPT_DIR/scripts/lib/run-python-container.sh"
+    PYTHON_CMD="python3"  # Still use python3 for inline scripts
+    echo "Using containerized analysis environment"
+fi
+
 # Find experiments with raw data but no summary.json
 python3 <<'PYTHON_SCRIPT'
 import json
@@ -90,8 +100,12 @@ PYTHON_SCRIPT
 echo ""
 echo "Generating missing summary files..."
 
+# Export wrapper path for Python script
+export PYTHON_WRAPPER="$PYTHON_WRAPPER"
+
 python3 <<'PYTHON_SCRIPT'
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -124,11 +138,12 @@ for entry in index.get('experiments', []):
         if not merged_file.exists():
             # Try to merge raw data first
             print(f"Merging raw data for {entry.get('scenario_id')}...")
-            subprocess.run([
-                'python3', 'analysis/scripts/merge_jsonl.py',
-                '--input', str(output_dir / 'raw'),
-                '--output', str(output_dir / 'merged')
-            ], check=False)
+            merge_cmd = ['python3', 'analysis/scripts/merge_jsonl.py',
+                        '--input', str(output_dir / 'raw'),
+                        '--output', str(output_dir / 'merged')]
+            if python_wrapper := os.environ.get('PYTHON_WRAPPER'):
+                merge_cmd = [python_wrapper] + merge_cmd[1:]
+            subprocess.run(merge_cmd, check=False)
         
         # Generate summary
         if merged_file.exists():
@@ -136,24 +151,26 @@ for entry in index.get('experiments', []):
             stats_dir = output_dir / 'merged' / 'stats'
             stats_dir.mkdir(parents=True, exist_ok=True)
             
-            subprocess.run([
-                'python3', 'analysis/scripts/compute_statistics.py',
-                '--input', str(merged_file),
-                '--output', str(stats_dir),
-                '--experiment-id', entry.get('scenario_id', '')
-            ], check=False)
+            stats_cmd = ['python3', 'analysis/scripts/compute_statistics.py',
+                        '--input', str(merged_file),
+                        '--output', str(stats_dir),
+                        '--experiment-id', entry.get('scenario_id', '')]
+            if python_wrapper := os.environ.get('PYTHON_WRAPPER'):
+                stats_cmd = [python_wrapper] + stats_cmd[1:]
+            subprocess.run(stats_cmd, check=False)
         elif (output_dir / 'raw' / 'run.jsonl').exists():
             # Use raw data directly
             print(f"Generating summary from raw data for {entry.get('scenario_id')}...")
             stats_dir = output_dir / 'stats'
             stats_dir.mkdir(parents=True, exist_ok=True)
             
-            subprocess.run([
-                'python3', 'analysis/scripts/compute_statistics.py',
-                '--input', str(output_dir / 'raw' / 'run.jsonl'),
-                '--output', str(stats_dir),
-                '--experiment-id', entry.get('scenario_id', '')
-            ], check=False)
+            stats_cmd = ['python3', 'analysis/scripts/compute_statistics.py',
+                        '--input', str(output_dir / 'raw' / 'run.jsonl'),
+                        '--output', str(stats_dir),
+                        '--experiment-id', entry.get('scenario_id', '')]
+            if python_wrapper := os.environ.get('PYTHON_WRAPPER'):
+                stats_cmd = [python_wrapper] + stats_cmd[1:]
+            subprocess.run(stats_cmd, check=False)
 
 print("Done!")
 PYTHON_SCRIPT

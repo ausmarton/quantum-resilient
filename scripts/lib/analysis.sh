@@ -60,10 +60,18 @@ run_analysis_pipeline() {
     # Run individual analysis scripts
     log_info "Running individual analysis scripts..."
     
+    # Use containerized Python if available, fallback to host Python
+    local python_cmd="python3"
+    if [[ -f "$script_dir/scripts/lib/run-python-container.sh" ]] && \
+       [[ "${QR_USE_CONTAINER:-true}" != "false" ]]; then
+        python_cmd="$script_dir/scripts/lib/run-python-container.sh"
+        log_info "Using containerized analysis environment"
+    fi
+    
     # Merge JSONL files if needed
     if [[ ! -f "$out_dir/merged/merged.jsonl" ]] && [[ -d "$out_dir/raw" ]]; then
         log_info "Merging JSONL files..."
-        python3 "$analysis_dir/scripts/merge_jsonl.py" \
+        $python_cmd "$analysis_dir/scripts/merge_jsonl.py" \
             --input "$out_dir/raw" \
             --output "$out_dir/merged" 2>/dev/null || {
             log_warn "merge_jsonl.py failed or not available"
@@ -83,7 +91,7 @@ run_analysis_pipeline() {
     
     if [[ -n "$input_file" ]]; then
         log_info "Computing statistics..."
-        python3 "$analysis_dir/scripts/compute_statistics.py" \
+        $python_cmd "$analysis_dir/scripts/compute_statistics.py" \
             --input "$input_file" \
             --output "$out_dir/stats" \
             --experiment-id "$exp_id" 2>/dev/null || {

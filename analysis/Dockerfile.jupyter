@@ -1,0 +1,35 @@
+# Quantum-Resilient Jupyter Environment Container
+# JupyterLab with all analysis dependencies pre-installed
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies including JupyterLab
+RUN pip install --no-cache-dir -r requirements.txt jupyterlab ipywidgets
+
+# Copy analysis scripts and notebooks
+COPY scripts /app/scripts
+COPY notebooks /app/notebooks
+COPY *.py /app/
+
+# Set Python path to include scripts directory
+ENV PYTHONPATH=/app:/app/scripts
+
+# Expose Jupyter port
+EXPOSE 8888
+
+# Create directory for Jupyter runtime files
+RUN mkdir -p /app/.jupyter && chmod 777 /app/.jupyter
+
+# Start JupyterLab
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--notebook-dir=/app"]
