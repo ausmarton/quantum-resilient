@@ -1015,6 +1015,81 @@ podman run --rm -v "$PWD/results:/workspace/results:rw" \
 
 ---
 
+## Documentation & Organization
+
+### 17. Documentation Organization and Cleanup
+
+**Status**: 🟡 **IN PROGRESS**  
+**Priority**: Medium - Improves maintainability and discoverability  
+**Independent**: Can be done anytime
+
+**Issue**: 
+- Some markdown files are scattered across directories
+- Potential duplication between files
+- Documentation structure needs verification after recent additions
+- **Why Important**: Ensures documentation is easily accessible and not duplicated
+
+**Current State**:
+- ✅ Main documentation structure in `docs/` (guides/, reference/, analysis/, troubleshooting/)
+- ✅ PODMAN_USAGE.md moved to `docs/guides/containerization.md` ✅ **COMPLETED**
+- ✅ `analysis/README.md` updated to reference docs location ✅ **COMPLETED**
+- ✅ `docs/README.md` updated with containerization guide ✅ **COMPLETED**
+- ⏭️ Review other scattered markdown files:
+  - `scripts/FETCH_SCRIPTS_REQUIREMENTS.md` - Consider moving to `docs/guides/` or `docs/reference/`
+  - `terraform/gke/DEBUG_NODE_POOL.md` - Consider moving to `docs/troubleshooting/` or `docs/reference/`
+- ⏭️ Check for duplicate information across files
+- ⏭️ Verify all documentation is referenced in `docs/README.md`
+
+**Scattered Files Identified**:
+1. `scripts/FETCH_SCRIPTS_REQUIREMENTS.md` - Fetch scripts requirements
+   - **Location**: `scripts/`
+   - **Suggested**: `docs/guides/data-collection.md` (if user-facing) or `docs/reference/` (if technical)
+   - **Action**: Review and consolidate into appropriate guide
+
+2. `terraform/gke/DEBUG_NODE_POOL.md` - GKE node pool debugging
+   - **Location**: `terraform/gke/`
+   - **Suggested**: `docs/troubleshooting/` or `docs/reference/gcp-deployment.md`
+   - **Action**: Review and consolidate into troubleshooting or GCP deployment guide
+
+**Files That Are Fine** (READMEs in their directories):
+- `analysis/README.md` - Analysis directory README ✅
+- `packaging/README.md` - Packaging directory README ✅
+- `reproducibility/README.md` - Reproducibility directory README ✅
+- `research/README.md` - Research directory README ✅
+
+**Implementation Steps**:
+1. ✅ Move `analysis/PODMAN_USAGE.md` → `docs/guides/containerization.md` ✅ **COMPLETED**
+2. ✅ Update `analysis/README.md` to reference docs location ✅ **COMPLETED**
+3. ✅ Update `docs/README.md` with containerization guide ✅ **COMPLETED**
+4. ⏭️ Review `scripts/FETCH_SCRIPTS_REQUIREMENTS.md` - consolidate into appropriate guide
+5. ⏭️ Review `terraform/gke/DEBUG_NODE_POOL.md` - consolidate into troubleshooting or GCP guide
+6. ⏭️ Check for duplicate information across documentation files
+7. ⏭️ Verify all documentation is referenced in `docs/README.md`
+
+**Expected Outcome**:
+- ✅ All user-facing documentation in `docs/guides/`
+- ✅ All technical reference in `docs/reference/`
+- ✅ All troubleshooting in `docs/troubleshooting/`
+- ✅ No duplicate information
+- ✅ All documentation easily discoverable via `docs/README.md`
+
+**Effort**: 2-3 hours (review + consolidation + verification)
+
+**Dependencies**: None
+
+**Impact**: 
+- **MEDIUM**: Improves documentation maintainability
+- **MEDIUM**: Improves discoverability
+- **LOW**: No functional impact
+
+**Related Files**:
+- `docs/README.md` - Documentation index
+- `docs/guides/containerization.md` - Containerization guide (created)
+- `scripts/FETCH_SCRIPTS_REQUIREMENTS.md` - To be reviewed
+- `terraform/gke/DEBUG_NODE_POOL.md` - To be reviewed
+
+---
+
 ## Low Priority (Optional Improvements)
 
 ### 9. Add Queue Delay Nanosecond Precision (Consistency)

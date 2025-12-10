@@ -6,86 +6,23 @@ Python-based analysis pipeline for processing benchmark results.
 
 The analysis pipeline is containerized to ensure consistent Python dependencies across all environments.
 
+**📖 For detailed containerization instructions, see: [Containerization Guide](../docs/guides/containerization.md)**
+
 ### Quick Start
 
 ```bash
-# Build the analysis container (wrapper script detects podman/docker automatically)
-# The wrapper script will build automatically on first use, or build manually:
-podman build -t quantum-resilient-analysis -f analysis/Dockerfile analysis/
-
-# Run analysis script in container (automatically uses podman if available)
+# Run analysis script (automatically uses Podman/Docker)
 ./scripts/lib/run-python-container.sh analysis/scripts/compute_statistics.py \
   --input results/exp1/merged/merged.jsonl \
   --output results/exp1/stats
 
 # Start Jupyter Lab
-# Option 1: Using helper script (recommended - detects podman/docker automatically)
 ./scripts/start-jupyter.sh
-# Stop with: ./scripts/start-jupyter.sh --stop
-
-# Option 2: Using podman-compose (if installed)
-podman-compose up jupyter
-
-# Option 3: Using podman directly
-podman run -d --name quantum-resilient-jupyter \
-  -p 8888:8888 \
-  -v "$PWD/results:/workspace/results:ro" \
-  -v "$PWD/analysis:/workspace/analysis:rw" \
-  -v "$PWD/final-results:/workspace/final-results:rw" \
-  -w /workspace \
-  -e PYTHONPATH=/workspace/analysis:/workspace/analysis/scripts \
-  quantum-resilient-jupyter:latest
-
 # Access at http://localhost:8888
+# Stop with: ./scripts/start-jupyter.sh --stop
 ```
 
-### Using the Wrapper Script
-
-The `scripts/lib/run-python-container.sh` wrapper automatically:
-- Builds the container image if it doesn't exist
-- Mounts project directories
-- Runs Python scripts with all dependencies
-
-```bash
-# Run any Python script
-./scripts/lib/run-python-container.sh analysis/scripts/merge_jsonl.py --help
-
-# Disable containerization (use host Python)
-QR_USE_CONTAINER=false python3 analysis/scripts/compute_statistics.py --help
-```
-
-### Docker Compose / Podman Compose
-
-**Note**: On Fedora with Podman, you can use `podman-compose` (if installed) or run containers directly with `podman`.
-
-```bash
-# Option 1: Using podman-compose (if installed)
-podman-compose up jupyter
-
-# Option 2: Using podman directly (recommended for Fedora)
-# Build Jupyter image first:
-podman build -t quantum-resilient-jupyter -f analysis/Dockerfile.jupyter analysis/
-
-# Run Jupyter Lab
-podman run -d --name quantum-resilient-jupyter \
-  -p 8888:8888 \
-  -v "$PWD/results:/workspace/results:ro" \
-  -v "$PWD/analysis:/workspace/analysis:rw" \
-  -v "$PWD/final-results:/workspace/final-results:rw" \
-  -w /workspace \
-  quantum-resilient-jupyter:latest
-
-# Run one-off analysis command
-podman run --rm \
-  -v "$PWD/results:/workspace/results:rw" \
-  -v "$PWD/analysis:/workspace/analysis:ro" \
-  -v "$PWD/final-results:/workspace/final-results:rw" \
-  -w /workspace \
-  quantum-resilient-analysis:latest \
-  python3 analysis/scripts/compute_statistics.py \
-  --input results/exp1/merged/merged.jsonl \
-  --output results/exp1/stats
-```
+The wrapper scripts automatically detect Podman (Fedora) or Docker and build images on first use.
 
 ## Host Python Execution (Alternative)
 

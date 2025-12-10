@@ -22,6 +22,7 @@ User-facing guides for running experiments and using the framework:
 - **[Researcher Guide](guides/researcher-guide.md)** - Comprehensive guide for researchers
 - **[Horizontal Scaling Guide](guides/horizontal-scaling-guide.md)** - Horizontal scaling experiments guide
 - **[Parallel Execution](guides/parallel-execution.md)** - Running experiments in parallel
+- **[Containerization](guides/containerization.md)** - Using containerized analysis pipeline (Podman/Docker)
 - **[Refactoring Plan](guides/refactoring-plan.md)** - Code refactoring plan and progress
 
 ### 📖 Reference (`reference/`)
@@ -75,6 +76,7 @@ The main project README is located at the repository root:
 - **"How do scaling experiments work?"** → [Scaling Experiments Guide](reference/scaling-experiments.md)
 - **"What about system load?"** → [System Requirements](reference/system-requirements.md)
 - **"How do I validate my data?"** → [Data Validation](reference/data-validation.md)
+- **"How do I use the containerized analysis pipeline?"** → [Containerization Guide](guides/containerization.md)
 
 ### By Environment
 
