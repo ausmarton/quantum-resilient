@@ -61,9 +61,15 @@ fi
 # Mount project root as /workspace
 # Mount results directory if it exists
 # Set working directory to /workspace
+# Use :Z flag for Podman on SELinux systems (Fedora)
+if [[ "$DOCKER_CMD" == "podman" ]]; then
+    VOLUME_FLAGS="-v $SCRIPT_DIR:/workspace:rw,Z"
+else
+    VOLUME_FLAGS="-v $SCRIPT_DIR:/workspace:rw"
+fi
+
 $DOCKER_CMD run --rm \
-    -v "$SCRIPT_DIR:/workspace:rw" \
-    -v "$SCRIPT_DIR/results:/workspace/results:rw" \
+    $VOLUME_FLAGS \
     -w /workspace \
     "$ANALYSIS_IMAGE" \
     "$SCRIPT_PATH" "$@"

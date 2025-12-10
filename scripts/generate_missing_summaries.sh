@@ -100,8 +100,9 @@ PYTHON_SCRIPT
 echo ""
 echo "Generating missing summary files..."
 
-# Export wrapper path for Python script
+# Export wrapper path and script directory for Python script
 export PYTHON_WRAPPER="$PYTHON_WRAPPER"
+export SCRIPT_DIR="$SCRIPT_DIR"
 
 python3 <<'PYTHON_SCRIPT'
 import json
@@ -135,42 +136,73 @@ for entry in index.get('experiments', []):
     if has_raw and not has_summary:
         # Check if merged data exists
         merged_file = output_dir / 'merged' / 'merged.jsonl'
-        if not merged_file.exists():
-            # Try to merge raw data first
-            print(f"Merging raw data for {entry.get('scenario_id')}...")
-            merge_cmd = ['python3', 'analysis/scripts/merge_jsonl.py',
-                        '--input', str(output_dir / 'raw'),
-                        '--output', str(output_dir / 'merged')]
-            if python_wrapper := os.environ.get('PYTHON_WRAPPER'):
-                merge_cmd = [python_wrapper] + merge_cmd[1:]
-            subprocess.run(merge_cmd, check=False)
+        raw_file = output_dir / 'raw' / 'run.jsonl'
         
-        # Generate summary
-        if merged_file.exists():
+        # Try to merge raw data first if merged doesn't exist
+        if not merged_file.exists():
+            print(f"Merging raw data for {entry.get('scenario_id')}...")
+            # Always use wrapper if available, otherwise use python3 directly
+            python_wrapper = os.environ.get('PYTHON_WRAPPER', '')
+            if python_wrapper and os.path.exists(python_wrapper):
+                merge_cmd = [python_wrapper, 'analysis/scripts/merge_jsonl.py',
+                            '--input', str(output_dir / 'raw'),
+                            '--output', str(output_dir / 'merged')]
+            else:
+                merge_cmd = ['python3', 'analysis/scripts/merge_jsonl.py',
+                            '--input', str(output_dir / 'raw'),
+                            '--output', str(output_dir / 'merged')]
+            result = subprocess.run(merge_cmd, capture_output=True, text=True, check=False)
+            if result.returncode != 0:
+                print(f"  Warning: Failed to merge data (exit code {result.returncode})")
+                if result.stderr:
+                    print(f"  Error: {result.stderr[-200:]}")
+        
+        # Generate summary - prefer merged, fallback to raw
+        if merged_file.exists() and merged_file.stat().st_size > 0:
             print(f"Generating summary for {entry.get('scenario_id')}...")
             stats_dir = output_dir / 'merged' / 'stats'
             stats_dir.mkdir(parents=True, exist_ok=True)
             
-            stats_cmd = ['python3', 'analysis/scripts/compute_statistics.py',
-                        '--input', str(merged_file),
-                        '--output', str(stats_dir),
-                        '--experiment-id', entry.get('scenario_id', '')]
-            if python_wrapper := os.environ.get('PYTHON_WRAPPER'):
-                stats_cmd = [python_wrapper] + stats_cmd[1:]
-            subprocess.run(stats_cmd, check=False)
+            # Always use wrapper if available, otherwise use python3 directly
+            python_wrapper = os.environ.get('PYTHON_WRAPPER', '')
+            if python_wrapper and os.path.exists(python_wrapper):
+                stats_cmd = [python_wrapper, 'analysis/scripts/compute_statistics.py',
+                            '--input', str(merged_file),
+                            '--output', str(stats_dir),
+                            '--experiment-id', entry.get('scenario_id', '')]
+            else:
+                stats_cmd = ['python3', 'analysis/scripts/compute_statistics.py',
+                            '--input', str(merged_file),
+                            '--output', str(stats_dir),
+                            '--experiment-id', entry.get('scenario_id', '')]
+            result = subprocess.run(stats_cmd, capture_output=True, text=True, check=False)
+            if result.returncode != 0:
+                print(f"  Warning: Failed to generate summary (exit code {result.returncode})")
+                if result.stderr:
+                    print(f"  Error: {result.stderr[-200:]}")
         elif (output_dir / 'raw' / 'run.jsonl').exists():
             # Use raw data directly
             print(f"Generating summary from raw data for {entry.get('scenario_id')}...")
             stats_dir = output_dir / 'stats'
             stats_dir.mkdir(parents=True, exist_ok=True)
             
-            stats_cmd = ['python3', 'analysis/scripts/compute_statistics.py',
-                        '--input', str(output_dir / 'raw' / 'run.jsonl'),
-                        '--output', str(stats_dir),
-                        '--experiment-id', entry.get('scenario_id', '')]
-            if python_wrapper := os.environ.get('PYTHON_WRAPPER'):
-                stats_cmd = [python_wrapper] + stats_cmd[1:]
-            subprocess.run(stats_cmd, check=False)
+            # Always use wrapper if available, otherwise use python3 directly
+            python_wrapper = os.environ.get('PYTHON_WRAPPER', '')
+            if python_wrapper and os.path.exists(python_wrapper):
+                stats_cmd = [python_wrapper, 'analysis/scripts/compute_statistics.py',
+                            '--input', str(output_dir / 'raw' / 'run.jsonl'),
+                            '--output', str(stats_dir),
+                            '--experiment-id', entry.get('scenario_id', '')]
+            else:
+                stats_cmd = ['python3', 'analysis/scripts/compute_statistics.py',
+                            '--input', str(output_dir / 'raw' / 'run.jsonl'),
+                            '--output', str(stats_dir),
+                            '--experiment-id', entry.get('scenario_id', '')]
+            result = subprocess.run(stats_cmd, capture_output=True, text=True, check=False)
+            if result.returncode != 0:
+                print(f"  Warning: Failed to generate summary (exit code {result.returncode})")
+                if result.stderr:
+                    print(f"  Error: {result.stderr[-200:]}")
 
 print("Done!")
 PYTHON_SCRIPT

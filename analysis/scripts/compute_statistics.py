@@ -30,7 +30,43 @@ def load_data(filepath: Path) -> pd.DataFrame:
     if filepath.suffix == ".parquet":
         return pd.read_parquet(filepath)
     else:
-        return pd.read_json(filepath, lines=True)
+        # Try to load JSONL with error handling for malformed lines
+        try:
+            return pd.read_json(filepath, lines=True)
+        except ValueError as e:
+            # If pandas fails, try reading line by line and skipping bad lines
+            console.print(f"[yellow]Warning: pandas read_json failed, trying line-by-line parsing: {e}[/yellow]")
+            import json
+            records = []
+            with open(filepath, 'r') as f:
+                for line_num, line in enumerate(f, 1):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        records.append(json.loads(line))
+                    except json.JSONDecodeError as je:
+                        console.print(f"[yellow]Warning: Skipping malformed JSON at line {line_num}: {je}[/yellow]")
+                        continue
+            if not records:
+                raise ValueError(f"No valid JSON records found in {filepath}")
+            return pd.DataFrame(records)
+
+
+def convert_to_python_types(obj):
+    """Convert numpy/pandas types to Python native types for JSON serialization."""
+    if isinstance(obj, (np.integer, np.floating)):
+        return float(obj) if isinstance(obj, np.floating) else int(obj)
+    elif isinstance(obj, np.bool_):
+        return bool(obj)
+    elif isinstance(obj, dict):
+        return {k: convert_to_python_types(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [convert_to_python_types(item) for item in obj]
+    elif pd.isna(obj):
+        return None
+    else:
+        return obj
 
 
 def compute_percentiles(series: pd.Series) -> dict:
@@ -96,7 +132,7 @@ def detect_drift(df: pd.DataFrame, threshold_ms: float = 100.0) -> dict:
     return {
         "workers": len(first_timestamps),
         "max_drift_ms": float(drift_ms),
-        "drift_detected": drift_ms > threshold_ms,
+        "drift_detected": bool(drift_ms > threshold_ms),
         "threshold_ms": threshold_ms,
         "first_timestamps": {
             int(k): str(v) for k, v in first_timestamps.to_dict().items()
@@ -275,14 +311,22 @@ def compute_statistics(
         "total_events": len(df),
     }
 
-    # Latency stats - expect nanosecond precision format
-    if "latency_ns" not in df.columns:
-        raise ValueError("Missing required column: latency_ns. Data must be in nanosecond precision format.")
-    
-    # Convert nanoseconds to microseconds for analysis
-    df["latency_us"] = df["latency_ns"] / 1000.0
-    summary["latency"] = compute_basic_stats(df["latency_us"])
-    summary["latency_ns"] = compute_basic_stats(df["latency_ns"])  # Store nanosecond stats
+    # Latency stats - handle both nanosecond precision (new) and microsecond precision (old) formats
+    if "latency_ns" in df.columns:
+        # New format: nanosecond precision
+        # Convert nanoseconds to microseconds for analysis
+        df["latency_us"] = df["latency_ns"] / 1000.0
+        summary["latency"] = compute_basic_stats(df["latency_us"])
+        summary["latency_ns"] = compute_basic_stats(df["latency_ns"])  # Store nanosecond stats
+    elif "latency_us" in df.columns:
+        # Old format: microsecond precision only (backward compatibility)
+        # Convert microseconds to nanoseconds for consistency (approximate)
+        df["latency_ns"] = df["latency_us"] * 1000.0
+        summary["latency"] = compute_basic_stats(df["latency_us"])
+        summary["latency_ns"] = compute_basic_stats(df["latency_ns"])  # Approximate nanosecond stats
+        summary["_note"] = "Data in legacy microsecond format - latency_ns is approximate"
+    else:
+        raise ValueError("Missing required column: latency_ns or latency_us. Data must include latency information.")
 
     # Queue delay stats - expect queue_delay_ns
     if "queue_delay_ns" in df.columns:
@@ -357,7 +401,7 @@ def compute_statistics(
                 "note": "CPU data unavailable (operations too fast for sampling or all zeros)",
                 "all_zeros": bool((df["cpu_user_seconds"] == 0.0).all()),
                 "total_cpu_seconds": float(df["cpu_user_seconds"].iloc[-1]) if len(df) > 0 else 0.0,
-                "total_events": len(df),
+                "total_events": int(len(df)),
             }
     else:
         summary["cpu"] = {"note": "CPU data not available"}
@@ -375,13 +419,18 @@ def compute_statistics(
             algo_df = df[df["algorithm"] == algo]
             algo_stats = {}
             
-            # Expect latency_ns to be present
+            # Handle both nanosecond (new) and microsecond (old) formats
             if "latency_ns" in algo_df.columns:
                 algo_df = algo_df.copy()
                 algo_df["latency_us"] = algo_df["latency_ns"] / 1000.0
                 algo_stats["latency"] = compute_basic_stats(algo_df["latency_us"])
+            elif "latency_us" in algo_df.columns:
+                # Old format: backward compatibility
+                algo_df = algo_df.copy()
+                algo_df["latency_ns"] = algo_df["latency_us"] * 1000.0
+                algo_stats["latency"] = compute_basic_stats(algo_df["latency_us"])
             else:
-                raise ValueError(f"Missing latency_ns column for algorithm {algo}")
+                raise ValueError(f"Missing latency_ns or latency_us column for algorithm {algo}")
             
             # Per-algorithm memory stats
             if "memory_rss_bytes" in algo_df.columns:
@@ -417,26 +466,44 @@ def compute_statistics(
         summary["per_operation"] = {}
         for op in df["operation"].unique():
             op_df = df[df["operation"] == op]
-            # Expect latency_ns to be present
+            # Handle both nanosecond (new) and microsecond (old) formats
             if "latency_ns" in op_df.columns:
                 op_df = op_df.copy()
                 op_df["latency_us"] = op_df["latency_ns"] / 1000.0
                 summary["per_operation"][op] = compute_basic_stats(op_df["latency_us"])
+            elif "latency_us" in op_df.columns:
+                # Old format: backward compatibility
+                op_df = op_df.copy()
+                op_df["latency_ns"] = op_df["latency_us"] * 1000.0
+                summary["per_operation"][op] = compute_basic_stats(op_df["latency_us"])
             else:
-                raise ValueError(f"Missing latency_ns column for operation {op}")
+                raise ValueError(f"Missing latency_ns or latency_us column for operation {op}")
 
     # Save summary
+    # Convert numpy/pandas types to Python native types for JSON serialization
+    summary_clean = convert_to_python_types(summary)
     summary_path = output_dir / "summary.json"
     with open(summary_path, "w") as f:
-        json.dump(summary, f, indent=2)
+        json.dump(summary_clean, f, indent=2)
     console.print(f"[green]  Saved {summary_path}[/green]")
 
-    # Generate plots
+    # Generate plots (non-critical - continue even if plots fail)
     console.print("[cyan]Generating plots...[/cyan]")
-
-    plot_latency_histogram(df, output_dir / "latency_hist.png")
-    plot_queue_histogram(df, output_dir / "queue_hist.png")
-    plot_throughput_curve(df, output_dir / "throughput_curve.png")
+    
+    try:
+        plot_latency_histogram(df, output_dir / "latency_hist.png")
+    except Exception as e:
+        console.print(f"[yellow]Warning: Failed to generate latency histogram: {e}[/yellow]")
+    
+    try:
+        plot_queue_histogram(df, output_dir / "queue_hist.png")
+    except Exception as e:
+        console.print(f"[yellow]Warning: Failed to generate queue histogram: {e}[/yellow]")
+    
+    try:
+        plot_throughput_curve(df, output_dir / "throughput_curve.png")
+    except Exception as e:
+        console.print(f"[yellow]Warning: Failed to generate throughput curve: {e}[/yellow]")
 
     # Print summary
     console.print("\n[bold]Summary:[/bold]")
