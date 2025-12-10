@@ -24,6 +24,15 @@
 
 set -euo pipefail
 
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source common libraries
+source "$SCRIPT_DIR/scripts/lib/common.sh"
+source "$SCRIPT_DIR/scripts/lib/directories.sh"
+source "$SCRIPT_DIR/scripts/lib/analysis.sh"
+source "$SCRIPT_DIR/scripts/lib/manifest.sh"
+
 # Default values
 SCENARIO=""
 OUT_DIR=""
@@ -34,34 +43,6 @@ TIMEOUT=3600
 SKIP_ANALYSIS=false
 SKIP_AGGREGATION=false
 SMOKE_TEST=false
-
-# Color output helpers
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
-
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[OK]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-log_run() {
-    echo -e "${CYAN}[RUN $1/$2]${NC} $3"
-}
 
 usage() {
     cat <<EOF
@@ -178,42 +159,10 @@ run_single_benchmark() {
     local raw_lines=$(wc -l < "$RAW_JSONL_PATH")
     
     # Generate manifest for this run
-    cat > "$run_out_dir/manifest.json" <<EOF
-{
-    "run_id": "${EXP_ID}_run${run_index}",
-    "run_index": $run_index,
-    "scenario": "$SCENARIO",
-    "git_commit": "$GIT_COMMIT",
-    "rustc_version": "$RUSTC_VERSION",
-    "start_time_utc": "$start_iso",
-    "end_time_utc": "$end_iso",
-    "duration_sec": $elapsed,
-    "events_count": $raw_lines,
-    "seed": ${run_seed:-null},
-    "host": "$(hostname)",
-    "platform": "$(uname -s)-$(uname -m)"
-}
-EOF
+    generate_manifest "$run_out_dir" "${EXP_ID}_run${run_index}" "$SCENARIO" "native" "$run_index" "$raw_lines" "$elapsed" "${run_seed:-null}" "1"
     
     # Run analysis for this run
-    if [[ "$SKIP_ANALYSIS" != "true" ]]; then
-        if [[ -f "${ANALYSIS_DIR}/scripts/merge_jsonl.py" ]]; then
-            python3 "${ANALYSIS_DIR}/scripts/merge_jsonl.py" \
-                --input "$run_out_dir/raw" \
-                --output "$run_out_dir/merged" 2>/dev/null || true
-        fi
-        
-        local input_file="$run_out_dir/merged/merged.parquet"
-        [[ ! -f "$input_file" ]] && input_file="$run_out_dir/merged/merged.jsonl"
-        [[ ! -f "$input_file" ]] && input_file="$run_out_dir/raw/run.jsonl"
-        
-        if [[ -f "${ANALYSIS_DIR}/scripts/compute_statistics.py" ]]; then
-            python3 "${ANALYSIS_DIR}/scripts/compute_statistics.py" \
-                --input "$input_file" \
-                --output "$run_out_dir/stats" \
-                --experiment-id "${EXP_ID}_run${run_index}" 2>/dev/null || true
-        fi
-    fi
+    run_analysis_pipeline "$run_out_dir" "${EXP_ID}_run${run_index}" "$SKIP_ANALYSIS"
     
     echo "$elapsed:$raw_lines"
     return 0

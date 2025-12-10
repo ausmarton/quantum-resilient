@@ -22,6 +22,16 @@ set -euo pipefail
 # Configuration
 # -----------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source common libraries
+source "$SCRIPT_DIR/scripts/lib/common.sh"
+source "$SCRIPT_DIR/scripts/lib/common.sh"
+source "$SCRIPT_DIR/scripts/lib/directories.sh"
+source "$SCRIPT_DIR/scripts/lib/analysis.sh"
+source "$SCRIPT_DIR/scripts/lib/manifest.sh"
+source "$SCRIPT_DIR/scripts/lib/k8s-configmap.sh"
+source "$SCRIPT_DIR/scripts/lib/k8s-job.sh"
+
 IMAGE_NAME="pqc-bench"
 IMAGE_TAG="latest"
 JOB_NAME="pqc-bench-worker"
@@ -44,43 +54,6 @@ SKIP_ANALYSIS=false
 SKIP_AGGREGATION=false
 KEEP_JOB=false
 SMOKE_TEST=false
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
-# -----------------------------------------------------------------------------
-# Helper functions
-# -----------------------------------------------------------------------------
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[OK]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-log_step() {
-    echo -e "\n${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${CYAN}$1${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-}
-
-log_run() {
-    echo -e "${CYAN}[RUN $1/$2]${NC} $3"
-}
 
 usage() {
     cat <<EOF
@@ -530,58 +503,31 @@ kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc/"$PVC_NAME" -n "$NAMESPA
 
 # Create output directory for final results
 log_info "Creating output directory: $RUN_OUT_DIR"
-mkdir -p "$RUN_OUT_DIR/raw"
-mkdir -p "$RUN_OUT_DIR/merged"
-mkdir -p "$RUN_OUT_DIR/stats"
-mkdir -p "$RUN_OUT_DIR/figures"
+create_output_directories "$RUN_OUT_DIR"
 
 # Create ConfigMap from scenario file
 log_info "Creating ConfigMap from scenario: $SCENARIO"
 
-# Update scenario to write to the correct output path
-TEMP_SCENARIO=$(mktemp)
-cp "$SCENARIO" "$TEMP_SCENARIO"
-
-# For scaling experiments, use /results/current/raw/run.jsonl (symlink created by init container)
-# For regular experiments, use /results/raw/run.jsonl
+# Determine JSONL output path (scaling mode uses different path)
 if [[ "$SCALING_MODE" == "true" ]]; then
     JSONL_OUT_PATH="/results/current/raw/run.jsonl"
 else
     JSONL_OUT_PATH="/results/raw/run.jsonl"
 fi
 
-# Ensure jsonl_out points to the correct path
-if grep -q "jsonl_out:" "$TEMP_SCENARIO"; then
-    sed -i "s|jsonl_out:.*|jsonl_out: \"${JSONL_OUT_PATH}\"|" "$TEMP_SCENARIO"
-else
-    # Add jsonl_out to metrics section
-    if grep -q "metrics:" "$TEMP_SCENARIO"; then
-        sed -i "/metrics:/a\  jsonl_out: \"${JSONL_OUT_PATH}\"" "$TEMP_SCENARIO"
-    else
-        echo -e "\nmetrics:\n  jsonl_out: \"${JSONL_OUT_PATH}\"" >> "$TEMP_SCENARIO"
-    fi
-fi
-
-# Override duration for smoke-test mode
-if [[ "$SMOKE_TEST" == "true" ]]; then
-    sed -i "s/duration_sec:.*/duration_sec: 5/" "$TEMP_SCENARIO"
-fi
-
-# Set seed for this run if specified
-if [[ -n "$RUN_SEED" ]]; then
-    if grep -q "rng_seed:" "$TEMP_SCENARIO"; then
-        sed -i "s/rng_seed:.*/rng_seed: $RUN_SEED/" "$TEMP_SCENARIO"
-    else
-        sed -i "/^id:/a rng_seed: $RUN_SEED" "$TEMP_SCENARIO"
-    fi
-fi
-
-kubectl create configmap "$CONFIGMAP_NAME" \
-    --from-file=scenario.yaml="$TEMP_SCENARIO" \
-    --dry-run=client -o yaml | kubectl apply --validate=false -f - -n "$NAMESPACE"
-
-rm -f "$TEMP_SCENARIO"
-log_success "ConfigMap created"
+# Use unified ConfigMap creation function
+CONFIGMAP_NAME=$(create_scenario_configmap \
+    "$SCENARIO" \
+    "$RUN_EXP_ID" \
+    "$NAMESPACE" \
+    "$SMOKE_TEST" \
+    "${RUN_SEED:-}" \
+    "$CONFIGMAP_NAME" \
+    "$JSONL_OUT_PATH" \
+    "${DURATION:-}") || {
+    log_error "Failed to create ConfigMap"
+    exit 1
+}
 
 # Apply Job (use parallel job for scaling tests)
 if [[ "$SCALING_MODE" == "true" ]]; then
@@ -604,9 +550,30 @@ if [[ "$SCALING_MODE" == "true" ]]; then
         kubectl apply --validate=false -f - -n "$NAMESPACE"
 else
     log_info "Creating Job..."
-    # Use original worker-job.yaml with PVC (simpler, no permission issues)
     JOB_NAME="pqc-bench-worker"
-    kubectl apply --validate=false -f "$SCRIPT_DIR/k8s/worker-job.yaml" -n "$NAMESPACE"
+    
+    # Generate Job YAML using unified generator
+    TEMP_JOB=$(mktemp)
+    "$SCRIPT_DIR/scripts/lib/k8s-job-generator.py" \
+        --environment minikube \
+        --job-name "$JOB_NAME" \
+        --namespace "$NAMESPACE" \
+        --image "$LOCAL_IMAGE" \
+        --scenario-configmap "$CONFIGMAP_NAME" \
+        --experiment-id "$RUN_EXP_ID" \
+        --output "$TEMP_JOB" || {
+        log_error "Failed to generate Job YAML"
+        rm -f "$TEMP_JOB"
+        exit 1
+    }
+    
+    # Apply generated Job YAML
+    kubectl apply --validate=false -f "$TEMP_JOB" -n "$NAMESPACE" || {
+        log_error "Failed to apply Job YAML"
+        rm -f "$TEMP_JOB"
+        exit 1
+    }
+    rm -f "$TEMP_JOB"
 fi
 
 log_success "Kubernetes resources deployed"
@@ -616,346 +583,56 @@ log_success "Kubernetes resources deployed"
 # =============================================================================
 log_step "Step 6/9: Waiting for Job completion"
 
-log_info "Waiting for Job to complete (timeout: $JOB_TIMEOUT)..."
-
-# Get pod name(s)
-sleep 5  # Give time for pod(s) to be created
-POD_NAMES=($(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo ""))
-
-if [[ ${#POD_NAMES[@]} -gt 0 ]]; then
-    if [[ ${#POD_NAMES[@]} -eq 1 ]]; then
-        log_info "Pod: ${POD_NAMES[0]}"
-        POD_NAME="${POD_NAMES[0]}"
-    else
-        log_info "Pods: ${POD_NAMES[*]} (${#POD_NAMES[@]} replicas)"
-        POD_NAME="${POD_NAMES[0]}"  # Use first pod for single-pod operations
-    fi
-    
-    # Stream logs from all pods in background
-    (
-        sleep 10
-        for pod in "${POD_NAMES[@]}"; do
-            (
-                kubectl logs -f "$pod" -n "$NAMESPACE" 2>/dev/null | while read -r line; do
-                    echo "  [pod:$pod] $line"
-                done
-            ) &
-        done
-        wait
-    ) &
-    LOG_PID=$!
-fi
-
-# Wait for completion
-if ! kubectl wait --for=condition=complete job/"$JOB_NAME" -n "$NAMESPACE" --timeout="$JOB_TIMEOUT"; then
-    # Check if failed
-    JOB_STATUS=$(kubectl get job "$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "")
-    
-    if [[ "$JOB_STATUS" == "True" ]]; then
-        log_error "Job failed!"
-        kubectl describe job "$JOB_NAME" -n "$NAMESPACE"
-        kubectl logs -l job-name="$JOB_NAME" -n "$NAMESPACE" --tail=50
-        exit 1
-    fi
-    
-    log_error "Job timed out"
+# Use unified job waiting function
+if ! wait_for_job "$JOB_NAME" "$NAMESPACE" "$JOB_TIMEOUT" "true"; then
     exit 1
 fi
-
-# Kill log streaming
-kill $LOG_PID 2>/dev/null || true
-
-log_success "Job completed successfully"
 
 # =============================================================================
 # Step 7: Copy results from PVC
 # =============================================================================
 log_step "Step 7/9: Copying results from PVC"
 
-# Get pod name
-POD_NAME=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-POD_PHASE=$(kubectl get pod "$POD_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
-log_info "Pod: $POD_NAME (phase: $POD_PHASE)"
+# Get pod name for later use (manifest generation)
+POD_NAME=$(get_job_pods "$JOB_NAME" "$NAMESPACE" | awk '{print $1}')
 
-# Copy results from PVC using a temporary pod and kubectl logs
-# This is more reliable than kubectl run -i which has timing issues
-# Note: We can't exec into completed pods, so we'll create a read pod to check the PVC
-log_info "Copying results from PVC..."
-log_info "Creating read pod to access PVC (cannot exec into completed pod $POD_NAME)..."
-
-READ_POD_NAME="pvc-read-$(date +%s)"
-
-COPY_SUCCESS=false
-TEMP_OUTPUT=$(mktemp)
-
-# Create a pod that will read the file
-READ_POD_YAML=$(mktemp)
-cat > "$READ_POD_YAML" <<'HEREDOC_EOF'
-apiVersion: v1
-kind: Pod
-metadata:
-  name: READ_POD_NAME_PLACEHOLDER
-  namespace: NAMESPACE_PLACEHOLDER
-spec:
-  restartPolicy: Never
-  containers:
-  - name: read
-    image: busybox:1.36
-    command: ["sh", "-c", "if [ -f /results/raw/run.jsonl ]; then cat /results/raw/run.jsonl; elif [ -d /results/raw ]; then find /results/raw -name '*.jsonl' -type f -exec cat {} \\;; elif [ -d /results/replica-0 ]; then find /results/replica-* -name '*.jsonl' -type f -exec cat {} \\;; else find /results -name '*.jsonl' -type f -exec cat {} \\;; fi"]
-    volumeMounts:
-    - name: results
-      mountPath: /results
-      readOnly: true
-  volumes:
-  - name: results
-    persistentVolumeClaim:
-      claimName: PVC_NAME_PLACEHOLDER
-HEREDOC_EOF
-# Replace placeholders with actual values
-log_info "Replacing placeholders in YAML..."
-# Use | as delimiter to avoid issues with / in values
-SED_SUCCESS=true
-if ! sed -i "s|READ_POD_NAME_PLACEHOLDER|${READ_POD_NAME}|g" "$READ_POD_YAML"; then
-    log_error "Failed to replace READ_POD_NAME_PLACEHOLDER"
-    SED_SUCCESS=false
-fi
-if [[ "$SED_SUCCESS" == "true" ]] && ! sed -i "s|NAMESPACE_PLACEHOLDER|${NAMESPACE}|g" "$READ_POD_YAML"; then
-    log_error "Failed to replace NAMESPACE_PLACEHOLDER"
-    SED_SUCCESS=false
-fi
-if [[ "$SED_SUCCESS" == "true" ]] && ! sed -i "s|PVC_NAME_PLACEHOLDER|${PVC_NAME}|g" "$READ_POD_YAML"; then
-    log_error "Failed to replace PVC_NAME_PLACEHOLDER"
-    SED_SUCCESS=false
-fi
-
-# Verify YAML file exists and has content
-if [[ "$SED_SUCCESS" == "true" ]] && ([[ ! -f "$READ_POD_YAML" ]] || [[ ! -s "$READ_POD_YAML" ]]); then
-    log_error "YAML file $READ_POD_YAML does not exist or is empty"
-    SED_SUCCESS=false
-fi
-
-if [[ "$SED_SUCCESS" == "false" ]]; then
-    log_error "Failed to prepare read pod YAML"
-    rm -f "$READ_POD_YAML" "$TEMP_OUTPUT"
-    COPY_SUCCESS=false
-elif [[ "$SED_SUCCESS" == "true" ]]; then
-    # Try to apply the pod and capture any errors for debugging
-    log_info "Creating read pod $READ_POD_NAME to access PVC $PVC_NAME..."
-    log_info "Read pod YAML location: $READ_POD_YAML"
-    log_info "YAML file size: $(wc -c < "$READ_POD_YAML") bytes"
-    
-    # Show first few lines of YAML for debugging
-    log_info "YAML content (first 10 lines):"
-    head -10 "$READ_POD_YAML" 2>/dev/null | sed 's/^/  /' || log_warn "Could not read YAML file"
-    
-    log_info "Running kubectl apply..."
-    # Temporarily disable exit on error to capture kubectl output even if it fails
-    set +e
-    KUBECTL_APPLY_OUTPUT=$(kubectl apply --validate=false -f "$READ_POD_YAML" 2>&1)
-    KUBECTL_APPLY_EXIT=$?
-    set -e
-
-    log_info "kubectl apply exit code: $KUBECTL_APPLY_EXIT"
-    if [[ -n "$KUBECTL_APPLY_OUTPUT" ]]; then
-        log_info "kubectl apply output: $KUBECTL_APPLY_OUTPUT"
-    else
-        log_warn "kubectl apply output is empty"
-    fi
-    
-    # Also validate the YAML file exists and show its full content for debugging
-    if [[ -f "$READ_POD_YAML" ]]; then
-        log_info "Full YAML file content:"
-        cat "$READ_POD_YAML" | sed 's/^/  /' || log_warn "Could not read full YAML file"
-    else
-        log_error "YAML file does not exist: $READ_POD_YAML"
-    fi
-
-    if [[ $KUBECTL_APPLY_EXIT -eq 0 ]]; then
-        log_info "Read pod created: $READ_POD_NAME"
-        log_info "Waiting for read pod to complete..."
-        
-        # Wait for pod to be created
-        sleep 2
-        
-        # Wait for completion (with timeout)
-        PHASE=""
-        for i in {1..30}; do
-            PHASE=$(kubectl get pod "$READ_POD_NAME" -n "$NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-            if [[ -z "$PHASE" ]]; then
-                log_warn "Pod $READ_POD_NAME not found yet (attempt $i/30)"
-                sleep 1
-                continue
-            fi
-            if [[ "$PHASE" == "Succeeded" ]] || [[ "$PHASE" == "Failed" ]]; then
-                log_info "Read pod phase: $PHASE"
-                break
-            fi
-            if [[ $i -eq 10 ]] || [[ $i -eq 20 ]]; then
-                log_info "Read pod still running (phase: $PHASE, attempt $i/30)"
-            fi
-            sleep 1
-        done
-        
-        if [[ -z "$PHASE" ]]; then
-            log_error "Read pod $READ_POD_NAME was never created or is not visible"
-            kubectl get pod "$READ_POD_NAME" -n "$NAMESPACE" 2>&1 || log_error "Pod does not exist"
-            kubectl get pods -n "$NAMESPACE" | grep -E "pvc-read|NAME" | head -5 || true
-        elif [[ "$PHASE" == "Succeeded" ]] || [[ "$PHASE" == "Failed" ]]; then
-            # Get logs (this is more reliable than kubectl run -i)
-            log_info "Getting logs from read pod..."
-            if kubectl logs "$READ_POD_NAME" -n "$NAMESPACE" > "$TEMP_OUTPUT" 2>&1; then
-                LOG_SIZE=$(stat -f%z "$TEMP_OUTPUT" 2>/dev/null || stat -c%s "$TEMP_OUTPUT" 2>/dev/null || echo 0)
-                log_info "Read pod logs size: $LOG_SIZE bytes"
-                
-                # Extract JSONL lines (lines that start with {)
-                # Filter out kubectl warning messages and non-JSONL lines
-                grep -E "^{" "$TEMP_OUTPUT" > "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || true
-                
-                # Also filter out common kubectl warning messages
-                if [[ -s "$RUN_OUT_DIR/raw/run.jsonl" ]]; then
-                    # Remove any lines that don't look like JSON
-                    grep -E "^{" "$RUN_OUT_DIR/raw/run.jsonl" > "${RUN_OUT_DIR}/raw/run.jsonl.tmp" 2>/dev/null && mv "${RUN_OUT_DIR}/raw/run.jsonl.tmp" "$RUN_OUT_DIR/raw/run.jsonl" || true
-                fi
-                
-                # Check if we have valid JSONL data (at least one line starting with {)
-                if [[ -f "$RUN_OUT_DIR/raw/run.jsonl" ]] && [[ -s "$RUN_OUT_DIR/raw/run.jsonl" ]]; then
-                    FILE_SIZE=$(stat -f%z "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || stat -c%s "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || echo 0)
-                    log_info "Filtered output file size: $FILE_SIZE bytes"
-                    
-                    # Check if it contains valid JSONL (at least one line starting with {)
-                    FIRST_LINE=$(head -1 "$RUN_OUT_DIR/raw/run.jsonl" 2>/dev/null || echo "")
-                    if [[ -n "$FIRST_LINE" ]] && echo "$FIRST_LINE" | grep -q "^{"; then
-                        COPY_SUCCESS=true
-                        log_success "Successfully copied run.jsonl from PVC"
-                    else
-                        log_warn "Output doesn't appear to be valid JSONL"
-                        log_info "First line (first 100 chars): ${FIRST_LINE:0:100}"
-                        log_info "Raw temp output (first 20 lines):"
-                        head -20 "$TEMP_OUTPUT" 2>/dev/null | sed 's/^/  /' || true
-                        log_info "Checking if raw directory exists in PVC..."
-                        # Try to list the directory structure
-                        kubectl logs "$READ_POD_NAME" -n "$NAMESPACE" 2>&1 | grep -E "(Listing|raw|jsonl|Found)" | head -20 || true
-                    fi
-                else
-                    log_warn "Read pod output is empty or invalid"
-                    log_info "Temp output file exists: $([[ -f "$TEMP_OUTPUT" ]] && echo 'yes' || echo 'no')"
-                    log_info "Temp output size: $LOG_SIZE bytes"
-                    log_info "Temp output (first 10 lines):"
-                    head -10 "$TEMP_OUTPUT" 2>/dev/null | sed 's/^/  /' || true
-                    log_info "Note: Cannot exec into completed pod to verify PVC contents directly"
-                    log_info "The read pod should have accessed the PVC - check its logs above"
-                fi
-            else
-                LOG_ERROR_OUTPUT=$(kubectl logs "$READ_POD_NAME" -n "$NAMESPACE" 2>&1)
-                log_error "Failed to get logs from read pod"
-                log_error "kubectl logs error output: $LOG_ERROR_OUTPUT"
-                log_info "Pod status:"
-                kubectl get pod "$READ_POD_NAME" -n "$NAMESPACE" -o yaml 2>&1 | grep -A 5 "status:" | head -10 || true
-            fi
-        else
-            log_error "Read pod did not complete (phase: $PHASE after 30 seconds)"
-            log_info "Pod description:"
-            kubectl describe pod "$READ_POD_NAME" -n "$NAMESPACE" 2>&1 | tail -30 || true
-            log_info "Pod events:"
-            kubectl get events -n "$NAMESPACE" --field-selector involvedObject.name="$READ_POD_NAME" 2>&1 | tail -10 || true
-        fi
-        
-        # Clean up
-        log_info "Cleaning up read pod..."
-        kubectl delete pod "$READ_POD_NAME" -n "$NAMESPACE" --ignore-not-found=true >/dev/null 2>&1
-        rm -f "$READ_POD_YAML" "$TEMP_OUTPUT"
-    else
-        log_error "Failed to create read pod"
-        log_error "kubectl apply exit code: $KUBECTL_APPLY_EXIT"
-        log_error "kubectl apply output: $KUBECTL_APPLY_OUTPUT"
-        log_info "Checking if PVC exists..."
-        kubectl get pvc "$PVC_NAME" -n "$NAMESPACE" 2>&1 || log_error "PVC not found!"
-        log_info "Checking for existing pods with same name..."
-        kubectl get pod "$READ_POD_NAME" -n "$NAMESPACE" 2>&1 || log_info "No existing pod found"
-        log_info "Checking PVC status:"
-        kubectl get pvc "$PVC_NAME" -n "$NAMESPACE" -o yaml 2>&1 | grep -A 5 "status:" | head -10 || true
-        rm -f "$READ_POD_YAML" "$TEMP_OUTPUT"
-        COPY_SUCCESS=false
-    fi
-fi
-
-if [[ "$COPY_SUCCESS" == "false" ]]; then
+# Use unified result retrieval function
+if ! copy_results_from_pvc "$JOB_NAME" "$RUN_OUT_DIR" "$NAMESPACE" "$PVC_NAME"; then
     log_error "Failed to copy results from PVC"
-    log_info "Main pod logs (last 20 lines):"
-    kubectl logs "$POD_NAME" -n "$NAMESPACE" --tail=20 2>&1 | head -20 || true
-    log_info "To recover data manually, create a pod to read from PVC:"
-    log_info "  kubectl run pvc-read --image=busybox:1.36 --rm -i --restart=Never --overrides='{\"spec\":{\"volumes\":[{\"name\":\"results\",\"persistentVolumeClaim\":{\"claimName\":\"$PVC_NAME\"}}],\"containers\":[{\"name\":\"read\",\"image\":\"busybox:1.36\",\"command\":[\"sh\",\"-c\",\"cat /results/raw/run.jsonl\"],\"volumeMounts\":[{\"name\":\"results\",\"mountPath\":\"/results\"}]}]}}' > output.jsonl"
+    if [[ -n "$POD_NAME" ]]; then
+        log_info "Main pod logs (last 20 lines):"
+        kubectl logs "$POD_NAME" -n "$NAMESPACE" --tail=20 2>&1 | head -20 || true
+    fi
     FAILED_RUNS=$((FAILED_RUNS + 1))
     continue
 fi
 
-# Verify results - check both existence AND content
+# Additional validation: check for error messages and JSON validity
 RAW_JSONL_FILE="$RUN_OUT_DIR/raw/run.jsonl"
-if [[ ! -f "$RAW_JSONL_FILE" ]]; then
-    RAW_JSONL_FILE=$(find "$RUN_OUT_DIR/raw" -name "*.jsonl" -type f | head -1)
-fi
-
-if [[ ! -f "$RAW_JSONL_FILE" ]]; then
-    log_error "No JSONL files found in results!"
-    log_info "Contents of $RUN_OUT_DIR/raw:"
-    ls -la "$RUN_OUT_DIR/raw/" || true
-    FAILED_RUNS=$((FAILED_RUNS + 1))
-    continue
-fi
-
-# Validate file has content (not 0 bytes)
 if [[ -f "$RAW_JSONL_FILE" ]]; then
-    FILE_SIZE=$(stat -f%z "$RAW_JSONL_FILE" 2>/dev/null || stat -c%s "$RAW_JSONL_FILE" 2>/dev/null || echo 0)
-    if [[ $FILE_SIZE -eq 0 ]]; then
-        log_error "Data collection failed: run.jsonl is 0 bytes!"
-        log_error "This indicates the benchmark didn't write any data."
-        log_info "Checking pod logs for errors..."
-        kubectl logs "$POD_NAME" -n "$NAMESPACE" --tail=100 || true
-        log_info "Checking if benchmark process completed..."
-        kubectl exec "$POD_NAME" -n "$NAMESPACE" -- ps aux 2>/dev/null || true
-        log_info "Checking if results directory exists in pod..."
-        kubectl exec "$POD_NAME" -n "$NAMESPACE" -- ls -la /results/raw/ 2>&1 || true
+    FIRST_LINE=$(head -1 "$RAW_JSONL_FILE" 2>/dev/null || echo "")
+    if [[ -n "$FIRST_LINE" ]] && [[ "$FIRST_LINE" =~ ^error: ]]; then
+        log_error "Data collection failed: file contains error message, not JSONL data!"
+        log_error "First line: ${FIRST_LINE:0:100}..."
         FAILED_RUNS=$((FAILED_RUNS + 1))
-        # Remove empty file so it will be retried
         rm -f "$RAW_JSONL_FILE"
         continue
-    else
-        # Validate file has valid JSONL content (at least one line)
-        LINE_COUNT=$(wc -l < "$RAW_JSONL_FILE" 2>/dev/null || echo 0)
-        if [[ $LINE_COUNT -eq 0 ]]; then
-            log_error "Data collection failed: run.jsonl has no lines!"
-            log_error "File size: $FILE_SIZE bytes, but no JSONL lines found"
-            FAILED_RUNS=$((FAILED_RUNS + 1))
-            rm -f "$RAW_JSONL_FILE"
-            continue
-        fi
-        # Check if first line is valid JSON (not an error message)
-        FIRST_LINE=$(head -1 "$RAW_JSONL_FILE" 2>/dev/null || echo "")
-        if [[ -n "$FIRST_LINE" ]] && [[ "$FIRST_LINE" =~ ^error: ]]; then
-            log_error "Data collection failed: file contains error message, not JSONL data!"
+    fi
+    
+    if [[ -n "$FIRST_LINE" ]]; then
+        if ! echo "$FIRST_LINE" | python3 -m json.tool >/dev/null 2>&1; then
+            log_error "Data collection failed: file does not contain valid JSONL!"
             log_error "First line: ${FIRST_LINE:0:100}..."
             FAILED_RUNS=$((FAILED_RUNS + 1))
             rm -f "$RAW_JSONL_FILE"
             continue
         fi
-        
-        if [[ -n "$FIRST_LINE" ]]; then
-            if ! echo "$FIRST_LINE" | python3 -m json.tool >/dev/null 2>&1; then
-                log_error "Data collection failed: file does not contain valid JSONL!"
-                log_error "First line: ${FIRST_LINE:0:100}..."
-                FAILED_RUNS=$((FAILED_RUNS + 1))
-                rm -f "$RAW_JSONL_FILE"
-                continue
-            fi
-        fi
-        
-        log_success "Verified run.jsonl: $FILE_SIZE bytes, $LINE_COUNT events"
     fi
-    else
-        log_error "run.jsonl file not found"
-        FAILED_RUNS=$((FAILED_RUNS + 1))
-        continue
-    fi
+    
+    FILE_SIZE=$(stat -f%z "$RAW_JSONL_FILE" 2>/dev/null || stat -c%s "$RAW_JSONL_FILE" 2>/dev/null || echo 0)
+    LINE_COUNT=$(wc -l < "$RAW_JSONL_FILE" 2>/dev/null || echo 0)
+    log_success "Verified run.jsonl: $FILE_SIZE bytes, $LINE_COUNT events"
+fi
 
 JSONL_COUNT=$(find "$RUN_OUT_DIR/raw" -name "*.jsonl" -type f | wc -l)
 log_success "Verified $JSONL_COUNT JSONL file(s) with valid data"
@@ -987,69 +664,32 @@ fi
 SCENARIO_ID=$(grep -E "^id:" "$SCENARIO" | awk '{print $2}' | tr -d '"' || echo "$EXP_ID")
 MANIFEST_SEED=${RUN_SEED:-null}
 
-cat > "$RUN_OUT_DIR/manifest.json" <<EOF
-{
-    "run_id": "$RUN_EXP_ID",
-    "run_index": $RUN_INDEX,
-    "scenario_id": "$SCENARIO_ID",
-    "scenario_path": "$SCENARIO",
-    "environment": "kubernetes",
-    "execution_type": "minikube",
-    "git_commit": "$GIT_COMMIT",
-    "start_time_utc": "$START_ISO",
-    "end_time_utc": "$END_ISO",
-    "duration_sec": $ELAPSED,
-    "events_count": $EVENT_COUNT,
-    "rng_seed": $MANIFEST_SEED,
-    "replicas": $REPLICAS,
-    "scaling_mode": $SCALING_MODE,
-    "kubernetes": {
-        "node_name": "$NODE_NAME",
-        "k8s_version": "$K8S_VERSION",
-        "namespace": "$NAMESPACE",
-        "job_name": "$JOB_NAME",
-        "pod_name": "$POD_NAME"
+# Generate manifest with Minikube-specific fields
+local extra_fields=",
+    \"scaling_mode\": $SCALING_MODE,
+    \"kubernetes\": {
+        \"node_name\": \"$NODE_NAME\",
+        \"k8s_version\": \"$K8S_VERSION\",
+        \"namespace\": \"$NAMESPACE\",
+        \"job_name\": \"$JOB_NAME\",
+        \"pod_name\": \"$POD_NAME\"
     },
-    "container": {
-        "image": "$IMAGE_NAME:$IMAGE_TAG",
-        "runtime": "podman"
+    \"container\": {
+        \"image\": \"$IMAGE_NAME:$IMAGE_TAG\",
+        \"runtime\": \"podman\"
     },
-    "minikube": {
-        "version": "$MINIKUBE_VERSION",
-        "driver": "podman"
-    }
-}
-EOF
-
-log_success "Manifest written: $RUN_OUT_DIR/manifest.json"
+    \"minikube\": {
+        \"version\": \"$MINIKUBE_VERSION\",
+        \"driver\": \"podman\"
+    }"
+generate_manifest "$RUN_OUT_DIR" "$RUN_EXP_ID" "$SCENARIO" "minikube" "$RUN_INDEX" "$EVENT_COUNT" "$ELAPSED" "$MANIFEST_SEED" "$REPLICAS" "$extra_fields"
 
 # =============================================================================
 # Step 9: Run analysis pipeline
 # =============================================================================
 log_step "Step 9/9: Running analysis pipeline"
 
-if [[ "$SKIP_ANALYSIS" == "true" ]]; then
-    log_warn "Skipping analysis (--skip-analysis)"
-else
-    log_info "Running analysis pipeline..."
-    
-    # Run merge
-    python3 "$SCRIPT_DIR/analysis/scripts/merge_jsonl.py" \
-        --input "$RUN_OUT_DIR/raw" \
-        --output "$RUN_OUT_DIR/merged" 2>/dev/null || true
-    
-    # Run stats
-    INPUT_FILE="$RUN_OUT_DIR/merged/merged.parquet"
-    [[ ! -f "$INPUT_FILE" ]] && INPUT_FILE="$RUN_OUT_DIR/merged/merged.jsonl"
-    [[ ! -f "$INPUT_FILE" ]] && INPUT_FILE="$RUN_OUT_DIR/raw/run.jsonl"
-    
-    python3 "$SCRIPT_DIR/analysis/scripts/compute_statistics.py" \
-        --input "$INPUT_FILE" \
-        --output "$RUN_OUT_DIR/stats" \
-        --experiment-id "$RUN_EXP_ID" 2>/dev/null || true
-    
-    log_success "Analysis complete for run $RUN_INDEX"
-fi
+run_analysis_pipeline "$RUN_OUT_DIR" "$RUN_EXP_ID" "$SKIP_ANALYSIS"
 
 COMPLETED_RUNS=$((COMPLETED_RUNS + 1))
 

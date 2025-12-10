@@ -11,6 +11,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 K8S_GCP_DIR="$SCRIPT_DIR/k8s/gcp"
 
+# Source common libraries
+source "$SCRIPT_DIR/scripts/lib/common.sh"
+source "$SCRIPT_DIR/scripts/lib/k8s-configmap.sh"
+
 SCENARIO=""
 EXP_ID=""
 PROJECT=""
@@ -164,126 +168,62 @@ SANITIZED_SUFFIX=$(SANITIZE_K8S_NAME "$REPLICA_SUFFIX" | sed 's/^_//')  # Remove
 JOB_NAME="pqc-bench-${SANITIZED_BASE}${SANITIZED_SUFFIX}"
 
 # Create scenario ConfigMap (unique per experiment to avoid conflicts)
-# Sanitize ConfigMap name to be RFC 1123 compliant (max 253 chars for K8s)
+# Use unified ConfigMap creation function
 SCENARIO_CM_SANITIZED=$(SANITIZE_K8S_NAME "$EXP_ID" | cut -c1-230)
 SCENARIO_CM="pqc-scenario-${SCENARIO_CM_SANITIZED}"
-TEMP_SCENARIO=$(mktemp)
-cp "$SCENARIO" "$TEMP_SCENARIO"
-
-# Update scenario for containerized environment
-python3 <<PYTHON_EOF
-import yaml
-import sys
-
-with open('$TEMP_SCENARIO', 'r') as f:
-    scenario = yaml.safe_load(f) or {}
-
-if 'metrics' not in scenario:
-    scenario['metrics'] = {}
-scenario['metrics']['jsonl_out'] = '/results/raw/run.jsonl'
-
-if '$SMOKE_TEST' == 'true' and 'workload' in scenario:
-    scenario['workload']['duration_sec'] = 5
-
-with open('$TEMP_SCENARIO', 'w') as f:
-    yaml.dump(scenario, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-PYTHON_EOF
 
 # Debug: Show ConfigMap name being used (for troubleshooting)
 if [[ "${DEBUG:-false}" == "true" ]]; then
     echo "DEBUG: Creating ConfigMap '$SCENARIO_CM' for experiment '$EXP_ID'" >&2
 fi
 
-SCENARIO_CM_OUTPUT=$(kubectl create configmap "$SCENARIO_CM" \
-    --from-file=scenario.yaml="$TEMP_SCENARIO" \
-    --namespace="$NAMESPACE" \
-    --dry-run=client -o yaml | kubectl apply -f - 2>&1)
-SCENARIO_CM_EXIT_CODE=$?
-
-if [[ $SCENARIO_CM_EXIT_CODE -ne 0 ]]; then
-    echo "ERROR: Failed to create scenario ConfigMap '$SCENARIO_CM'" >&2
-    echo "ERROR: Original experiment ID: '$EXP_ID'" >&2
-    echo "ERROR: Sanitized ConfigMap name: '$SCENARIO_CM'" >&2
-    echo "ERROR: ConfigMap creation output:" >&2
-    echo "$SCENARIO_CM_OUTPUT" >&2
-    rm -f "$TEMP_SCENARIO"
+SCENARIO_CM=$(create_scenario_configmap \
+    "$SCENARIO" \
+    "$EXP_ID" \
+    "$NAMESPACE" \
+    "$SMOKE_TEST" \
+    "" \
+    "$SCENARIO_CM") || {
+    echo "ERROR: Failed to create scenario ConfigMap" >&2
     exit 1
-fi
-rm -f "$TEMP_SCENARIO"
+}
 
 # Create GCP config ConfigMap (unique per experiment)
-# Sanitize ConfigMap name to be RFC 1123 compliant (max 253 chars for K8s)
+# Use unified ConfigMap creation function
 GCP_CM_SANITIZED=$(SANITIZE_K8S_NAME "$EXP_ID" | cut -c1-228)
 GCP_CM="pqc-gcp-config-${GCP_CM_SANITIZED}"
+
 # Debug: Show ConfigMap name being used (for troubleshooting)
 if [[ "${DEBUG:-false}" == "true" ]]; then
     echo "DEBUG: Creating GCP ConfigMap '$GCP_CM' for experiment '$EXP_ID'" >&2
 fi
 
-GCP_CM_OUTPUT=$(kubectl create configmap "$GCP_CM" \
-    --from-literal=bucket_name="$BUCKET" \
-    --from-literal=experiment_id="$EXP_ID" \
-    --from-literal=region="$REGION" \
-    --from-literal=project_id="$PROJECT" \
-    --from-literal=smoke_test="$([ "$SMOKE_TEST" == "true" ] && echo "true" || echo "false")" \
-    --namespace="$NAMESPACE" \
-    --dry-run=client -o yaml | kubectl apply -f - 2>&1)
-GCP_CM_EXIT_CODE=$?
-
-if [[ $GCP_CM_EXIT_CODE -ne 0 ]]; then
-    echo "ERROR: Failed to create GCP config ConfigMap '$GCP_CM'" >&2
-    echo "ERROR: Original experiment ID: '$EXP_ID'" >&2
-    echo "ERROR: Sanitized ConfigMap name: '$GCP_CM'" >&2
-    echo "ERROR: ConfigMap creation output:" >&2
-    echo "$GCP_CM_OUTPUT" >&2
+GCP_CM=$(create_gcp_config_configmap \
+    "$EXP_ID" \
+    "$BUCKET" \
+    "$REGION" \
+    "$PROJECT" \
+    "$NAMESPACE" \
+    "$SMOKE_TEST" \
+    "$GCP_CM") || {
+    echo "ERROR: Failed to create GCP config ConfigMap" >&2
     exit 1
-fi
+}
 
-# Create Job YAML
+# Create Job YAML using unified generator
 TEMP_JOB=$(mktemp)
-python3 <<PYTHON_EOF
-import yaml
-import sys
-
-# Read base job template
-with open('$K8S_GCP_DIR/worker-job.yaml', 'r') as f:
-    job = yaml.safe_load(f)
-
-# Update metadata
-job['metadata']['name'] = '$JOB_NAME'
-job['metadata']['namespace'] = '$NAMESPACE'
-job['metadata']['labels']['experiment-id'] = '${EXP_ID}'
-
-# Update ConfigMap references in volumes
-for vol in job['spec']['template']['spec'].get('volumes', []):
-    if vol.get('name') == 'scenario-config':
-        if 'configMap' in vol:
-            vol['configMap']['name'] = '$SCENARIO_CM'
-
-# Update image and ConfigMap references in containers
-for container in job['spec']['template']['spec']['containers']:
-    if container['name'] == 'pqc-bench':
-        container['image'] = '$IMAGE_NAME'
-    # Update ConfigMap references in env vars
-    for env_var in container.get('env', []):
-        if 'configMapKeyRef' in env_var.get('valueFrom', {}):
-            if env_var['valueFrom']['configMapKeyRef'].get('name') == 'pqc-gcp-config':
-                env_var['valueFrom']['configMapKeyRef']['name'] = '$GCP_CM'
-
-# Also update in init containers
-for container in job['spec']['template']['spec'].get('initContainers', []):
-    for env_var in container.get('env', []):
-        if 'configMapKeyRef' in env_var.get('valueFrom', {}):
-            if env_var['valueFrom']['configMapKeyRef'].get('name') == 'pqc-gcp-config':
-                env_var['valueFrom']['configMapKeyRef']['name'] = '$GCP_CM'
-
-# Update replicas if needed (for scaling experiments)
-# Note: This is handled by the job itself, not by Kubernetes replicas
-
-# Write job
-with open('$TEMP_JOB', 'w') as f:
-    yaml.dump(job, f, default_flow_style=False, sort_keys=False)
-PYTHON_EOF
+"$SCRIPT_DIR/scripts/lib/k8s-job-generator.py" \
+    --environment gcp \
+    --job-name "$JOB_NAME" \
+    --namespace "$NAMESPACE" \
+    --image "$IMAGE_NAME" \
+    --scenario-configmap "$SCENARIO_CM" \
+    --experiment-id "$EXP_ID" \
+    --gcp-config-configmap "$GCP_CM" \
+    --output "$TEMP_JOB" || {
+    echo "ERROR: Failed to generate Job YAML" >&2
+    exit 1
+}
 
 # Submit job
 JOB_OUTPUT=$(kubectl apply -f "$TEMP_JOB" 2>&1)

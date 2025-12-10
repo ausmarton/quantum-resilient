@@ -26,6 +26,14 @@ set -euo pipefail
 # Configuration
 # -----------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source common libraries
+source "$SCRIPT_DIR/scripts/lib/common.sh"
+source "$SCRIPT_DIR/scripts/lib/directories.sh"
+source "$SCRIPT_DIR/scripts/lib/analysis.sh"
+source "$SCRIPT_DIR/scripts/lib/manifest.sh"
+source "$SCRIPT_DIR/scripts/lib/k8s-job.sh"
+
 TERRAFORM_DIR="$SCRIPT_DIR/terraform/gke"
 K8S_GCP_DIR="$SCRIPT_DIR/k8s/gcp"
 JOB_NAME="pqc-bench-worker"
@@ -51,43 +59,6 @@ SMOKE_TEST=false
 EPHEMERAL=false
 CREATE_CLUSTER=false
 DESTROY_CLUSTER=false
-
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
-# -----------------------------------------------------------------------------
-# Helper functions
-# -----------------------------------------------------------------------------
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[OK]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-log_step() {
-    echo -e "\n${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${CYAN}$1${NC}"
-    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-}
-
-log_run() {
-    echo -e "${CYAN}[RUN $1/$2]${NC} $3"
-}
 
 usage() {
     cat <<EOF
@@ -912,129 +883,10 @@ log_success "Kubernetes resources deployed"
 # =============================================================================
 log_step "Step 6/8: Waiting for Job completion"
 
-log_info "Waiting for Job to complete (timeout: $JOB_TIMEOUT)..."
-
-# Wait for pod to be created
-sleep 10
-
-# Get pod name
-POD_NAME=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-
-if [[ -n "$POD_NAME" ]]; then
-    log_info "Pod: $POD_NAME"
-    
-    # Stream logs in background
-    (
-        sleep 30
-        kubectl logs -f "$POD_NAME" -c pqc-bench 2>/dev/null | while read -r line; do
-            echo "  [pqc-bench] $line"
-        done
-    ) &
-    LOG_PID=$!
-fi
-
-# Wait for completion or failure
-# Use a loop to check both conditions since kubectl wait only checks one at a time
-log_info "Monitoring job status..."
-START_TIME=$(date +%s)
-TIMEOUT_SECONDS=$(echo "$JOB_TIMEOUT" | sed 's/s$//' || echo "300")
-JOB_COMPLETE=false
-JOB_FAILED=false
-
-# Check if jq is available for JSON parsing
-HAS_JQ=false
-if command -v jq &> /dev/null; then
-    HAS_JQ=true
-fi
-
-while true; do
-    ELAPSED=$(($(date +%s) - START_TIME))
-    
-    if [[ $ELAPSED -gt $TIMEOUT_SECONDS ]]; then
-        log_error "Job timed out after ${TIMEOUT_SECONDS}s"
-        JOB_FAILED=true
-        break
-    fi
-    
-    # Check job status
-    if [[ "$HAS_JQ" == "true" ]]; then
-        # Use jq for more reliable JSON parsing
-        JOB_JSON=$(kubectl get job "$JOB_NAME" -n "$NAMESPACE" -o json 2>/dev/null || echo "{}")
-        
-        # Check for Failed condition
-        FAILED_STATUS=$(echo "$JOB_JSON" | jq -r '.status.conditions[]? | select(.type=="Failed") | .status' 2>/dev/null || echo "")
-        if [[ "$FAILED_STATUS" == "True" ]]; then
-            log_error "Job has failed!"
-            JOB_FAILED=true
-            break
-        fi
-        
-        # Check for Complete condition
-        COMPLETE_STATUS=$(echo "$JOB_JSON" | jq -r '.status.conditions[]? | select(.type=="Complete") | .status' 2>/dev/null || echo "")
-        if [[ "$COMPLETE_STATUS" == "True" ]]; then
-            log_success "Job completed successfully"
-            JOB_COMPLETE=true
-            break
-        fi
-        
-        # Check if backoff limit is exceeded
-        FAILED_COUNT=$(echo "$JOB_JSON" | jq -r '.status.failed // 0' 2>/dev/null || echo "0")
-        BACKOFF_LIMIT=$(echo "$JOB_JSON" | jq -r '.spec.backoffLimit // 0' 2>/dev/null || echo "0")
-        if [[ "$FAILED_COUNT" -gt 0 ]] && [[ "$FAILED_COUNT" -gt "$BACKOFF_LIMIT" ]]; then
-            log_error "Job has exceeded backoff limit (failed: $FAILED_COUNT, limit: $BACKOFF_LIMIT)"
-            JOB_FAILED=true
-            break
-        fi
-        
-        # Show progress every 30 seconds
-        if [[ $((ELAPSED % 30)) -eq 0 ]] && [[ $ELAPSED -gt 0 ]]; then
-            log_info "Still waiting... (${ELAPSED}s elapsed)"
-            # Show pod status
-            PODS=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o json 2>/dev/null || echo "{}")
-            POD_COUNT=$(echo "$PODS" | jq -r '.items | length' 2>/dev/null || echo "0")
-            if [[ "$POD_COUNT" -gt 0 ]]; then
-                POD_NAME=$(echo "$PODS" | jq -r '.items[0].metadata.name' 2>/dev/null || echo "")
-                POD_PHASE=$(echo "$PODS" | jq -r '.items[0].status.phase' 2>/dev/null || echo "Unknown")
-                log_info "Pod status: $POD_NAME - $POD_PHASE"
-            fi
-        fi
-    else
-        # Fallback: use kubectl wait and jsonpath
-        # Check for failed condition
-        FAILED_STATUS=$(kubectl get job "$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "")
-        if [[ "$FAILED_STATUS" == "True" ]]; then
-            log_error "Job has failed!"
-            JOB_FAILED=true
-            break
-        fi
-        
-        # Check for complete condition
-        COMPLETE_STATUS=$(kubectl get job "$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "")
-        if [[ "$COMPLETE_STATUS" == "True" ]]; then
-            log_success "Job completed successfully"
-            JOB_COMPLETE=true
-            break
-        fi
-        
-        # Show progress every 30 seconds
-        if [[ $((ELAPSED % 30)) -eq 0 ]] && [[ $ELAPSED -gt 0 ]]; then
-            log_info "Still waiting... (${ELAPSED}s elapsed)"
-            POD_NAME=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
-            POD_PHASE=$(kubectl get pods -l job-name="$JOB_NAME" -n "$NAMESPACE" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "Unknown")
-            if [[ -n "$POD_NAME" ]]; then
-                log_info "Pod status: $POD_NAME - $POD_PHASE"
-            fi
-        fi
-    fi
-    
-    sleep 5
-done
-
-# Kill log streaming
-kill $LOG_PID 2>/dev/null || true
-
-# Handle failure
-if [[ "$JOB_FAILED" == "true" ]]; then
+# Use unified job waiting function
+# Note: For GCP, we also need to wait for the upload sidecar container (handled below)
+if ! wait_for_job "$JOB_NAME" "$NAMESPACE" "$JOB_TIMEOUT" "true"; then
+    # Enhanced diagnostics for GCP failures
     log_error "Job failed! Gathering diagnostics..."
     
     # Show job description
@@ -1068,15 +920,8 @@ if [[ "$JOB_FAILED" == "true" ]]; then
     exit 1
 fi
 
-if [[ "$JOB_COMPLETE" != "true" ]]; then
-    log_error "Job did not complete successfully"
-    exit 1
-fi
-
-# Kill log streaming
-kill $LOG_PID 2>/dev/null || true
-
-log_success "Job completed successfully"
+# Get pod name for upload sidecar check
+POD_NAME=$(get_job_pods "$JOB_NAME" "$NAMESPACE" | awk '{print $1}')
 
 # =============================================================================
 # Step 7: Verify GCS artifacts
@@ -1186,39 +1031,20 @@ LOCAL_OUTPUT_DIR="$SCRIPT_DIR/results/gcp/${EXP_ID}"
 log_info "Downloading results to: $LOCAL_OUTPUT_DIR"
 
 # Create output directory
-mkdir -p "$LOCAL_OUTPUT_DIR/raw"
-mkdir -p "$LOCAL_OUTPUT_DIR/merged"
-mkdir -p "$LOCAL_OUTPUT_DIR/stats"
-mkdir -p "$LOCAL_OUTPUT_DIR/figures"
+create_output_directories "$LOCAL_OUTPUT_DIR"
 
-# Download merged JSONL
-if gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/merged.jsonl" "$LOCAL_OUTPUT_DIR/merged/merged.jsonl" 2>/dev/null; then
-    log_success "Downloaded merged.jsonl"
-else
-    log_warn "merged.jsonl not found, trying raw data..."
-    # Use direct file copy to avoid wildcard/trailing slash issues with gsutil
-    if ! gsutil -m cp "gs://${BUCKET}/experiments/${EXP_ID}/raw/run.jsonl" "$LOCAL_OUTPUT_DIR/raw/run.jsonl" 2>&1; then
-        # Fallback: try rsync if direct copy fails
-        if ! gsutil -m rsync -r "gs://${BUCKET}/experiments/${EXP_ID}/raw" "$LOCAL_OUTPUT_DIR/raw" 2>&1; then
-            log_error "Failed to download raw data from GCS"
-        fi
-    fi
+# Use unified result retrieval function for raw data
+if ! download_results_from_gcs "$EXP_ID" "$BUCKET" "$LOCAL_OUTPUT_DIR"; then
+    log_error "Failed to download raw data from GCS"
+    exit 1
 fi
 
-# Download manifest and metadata
+# Download additional metadata files (not included in download_results_from_gcs)
+gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/merged.jsonl" "$LOCAL_OUTPUT_DIR/merged/merged.jsonl" 2>/dev/null || log_warn "merged.jsonl not found"
 gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/manifest.json" "$LOCAL_OUTPUT_DIR/manifest.json" 2>/dev/null || log_warn "manifest.json not found"
 gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/provenance.json" "$LOCAL_OUTPUT_DIR/provenance.json" 2>/dev/null || log_warn "provenance.json not found"
 gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/cloud_metadata.json" "$LOCAL_OUTPUT_DIR/cloud_metadata.json" 2>/dev/null || log_warn "cloud_metadata.json not found"
 gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/summary.json" "$LOCAL_OUTPUT_DIR/stats/summary.json" 2>/dev/null || log_warn "summary.json not found"
-
-# Download raw data if available
-# Use direct file copy to avoid wildcard/trailing slash issues with gsutil
-if ! gsutil -m cp "gs://${BUCKET}/experiments/${EXP_ID}/raw/run.jsonl" "$LOCAL_OUTPUT_DIR/raw/run.jsonl" 2>&1; then
-    # Fallback: try rsync if direct copy fails
-    if ! gsutil -m rsync -r "gs://${BUCKET}/experiments/${EXP_ID}/raw" "$LOCAL_OUTPUT_DIR/raw" 2>&1; then
-        log_warn "Failed to download some raw data files"
-    fi
-fi
 
 # Validate downloaded data integrity
 RAW_JSONL_FILE="$LOCAL_OUTPUT_DIR/raw/run.jsonl"
