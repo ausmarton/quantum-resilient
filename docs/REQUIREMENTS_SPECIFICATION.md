@@ -463,11 +463,13 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Analysis scripts exist
 - ❌ Missing dependency handling (e.g., pandas not installed) causes failures
 - ❌ Graceful degradation not implemented
+- ⏭️ **Proposed Solution**: Containerize analysis pipeline to eliminate dependency issues (see OUTSTANDING_WORK.md #11)
 
 **Evidence**: GCP log shows `ModuleNotFoundError: No module named 'pandas'` causing analysis failure
 
 **Gap**: 
 - **Medium**: Should handle missing dependencies gracefully (warn and continue, or provide clear error message)
+- **Medium**: Containerization would eliminate dependency issues entirely
 
 ---
 
@@ -542,9 +544,11 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Python requirements file exists (`analysis/requirements.txt`)
 - ❌ Dependencies not verified before analysis
 - ❌ Missing dependencies cause silent failures (see GCP log: pandas error)
+- ⏭️ **Proposed Solution**: Containerize analysis pipeline (see OUTSTANDING_WORK.md #11)
 
 **Gap**: 
 - **Medium**: Should verify dependencies before analysis or handle gracefully
+- **Medium**: Containerization would ensure consistent environment across all machines
 
 ---
 
@@ -858,9 +862,15 @@ This document defines the **requirements** for the codebase to support dissertat
 - [ ] **CPU Analysis**: Implement if CPU data valid (OUTSTANDING_WORK.md #3) - **HIGH**
 - [ ] **Missing Summaries**: Regenerate 14 missing summaries (OUTSTANDING_WORK.md #4) - **MEDIUM**
 - [ ] **Data Validation**: Enhance validation (OUTSTANDING_WORK.md #5) - **MEDIUM**
-- [ ] **Dependency Verification**: Add dependency check before analysis (NFR5) - **MEDIUM**
+- [ ] **Dependency Verification**: Add dependency check before analysis (NFR5) - **MEDIUM** (OUTSTANDING_WORK.md #12)
+- [ ] **Containerization**: Containerize analysis pipeline (OUTSTANDING_WORK.md #11) - **MEDIUM** (alternative to dependency verification)
 - [ ] **Nanosecond Precision**: Test implementation (OUTSTANDING_WORK.md #6) - **LOW**
 - [ ] **Documentation**: Update methodology section (OUTSTANDING_WORK.md #7) - **MEDIUM**
+- [ ] **Payload Impact Documentation**: Document payload size impact analysis (FR10) - **LOW** (OUTSTANDING_WORK.md #12)
+- [ ] **Pattern Impact Documentation**: Document workload pattern impact analysis (FR11) - **LOW** (OUTSTANDING_WORK.md #13)
+- [ ] **Error Rate Documentation**: Document error rate analysis (FR12) - **LOW** (OUTSTANDING_WORK.md #14)
+- [ ] **Cost Efficiency**: Implement cost efficiency metrics (FR13) - **LOW** (OUTSTANDING_WORK.md #15)
+- [ ] **Report Generation**: Implement automated report generation (NFR8) - **LOW** (OUTSTANDING_WORK.md #16)
 
 ### Dissertation Claims Validation
 

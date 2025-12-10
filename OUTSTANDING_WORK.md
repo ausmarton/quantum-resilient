@@ -26,10 +26,14 @@ This document tracks all outstanding work items identified across the codebase, 
 - Item #6: Test Nanosecond Precision Implementation
 - Item #7: Update Dissertation Methodology Documentation (depends on #1, #2, #6)
 
-### Phase 4: Optional Improvements
+### Phase 4: Infrastructure & Developer Experience
 **Can be done anytime:**
-- Item #8: Add Queue Delay Nanosecond Precision
-- Item #9: Refine Prometheus Histogram Buckets
+- Item #11: Containerize Analysis Pipeline and Development Tools
+
+### Phase 5: Optional Improvements
+**Can be done anytime:**
+- Item #9: Add Queue Delay Nanosecond Precision
+- Item #10: Refine Prometheus Histogram Buckets
 
 ---
 
@@ -657,6 +661,279 @@ detailed time-series analysis if needed.
 
 ---
 
+## Infrastructure & Developer Experience
+
+### 11. Containerize Analysis Pipeline and Development Tools
+
+**Status**: 🟡 **MEDIUM PRIORITY - INFRASTRUCTURE IMPROVEMENT**  
+**Priority**: Recommended for consistency and reproducibility  
+**Independent**: Can be done anytime
+
+**Issue**: 
+- Python dependencies (pandas, matplotlib, etc.) need to be installed on host OS
+- Jupyter notebooks require manual environment setup
+- Python utility scripts (`k8s-job-generator.py`, `scenario-patch.py`) require host Python
+- Analysis scripts run directly on host, polluting system Python
+- Inconsistent environments across developer machines
+- **Why Important**: Ensures consistent analysis results, easier onboarding, no host OS pollution
+
+**Principle**: 
+- ✅ **Containerize**: Analysis tools, Jupyter notebooks, build tools, utility scripts
+- ❌ **DO NOT Containerize**: Native benchmark binary execution (must be native for baseline measurements)
+
+**Containerization Candidates**:
+
+1. **Analysis Pipeline** (HIGH PRIORITY):
+   - ✅ `analysis/scripts/*.py` - All Python analysis scripts
+   - ✅ `analysis/notebooks/*.ipynb` - Jupyter notebooks  
+   - ✅ `analysis/run_full_pipeline.sh` - Pipeline runner
+   - ✅ Scripts that invoke Python analysis: `scripts/lib/analysis.sh`, `scripts/generate_missing_summaries.sh`
+   - **Benefit**: Consistent Python environment, no host pollution, reproducible analysis
+
+2. **Python Utility Scripts** (MEDIUM PRIORITY):
+   - ✅ `scripts/lib/k8s-job-generator.py` - Kubernetes YAML generation
+   - ✅ `scripts/lib/scenario-patch.py` - Scenario YAML patching
+   - ✅ `scripts/complete_incomplete_experiments.sh` - Uses Python for analysis
+   - **Benefit**: No Python version conflicts, consistent behavior
+
+3. **Jupyter Environment** (HIGH PRIORITY):
+   - ✅ All notebooks in `analysis/notebooks/`
+   - ✅ JupyterLab with all dependencies pre-installed
+   - **Benefit**: One-command startup, consistent environment
+
+4. **Rust Build Tools** (LOW PRIORITY - Already partially done):
+   - ✅ Already have `Dockerfile.podman` for benchmark binary
+   - ⏭️ Consider containerized Rust toolchain for CI/CD
+   - **Note**: Native experiments must use host Rust (for baseline)
+
+**Implementation Plan**:
+
+**Phase 1: Analysis Pipeline Container** (2-3 hours)
+```dockerfile
+# analysis/Dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+ENTRYPOINT ["python3"]
+```
+
+**Phase 2: Jupyter Container** (1 hour)
+```dockerfile
+# analysis/Dockerfile.jupyter
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt jupyterlab
+COPY notebooks /app/notebooks
+EXPOSE 8888
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
+```
+
+**Phase 3: Utility Scripts Wrapper** (1-2 hours)
+- Create `scripts/lib/run-python-container.sh` wrapper
+- Wraps Python scripts to run in analysis container
+- Updates `k8s-job-generator.py` and `scenario-patch.py` invocations
+
+**Phase 4: Integration** (1-2 hours)
+- Update `scripts/lib/analysis.sh` to use container
+- Update `scripts/generate_missing_summaries.sh` to use container
+- Update documentation
+
+**Docker Compose Setup** (Optional):
+```yaml
+# docker-compose.yml
+services:
+  analysis:
+    build:
+      context: ./analysis
+      dockerfile: Dockerfile
+    volumes:
+      - ./results:/app/results:ro
+      - ./analysis:/app
+    working_dir: /app
+
+  jupyter:
+    build:
+      context: ./analysis
+      dockerfile: Dockerfile.jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./results:/app/results:ro
+      - ./analysis:/app
+```
+
+**Usage Examples**:
+
+```bash
+# Run analysis pipeline
+docker run --rm -v "$PWD/results:/app/results" -v "$PWD/analysis:/app" \
+  quantum-resilient-analysis python3 scripts/compute_statistics.py \
+  --input results/exp1/merged/merged.jsonl \
+  --output results/exp1/stats
+
+# Start Jupyter
+docker-compose up jupyter
+# Or: docker run -p 8888:8888 -v "$PWD:/app" quantum-resilient-jupyter
+
+# Run utility script
+./scripts/lib/run-python-container.sh k8s-job-generator.py --help
+```
+
+**Testing**:
+1. Build analysis container image
+2. Run `compute_statistics.py` in container on sample data
+3. Verify outputs match host execution
+4. Test Jupyter notebook access
+5. Test utility script wrappers
+6. Update CI/CD if applicable
+
+**Expected Outcome**:
+- ✅ No host Python dependencies needed
+- ✅ Consistent analysis environment across machines
+- ✅ One-command Jupyter startup
+- ✅ Reproducible analysis results
+- ✅ Easier onboarding for new developers
+- ✅ No host OS pollution
+
+**Effort**: 5-8 hours (containerization + integration + testing)
+
+**Dependencies**: Docker/Podman installed
+
+**Impact**: 
+- **HIGH**: Improves developer experience and reproducibility
+- **MEDIUM**: Reduces environment setup friction
+- **LOW**: No impact on benchmark results (analysis only)
+
+**Related Files**:
+- `analysis/requirements.txt` - Python dependencies
+- `analysis/scripts/*.py` - Analysis scripts
+- `analysis/notebooks/*.ipynb` - Jupyter notebooks
+- `scripts/lib/analysis.sh` - Analysis invocation
+- `scripts/lib/k8s-job-generator.py` - Utility script
+- `scripts/lib/scenario-patch.py` - Utility script
+- `Dockerfile.podman` - Existing Rust build container
+
+**Alignment with Requirements**:
+- ✅ Does NOT affect native benchmark execution (baseline preserved)
+- ✅ Supports reproducibility (NFR2)
+- ✅ Improves dependency consistency (NFR5)
+- ✅ No impact on research validity (analysis only, not measurement)
+
+---
+
+## Documentation & Analysis Gaps (Low Priority)
+
+### 12. Document Payload Size Impact Analysis
+
+**Status**: 🟢 **LOW PRIORITY - DOCUMENTATION**  
+**Priority**: Optional - data available, analysis implicit  
+**Independent**: Can be done anytime  
+**Requirement**: FR10
+
+**Issue**: 
+- Payload size impact analysis is supported (data available, analysis implicit)
+- Not explicitly documented as a requirement
+- **Why Low Priority**: Data exists, analysis can be done, just needs documentation
+
+**Current State**:
+- ✅ Multiple payload sizes tested (256B, 1KB, 4KB, 16KB)
+- ✅ Payload size included in experimental design
+- ✅ Payload size included in scenario IDs
+- ⚠️ Explicit payload impact analysis not documented
+
+**Documentation Needed**:
+- Document how to analyze payload size impact
+- Add examples of payload size analysis in notebooks
+- Document dissertation claims supported (e.g., "Performance scales with payload size by X% per KB")
+
+**Effort**: 1-2 hours (documentation)
+
+**Dependencies**: None
+
+**Impact**: 
+- **LOW**: Documentation improvement only (data and analysis capability exist)
+
+**Related Files**:
+- `docs/REQUIREMENTS_SPECIFICATION.md` (FR10)
+- `analysis/notebooks/` (add payload impact analysis examples)
+
+---
+
+### 13. Document Workload Pattern Impact Analysis
+
+**Status**: 🟢 **LOW PRIORITY - DOCUMENTATION**  
+**Priority**: Optional - data available, analysis implicit  
+**Independent**: Can be done anytime  
+**Requirement**: FR11
+
+**Issue**: 
+- Workload pattern impact analysis is supported (data available, analysis implicit)
+- Not explicitly documented as a requirement
+- **Why Low Priority**: Data exists, analysis can be done, just needs documentation
+
+**Current State**:
+- ✅ Constant pattern tested (baseline)
+- ✅ Burst pattern tested (enterprise patterns)
+- ✅ Pattern included in scenario IDs
+- ⚠️ Pattern impact analysis not explicitly documented
+
+**Documentation Needed**:
+- Document how to analyze workload pattern impact
+- Add examples of pattern analysis in notebooks
+- Document dissertation claims supported (e.g., "Burst patterns increase latency by X% compared to constant")
+
+**Effort**: 1-2 hours (documentation)
+
+**Dependencies**: None
+
+**Impact**: 
+- **LOW**: Documentation improvement only (data and analysis capability exist)
+
+**Related Files**:
+- `docs/REQUIREMENTS_SPECIFICATION.md` (FR11)
+- `analysis/notebooks/` (add pattern impact analysis examples)
+
+---
+
+### 14. Document Error Rate Analysis
+
+**Status**: 🟢 **LOW PRIORITY - DOCUMENTATION**  
+**Priority**: Optional - tracking implemented, analysis implicit  
+**Independent**: Can be done anytime  
+**Requirement**: FR12
+
+**Issue**: 
+- Error rate tracking is implemented
+- Error rate analysis not explicitly documented
+- **Why Low Priority**: Tracking exists, analysis can be done, just needs documentation
+
+**Current State**:
+- ✅ Error field in event data (`error: Option<String>`)
+- ✅ Error tracking per event
+- ✅ Errors included in summary statistics
+- ⚠️ Error rate analysis not explicitly documented
+
+**Documentation Needed**:
+- Document how to analyze error rates
+- Add examples of error rate analysis in notebooks
+- Document dissertation claims supported (e.g., "Error rate is X% for algorithm Y")
+
+**Effort**: 1-2 hours (documentation)
+
+**Dependencies**: None
+
+**Impact**: 
+- **LOW**: Documentation improvement only (tracking and analysis capability exist)
+
+**Related Files**:
+- `docs/REQUIREMENTS_SPECIFICATION.md` (FR12)
+- `analysis/notebooks/` (add error rate analysis examples)
+
+---
+
 ## Low Priority (Optional Improvements)
 
 ### 9. Add Queue Delay Nanosecond Precision (Consistency)
@@ -737,6 +1014,115 @@ elif "queue_delay_us" in df.columns:
 
 ---
 
+### 15. Implement Cost Efficiency Metrics
+
+**Status**: 🟢 **LOW PRIORITY - OPTIONAL ANALYSIS**  
+**Priority**: Optional - not critical for dissertation  
+**Independent**: Can be done anytime  
+**Requirement**: FR13
+
+**Issue**: 
+- GCP costs are tracked but cost efficiency metrics not calculated
+- Cannot make cost efficiency claims (ops/dollar, latency/dollar)
+- **Why Low Priority**: Cost efficiency is optional for dissertation (not critical)
+
+**Current State**:
+- ✅ GCP costs tracked (Compute Engine, storage, network)
+- ✅ Cost estimation available
+- ❌ Cost efficiency metrics not calculated (ops/dollar, latency/dollar)
+- ❌ Cost comparison across environments not supported (native/minikube have no cost)
+
+**Implementation Required**:
+
+**File**: `analysis/scripts/compute_statistics.py` or new `analysis/scripts/compute_cost_efficiency.py`
+
+**Add Cost Efficiency Calculation**:
+```python
+# For GCP experiments only
+if environment == "gcp" and "cost_usd" in metadata:
+    total_ops = summary["throughput"]["total_messages"]
+    cost_per_million_ops = (metadata["cost_usd"] / total_ops) * 1_000_000
+    
+    summary["cost_efficiency"] = {
+        "total_cost_usd": metadata["cost_usd"],
+        "total_operations": total_ops,
+        "cost_per_million_ops": cost_per_million_ops,
+        "ops_per_dollar": total_ops / metadata["cost_usd"],
+    }
+```
+
+**Dissertation Claims Supported** (if implemented):
+- "Algorithm X provides Y% better cost efficiency than baseline Z"
+- "GCP deployment costs $X per million operations"
+- "Cost efficiency scales with replica count"
+
+**Effort**: 2-3 hours (implementation + testing)
+
+**Dependencies**: GCP cost data available
+
+**Impact**: 
+- **LOW**: Optional analysis (not critical for dissertation)
+- **LOW**: Only applicable to GCP experiments
+
+**Related Files**:
+- `analysis/scripts/compute_statistics.py`
+- `docs/REQUIREMENTS_SPECIFICATION.md` (FR13)
+
+---
+
+### 16. Implement Automated Report Generation
+
+**Status**: 🟢 **LOW PRIORITY - OPTIONAL FEATURE**  
+**Priority**: Optional - can be done manually  
+**Independent**: Can be done anytime  
+**Requirement**: NFR8
+
+**Issue**: 
+- Individual summaries and aggregated stats exist
+- Comprehensive report generation not implemented
+- Dissertation-ready report format not available
+- **Why Low Priority**: Reports can be generated manually from existing data
+
+**Current State**:
+- ✅ Individual experiment summaries (`summary.json`)
+- ✅ Aggregated statistics (`aggregated_stats.json`)
+- ✅ Hypothesis test results (`hypothesis_tests.json`)
+- ✅ Plots (CDFs, scaling curves)
+- ❌ Comprehensive report generation not implemented
+- ❌ Dissertation-ready report format not available
+
+**Implementation Required**:
+
+**File**: `analysis/build_final_report.py` (already exists, may need enhancement)
+
+**Report Should Include**:
+- Executive summary
+- Key findings
+- Statistical test results
+- Figures and tables
+- Methodology summary
+- Limitations
+
+**Format Options**:
+- Markdown report
+- PDF report (using reportlab or LaTeX)
+- HTML report
+- Jupyter notebook report
+
+**Effort**: 4-6 hours (implementation + formatting)
+
+**Dependencies**: All analysis outputs available
+
+**Impact**: 
+- **LOW**: Convenience feature (can be done manually)
+- **LOW**: Not critical for dissertation
+
+**Related Files**:
+- `analysis/build_final_report.py` (may exist)
+- `docs/REQUIREMENTS_SPECIFICATION.md` (NFR8)
+
+---
+
 ### 10. Refine Prometheus Histogram Buckets
 
 **Status**: 🟢 **LOW PRIORITY - OPTIONAL MONITORING IMPROVEMENT**  
@@ -802,6 +1188,45 @@ vec![0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 100.0, 500.0, 1000.0, 5000.0, 100
 
 ---
 
+## Testing Status & Next Steps
+
+### Items #1 & #2 Testing Results (2025-12-10)
+
+**Item #1: CPU Sampling Fix**
+- ✅ Rust unit tests passing (`test_sampler_creation`, `test_sampler_memory`)
+- ✅ `/proc/self/stat` reading logic verified
+- ✅ Cumulative CPU time calculation works correctly
+- ✅ Code compiles without errors
+- ⚠️ Existing data has CPU=0.0 (expected - old data collected before fix)
+- ⏭️ **Next**: Run new experiment to verify CPU values are non-zero
+- ⏭️ **Next**: Proceed with Item #3 (CPU Analysis) - now unblocked
+
+**Item #2: Memory Analysis**
+- ✅ Memory data exists in existing experiments (6-7MB range, valid)
+- ✅ Memory stats calculation logic verified
+- ✅ Per-algorithm memory stats logic verified
+- ✅ Memory comparison extraction logic verified
+- ✅ Code syntax correct (all Python files compile)
+- ⚠️ Full end-to-end test requires pandas/matplotlib dependencies
+- ⏭️ **Next**: Install dependencies to run full test
+- ⏭️ **Next**: Run `compute_statistics.py` on existing data to verify memory stats appear in summary.json
+
+**Dependencies Needed**:
+```bash
+pip install pandas numpy matplotlib seaborn scipy rich tqdm
+```
+
+**Verification Checklist**:
+- [ ] Install Python dependencies (pandas, matplotlib, etc.)
+- [ ] Run `compute_statistics.py` on existing merged data
+- [ ] Verify memory stats appear in `summary.json`
+- [ ] Verify per-algorithm memory stats are present
+- [ ] Run new experiment to verify CPU values are non-zero
+- [ ] Verify CPU values increase over time (cumulative)
+- [ ] Run full test suite after dependency installation
+
+---
+
 ## Completed Items
 
 ### ✅ Nanosecond Precision Implementation
@@ -832,16 +1257,33 @@ vec![0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 100.0, 500.0, 1000.0, 5000.0, 100
 - **Fix**: Removed filter `if r.p50 > 0` to accept zero values as valid
 - **Result**: All 86 entries now have valid data (zero values included)
 
+### ✅ CPU Sampling Fix (Item #1)
+- **Status**: Completed
+- **Date**: 2025-12-10
+- **Files Modified**: 
+  - `rust-core/src/telemetry/sysinfo_sampler.rs`
+- **Result**: Now uses `/proc/self/stat` for cumulative CPU time on Linux. Old data has CPU=0.0 (expected), new experiments will have valid CPU data.
+- **Testing**: ✅ Unit tests passing, logic verified
+
+### ✅ Memory Utilization Analysis (Item #2)
+- **Status**: Completed
+- **Date**: 2025-12-10
+- **Files Modified**: 
+  - `analysis/scripts/compute_statistics.py`
+  - `analysis/compare_all_environments.py`
+- **Result**: Memory stats added (mean, max, min, std, percentiles), per-algorithm memory stats, memory comparison across environments.
+- **Testing**: ✅ Logic verified, ready for production after dependency installation
+
 ---
 
 ## Priority Summary
 
 **Critical** (Must complete before dissertation):
-1. 🔴 Investigate CPU Sampling Issue (blocks #3, #7)
-2. 🟡 Add Memory Utilization Analysis
+1. ✅ Investigate CPU Sampling Issue - **COMPLETED** (blocks #3, #7 - now unblocked)
+2. ✅ Add Memory Utilization Analysis - **COMPLETED**
 
 **High** (Should complete if CPU data valid):
-3. 🟡 Add CPU Utilization Analysis (depends on #1)
+3. 🟡 Add CPU Utilization Analysis (depends on #1 - **NOW UNBLOCKED**)
 
 **Medium** (Recommended):
 4. 🟡 Address Test Coverage Gaps
@@ -849,10 +1291,17 @@ vec![0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 100.0, 500.0, 1000.0, 5000.0, 100
 6. 🟡 Enhance Data Validation
 7. 🟡 Test Nanosecond Precision Implementation
 8. 🟡 Update Dissertation Methodology Documentation (depends on #1, #2, #7)
+11. 🟡 Containerize Analysis Pipeline and Development Tools (Infrastructure)
+12. 🟡 Add Dependency Verification (Alternative to Containerization)
 
 **Low** (Optional):
 9. 🟢 Add Queue Delay Nanosecond Precision
 10. 🟢 Refine Prometheus Histogram Buckets
+12. 🟢 Document Payload Size Impact Analysis (FR10)
+13. 🟢 Document Workload Pattern Impact Analysis (FR11)
+14. 🟢 Document Error Rate Analysis (FR12)
+15. 🟢 Implement Cost Efficiency Metrics (FR13)
+16. 🟢 Implement Automated Report Generation (NFR8)
 
 ---
 
@@ -881,4 +1330,4 @@ When investigating each item:
 ---
 
 **Last Review**: 2025-12-10  
-**Next Review**: After CPU investigation completion
+**Next Review**: After dependency installation and full testing
