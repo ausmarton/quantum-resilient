@@ -6,6 +6,10 @@ This document tracks all outstanding work items identified across the codebase, 
 
 **Last Updated**: 2025-12-10
 
+**Recent Additions**:
+- Item #18: Design and Execute Smoke Benchmark Test (2025-12-10)
+- Item #19: Remove Backward Compatibility for Microseconds (2025-12-10)
+
 ---
 
 ## Work Order & Dependencies
@@ -32,7 +36,12 @@ This document tracks all outstanding work items identified across the codebase, 
 **Can be done anytime:**
 - Item #11: Containerize Analysis Pipeline and Development Tools
 
-### Phase 5: Optional Improvements
+### Phase 5: Data Re-collection & Cleanup
+**Sequential:**
+- Item #18: Design and Execute Smoke Benchmark Test (prerequisite for full re-run)
+- Item #19: Remove Backward Compatibility for Microseconds (after full re-run with nanosecond precision)
+
+### Phase 6: Optional Improvements
 **Can be done anytime:**
 - Item #9: Add Queue Delay Nanosecond Precision
 - Item #10: Refine Prometheus Histogram Buckets
@@ -1554,3 +1563,414 @@ When investigating each item:
 3. ✅ All changes must comply with [REQUIREMENTS_SPECIFICATION.md](docs/REQUIREMENTS_SPECIFICATION.md)
 4. ✅ Impact analysis must be performed before making changes
 5. ✅ Documentation must be updated when changes are made
+
+---
+
+## Data Re-collection & Cleanup
+
+### 18. Review, Enhance, and Validate Smoke Benchmark Test
+
+**Status**: 🟡 **PENDING - HIGH PRIORITY BEFORE FULL RE-RUN**  
+**Priority**: High - Must complete before full-scale re-run  
+**Independent**: Can be done anytime, but should precede Item #19  
+**Blocks**: Item #19 (Remove Backward Compatibility)
+
+**Problem Statement**: 
+Before executing the full-scale benchmark re-run (which will take hours/days), we need to review and enhance the existing smoke test capability to ensure it:
+1. Validates all environments (native, minikube, GCP) work correctly
+2. Validates all experiment types (constant, burst, scaling) execute properly
+3. Produces nanosecond-precision data suitable for designing/implementing/validating analysis pipeline
+4. Validates all analysis pipeline components work with new nanosecond-precision data
+5. Validates data collection captures all required telemetry correctly
+6. Validates the end-to-end workflow from experiment execution to analysis produces valid results
+7. Ensures compliance with REQUIREMENTS_SPECIFICATION.md before production runs
+
+**Why Critical**: 
+- Full-scale benchmark runs take hours/days and consume significant resources
+- Discovering issues after full-scale runs wastes time and resources
+- Smoke test validates the entire pipeline before committing to long runs
+- Smoke test provides nanosecond-precision data needed to design/validate analysis pipeline
+- Ensures compliance with REQUIREMENTS_SPECIFICATION.md before production runs
+
+**Current State**:
+- ✅ Basic smoke test scripts exist (`tests/smoke/test_smoke_*.sh`) for all environments
+- ✅ Smoke test support in scenario generation (`orchestration/generate_scenarios.py`):
+  - `smoke_test` parameter reduces scale (algorithms, payload sizes, rates, runs, duration)
+  - Sets duration to 5 seconds
+  - Restricts to subset of algorithms (rsa2048, kyber512, dilithium2, hybrid_kyber_dilithium)
+  - Uses reduced parameters (payload_size=256, rate=50, runs=1)
+- ✅ Individual smoke scenario files exist (`scenarios/*_smoke.yaml`)
+- ✅ Basic validation checks for `latency_ns` field (nanosecond precision)
+- ⚠️ **GAPS IDENTIFIED**:
+  - Smoke test doesn't cover all experiment types (missing burst pattern, scaling)
+  - Smoke test doesn't validate analysis pipeline end-to-end
+  - Smoke test doesn't produce comprehensive data for analysis pipeline design/validation
+  - Smoke test doesn't validate cross-environment comparison capability
+  - Smoke test doesn't validate classical vs PQC comparison capability
+  - Smoke test doesn't validate scaling behavior
+  - Smoke test coverage not validated against REQUIREMENTS_SPECIFICATION.md
+  - No unified smoke test execution script that runs across all environments systematically
+  - No smoke test validation script that checks analysis pipeline compatibility
+
+**Expected Outcome**:
+- ✅ Smoke test reviewed and enhanced to cover all aspects of full-scale benchmark
+- ✅ Smoke test executes in <10 minutes per environment (total <30 minutes)
+- ✅ Smoke test produces valid raw data (JSONL) with nanosecond precision (`latency_ns` field)
+- ✅ Smoke test data validates successfully through analysis pipeline
+- ✅ Smoke test demonstrates all experiment types work correctly (constant, burst, scaling)
+- ✅ Smoke test validates cross-environment comparison capability (native vs minikube vs GCP)
+- ✅ Smoke test validates classical vs PQC comparison capability (RSA vs Kyber vs Dilithium)
+- ✅ Smoke test validates scaling behavior (minikube + GCP with replica scaling)
+- ✅ Smoke test validates burst pattern execution
+- ✅ Smoke test produces data suitable for designing/implementing/validating analysis pipeline
+- ✅ All REQUIREMENTS_SPECIFICATION.md capabilities verified
+
+**Smoke Test Design Requirements** (to be validated/enhanced):
+
+**Current Coverage** (from existing implementation):
+- **Algorithms**: 4 algorithms (rsa2048, kyber512, dilithium2, hybrid_kyber_dilithium)
+- **Payload sizes**: 1 size (256B)
+- **Workload rates**: 1 rate (50 msg/s)
+- **Workload patterns**: Constant only (burst missing)
+- **Duration**: 5 seconds
+- **Runs**: 1 run per configuration
+- **Environments**: All 3 (native, minikube, GCP) - basic tests exist
+- **Scaling**: Not covered in smoke test mode
+- **Total smoke test experiments**: ~4-8 experiments (very minimal)
+
+**Enhanced Coverage Needed** (to be implemented):
+- **Algorithms**: 3-4 representative (1 classical baseline, 2-3 PQC)
+  - Required: RSA-2048 (classical), Kyber-512 (PQC), Dilithium-2 (PQC)
+  - Optional: Hybrid (if time permits)
+- **Payload sizes**: 2 sizes (smallest + one larger)
+  - Required: 256B (minimal), 1024B (common)
+- **Workload rates**: 2 rates (low + medium)
+  - Required: 100 msg/s (baseline), 500 msg/s (moderate load)
+- **Workload patterns**: Both constant and burst
+  - Constant: Baseline pattern (already supported)
+  - Burst: One burst pattern experiment (needs to be added)
+- **Duration**: 5-10 seconds (current: 5 seconds is good)
+- **Runs**: 1-2 runs per configuration (current: 1 is acceptable)
+- **Environments**: All 3 (native, minikube, GCP) - already supported
+- **Scaling**: 1-2 scaling experiments per environment that supports it
+  - Minikube: 1 scaling test (e.g., replicas 1→2) - needs to be added
+  - GCP: 1 scaling test (e.g., replicas 1→2) - needs to be added
+- **Total smoke test experiments**: ~15-25 experiments (vs 1,458 full-scale)
+
+**Enhanced Smoke Test Configuration** (to be implemented):
+```yaml
+# Update orchestration/generate_scenarios.py smoke_test mode to support:
+smoke_test_enhancements:
+  # Expand algorithms (already supports rsa2048, kyber512, dilithium2, hybrid)
+  # Expand payload sizes: [256, 1024]  # Currently only [256]
+  # Expand rates: [100, 500]  # Currently only [50]
+  # Add burst pattern support (currently missing)
+  # Add scaling experiment support (currently missing)
+
+# Example enhanced smoke test scenarios to generate:
+# - Constant pattern: rsa2048, kyber512, dilithium2 with p256/p1024, r100/r500
+# - Burst pattern: rsa2048 with p1024, r500, burst config
+# - Scaling: kyber512 with p1024, r500, replicas [1, 2] (minikube + GCP)
+```
+
+**Note**: The existing `orchestration/generate_scenarios.py` smoke test mode needs to be enhanced to support burst patterns and scaling experiments. The current implementation only supports constant pattern with minimal parameters.
+
+**Implementation Plan**:
+
+1. **Review existing smoke test implementation**
+   - Review `tests/smoke/test_smoke_*.sh` scripts - assess current coverage
+   - Review `orchestration/generate_scenarios.py` smoke test mode - assess limitations
+   - Review `scenarios/*_smoke.yaml` files - assess coverage
+   - Identify gaps in coverage (burst patterns, scaling, analysis pipeline validation)
+
+2. **Enhance smoke test scenario generation**
+   - Update `orchestration/generate_scenarios.py` to support:
+     - Burst pattern experiments in smoke test mode
+     - Scaling experiments in smoke test mode (minikube + GCP)
+     - Multiple algorithms for comparison (classical vs PQC)
+     - Multiple payload sizes (at least 2: minimal + one larger)
+     - Multiple rates (at least 2: low + medium)
+   - Ensure smoke test produces data suitable for analysis pipeline design/validation
+
+3. **Enhance smoke test execution scripts** (`tests/smoke/test_smoke_*.sh`)
+   - Update to run comprehensive smoke test scenarios (not just single algorithm)
+   - Add validation for burst pattern experiments
+   - Add validation for scaling experiments (where applicable)
+   - Ensure all environments produce nanosecond-precision data
+
+4. **Create unified smoke test execution script** (`scripts/run_smoke_test.sh`)
+   - Execute smoke tests in all environments sequentially
+   - Use enhanced scenario generation with comprehensive coverage
+   - Collect results from all environments
+   - Validate data collection succeeded
+   - Report summary of execution
+
+5. **Create smoke test validation script** (`scripts/validate_smoke_test.sh`)
+   - Verify all expected experiments completed
+   - Verify raw data files exist and are non-empty
+   - Verify data has nanosecond precision (`latency_ns` field present, no `latency_us`-only data)
+   - Run analysis pipeline on smoke test data:
+     - Verify `compute_statistics.py` processes smoke test data successfully
+     - Verify summaries generated successfully
+     - Verify aggregation works (`aggregate_results.py`)
+   - Verify cross-environment comparison possible (native vs minikube vs GCP)
+   - Verify classical vs PQC comparison possible (RSA vs Kyber vs Dilithium)
+   - Verify scaling analysis possible (replica scaling in minikube + GCP)
+   - Verify burst pattern analysis possible
+   - Validate against REQUIREMENTS_SPECIFICATION.md capabilities
+
+6. **Document smoke test results** (`docs/reference/smoke-test-results.md`)
+   - Document execution time per environment
+   - Document any issues encountered
+   - Document validation results
+   - Document compliance with REQUIREMENTS_SPECIFICATION.md
+   - Document data quality (nanosecond precision verified)
+
+7. **Update documentation**
+   - Add/update smoke test guide to `docs/guides/smoke-test.md`
+   - Update full-scale run guide to reference smoke test as prerequisite
+   - Update REQUIREMENTS_SPECIFICATION.md if gaps found
+
+**Testing Requirements**:
+- [ ] Smoke test executes successfully in native environment (<5 minutes)
+- [ ] Smoke test executes successfully in minikube environment (<5 minutes)
+- [ ] Smoke test executes successfully in GCP environment (<10 minutes)
+- [ ] All smoke test experiments produce valid raw data (JSONL)
+- [ ] All raw data files have nanosecond precision (latency_ns field present)
+- [ ] Analysis pipeline processes smoke test data successfully
+- [ ] Summaries generated for all smoke test experiments
+- [ ] Aggregation works with smoke test data
+- [ ] Cross-environment comparison validated (native vs minikube vs GCP)
+- [ ] Classical vs PQC comparison validated (RSA vs Kyber vs Dilithium)
+- [ ] Scaling analysis validated (replica scaling works)
+- [ ] Burst pattern validated (burst experiments produce expected patterns)
+- [ ] All REQUIREMENTS_SPECIFICATION.md capabilities verified
+
+**Acceptance Criteria**:
+- [ ] Smoke test completes in <30 minutes total (all environments)
+- [ ] 100% of smoke test experiments produce valid data
+- [ ] 100% of smoke test data validates through analysis pipeline
+- [ ] All experiment types validated (constant, burst, scaling)
+- [ ] All environments validated (native, minikube, GCP)
+- [ ] All analysis capabilities validated (comparisons, aggregations)
+- [ ] No blocking issues found that would prevent full-scale run
+- [ ] Documentation updated with smoke test guide
+
+**Risk Assessment**:
+- **High Risk**: Smoke test might miss issues that only appear at scale
+  - **Mitigation**: Ensure smoke test covers all code paths and experiment types
+- **High Risk**: Smoke test might take longer than expected
+  - **Mitigation**: Use very short durations (5 seconds) and minimal runs (1-2)
+- **Medium Risk**: GCP smoke test might incur costs
+  - **Mitigation**: Use minimal resources, single-node cluster, short duration
+- **Medium Risk**: Smoke test might not catch environment-specific issues
+  - **Mitigation**: Ensure smoke test runs in all three environments
+- **Low Risk**: Smoke test configuration might be incomplete
+  - **Mitigation**: Review against REQUIREMENTS_SPECIFICATION.md and full experiment matrix
+
+**Dependencies**: 
+- None (can be done immediately)
+
+**Effort**: 4-6 hours (design + implementation + execution + validation + documentation)
+
+**Impact**:
+- **HIGH**: Prevents wasted time/resources on full-scale runs with broken pipeline
+- **HIGH**: Validates entire workflow before production runs
+- **HIGH**: Ensures compliance with REQUIREMENTS_SPECIFICATION.md
+- **MEDIUM**: Provides quick feedback loop for development
+
+**Related Files**:
+- ✅ `tests/smoke/test_smoke_native.sh` - Existing native smoke test (to be reviewed/enhanced)
+- ✅ `tests/smoke/test_smoke_minikube.sh` - Existing minikube smoke test (to be reviewed/enhanced)
+- ✅ `tests/smoke/test_smoke_gcp.sh` - Existing GCP smoke test (to be reviewed/enhanced)
+- ✅ `orchestration/generate_scenarios.py` - Scenario generation (has smoke_test parameter, needs enhancement)
+- ✅ `scenarios/*_smoke.yaml` - Individual smoke scenarios (to be reviewed)
+- ✅ `orchestration/experiment_matrix.yaml` - Full experiment matrix (reference)
+- ⏭️ `scripts/run_smoke_test.sh` - To be created (unified execution script)
+- ⏭️ `scripts/validate_smoke_test.sh` - To be created (comprehensive validation)
+- ⏭️ `docs/guides/smoke-test.md` - Smoke test guide (to be created/updated)
+- ✅ `docs/guides/data-collection.md` - Full-scale guide (to be updated with smoke test reference)
+- ✅ `docs/REQUIREMENTS_SPECIFICATION.md` - Requirements to validate against
+- ✅ `analysis/scripts/compute_statistics.py` - Analysis pipeline (to validate with smoke test data)
+- ✅ `scripts/generate_missing_summaries.sh` - Summary generation (to validate)
+
+---
+
+### 19. Remove Backward Compatibility for Microseconds
+
+**Status**: 🟡 **PENDING - AFTER FULL RE-RUN**  
+**Priority**: Medium - Code cleanup after data re-collection  
+**Depends on**: Item #18 (Smoke Test), Full-scale re-run with nanosecond precision  
+**Blocks**: None
+
+**Problem Statement**: 
+After re-running all experiments with nanosecond precision, the codebase will no longer need backward compatibility for the old microsecond-only data format. The backward compatibility code added in Item #4 should be removed to:
+1. Simplify codebase maintenance
+2. Remove technical debt
+3. Ensure all future data uses nanosecond precision
+4. Reduce code complexity in analysis scripts
+
+**Why Important**: 
+- Reduces code complexity and maintenance burden
+- Ensures consistency (all data uses nanosecond precision)
+- Prevents accidental use of old data format
+- Clean codebase after migration to nanosecond precision
+
+**Current State**:
+- ✅ Backward compatibility code exists in `analysis/scripts/compute_statistics.py`
+- ✅ Code handles both `latency_ns` (new) and `latency_us` (old) formats
+- ✅ Code converts `latency_us` to `latency_ns` for consistency
+- ✅ Code adds `_note` field indicating legacy format
+- ⚠️ After full re-run, all data will have `latency_ns`, making backward compatibility unnecessary
+- ⚠️ Old data with `latency_us` only will be archived/replaced
+
+**Expected Outcome**:
+- ✅ All backward compatibility code removed from `compute_statistics.py`
+- ✅ Code only accepts `latency_ns` format (raises error if missing)
+- ✅ Code no longer converts `latency_us` to `latency_ns`
+- ✅ Code no longer adds `_note` field for legacy format
+- ✅ All analysis scripts updated to require nanosecond precision
+- ✅ Documentation updated to reflect nanosecond-only requirement
+- ✅ Validation scripts updated to check for nanosecond precision
+
+**Implementation Plan**:
+
+1. **Verify all data uses nanosecond precision**
+   - Run validation script to confirm no `latency_us`-only data exists
+   - Archive old microsecond-only data if needed
+   - Confirm all new data has `latency_ns` field
+
+2. **Remove backward compatibility from `compute_statistics.py`**
+   - Remove `latency_us` → `latency_ns` conversion logic
+   - Remove `_note` field addition for legacy format
+   - Update error message to require `latency_ns` only
+   - Remove fallback logic in per-algorithm and per-operation stats
+
+3. **Update other analysis scripts** (if any use backward compatibility)
+   - Check `analysis/scripts/merge_jsonl.py` for backward compatibility
+   - Check `analysis/aggregate_results.py` for backward compatibility
+   - Update any scripts that handle latency data
+
+4. **Update validation scripts**
+   - Update `scripts/validate_data_integrity.sh` to require `latency_ns`
+   - Update `scripts/validate_data_quality.sh` to require `latosecond precision`
+   - Add checks to reject `latency_us`-only data
+
+5. **Update documentation**
+   - Update `docs/REQUIREMENTS_SPECIFICATION.md` to reflect nanosecond-only requirement
+   - Update analysis documentation to remove references to microsecond format
+   - Update data collection guides to emphasize nanosecond precision
+
+6. **Test changes**
+   - Run analysis pipeline on new nanosecond-precision data
+   - Verify all analysis scripts work correctly
+   - Verify validation scripts reject old format
+   - Run smoke test to ensure nothing breaks
+
+**Code Changes**:
+
+**File**: `analysis/scripts/compute_statistics.py`
+
+**Remove backward compatibility** (lines ~278-285):
+```python
+# OLD CODE (to be removed):
+# Latency stats - handle both nanosecond precision (new) and microsecond precision (old) formats
+if "latency_ns" in df.columns:
+    # New format: nanosecond precision
+    df["latency_us"] = df["latency_ns"] / 1000.0
+    summary["latency"] = compute_basic_stats(df["latency_us"])
+    summary["latency_ns"] = compute_basic_stats(df["latency_ns"])
+elif "latency_us" in df.columns:
+    # Old format: microsecond precision only (backward compatibility)
+    df["latency_ns"] = df["latency_us"] * 1000.0
+    summary["latency"] = compute_basic_stats(df["latency_us"])
+    summary["latency_ns"] = compute_basic_stats(df["latency_ns"])
+    summary["_note"] = "Data in legacy microsecond format - latency_ns is approximate"
+else:
+    raise ValueError("Missing required column: latency_ns or latency_us...")
+
+# NEW CODE (after removal):
+# Latency stats - require nanosecond precision format
+if "latency_ns" not in df.columns:
+    raise ValueError("Missing required column: latency_ns. Data must be in nanosecond precision format.")
+
+# Convert nanoseconds to microseconds for analysis
+df["latency_us"] = df["latency_ns"] / 1000.0
+summary["latency"] = compute_basic_stats(df["latency_us"])
+summary["latency_ns"] = compute_basic_stats(df["latency_ns"])
+```
+
+**Remove backward compatibility from per-algorithm stats** (lines ~378-384):
+```python
+# OLD CODE (to be removed):
+# Handle both nanosecond (new) and microsecond (old) formats
+if "latency_ns" in algo_df.columns:
+    algo_df = algo_df.copy()
+    algo_df["latency_us"] = algo_df["latency_ns"] / 1000.0
+    algo_stats["latency"] = compute_basic_stats(algo_df["latency_us"])
+elif "latency_us" in algo_df.columns:
+    # Old format: backward compatibility
+    algo_df = algo_df.copy()
+    algo_df["latency_ns"] = algo_df["latency_us"] * 1000.0
+    algo_stats["latency"] = compute_basic_stats(algo_df["latency_us"])
+else:
+    raise ValueError(f"Missing latency_ns or latency_us column for algorithm {algo}")
+
+# NEW CODE (after removal):
+# Require nanosecond precision
+if "latency_ns" not in algo_df.columns:
+    raise ValueError(f"Missing latency_ns column for algorithm {algo}")
+
+algo_df = algo_df.copy()
+algo_df["latency_us"] = algo_df["latency_ns"] / 1000.0
+algo_stats["latency"] = compute_basic_stats(algo_df["latency_us"])
+```
+
+**Remove backward compatibility from per-operation stats** (similar changes)
+
+**Testing Requirements**:
+- [ ] Verify all current data has `latency_ns` field (no `latency_us`-only data)
+- [ ] Run analysis pipeline on nanosecond-precision data
+- [ ] Verify analysis scripts reject `latency_us`-only data with clear error
+- [ ] Verify validation scripts check for nanosecond precision
+- [ ] Run smoke test to ensure nothing breaks
+- [ ] Verify documentation updated correctly
+
+**Acceptance Criteria**:
+- [ ] All backward compatibility code removed
+- [ ] Code only accepts `latency_ns` format
+- [ ] Clear error messages when `latency_ns` missing
+- [ ] All analysis scripts updated
+- [ ] All validation scripts updated
+- [ ] Documentation updated
+- [ ] Smoke test passes with new code
+
+**Risk Assessment**:
+- **High Risk**: Accidentally removing code before all data is re-collected
+  - **Mitigation**: Only proceed after full re-run complete and verified
+- **Medium Risk**: Missing some backward compatibility code
+  - **Mitigation**: Search codebase for `latency_us` references and review all
+- **Low Risk**: Breaking analysis pipeline
+  - **Mitigation**: Run smoke test and validation scripts before and after changes
+
+**Dependencies**: 
+- Item #18 (Smoke Test) - Should validate before full re-run
+- Full-scale re-run with nanosecond precision - Must complete first
+
+**Effort**: 2-3 hours (code removal + testing + documentation)
+
+**Impact**:
+- **MEDIUM**: Reduces code complexity and maintenance burden
+- **MEDIUM**: Ensures consistency (all data uses nanosecond precision)
+- **LOW**: No functional impact (after re-run, all data will be nanosecond)
+
+**Related Files**:
+- `analysis/scripts/compute_statistics.py` - Main file to update
+- `analysis/scripts/merge_jsonl.py` - Check for backward compatibility
+- `analysis/aggregate_results.py` - Check for backward compatibility
+- `scripts/validate_data_integrity.sh` - Update validation
+- `scripts/validate_data_quality.sh` - Update validation
+- `docs/REQUIREMENTS_SPECIFICATION.md` - Update documentation
+- `docs/guides/data-collection.md` - Update documentation
+
+---
