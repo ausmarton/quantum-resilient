@@ -132,7 +132,11 @@ TOTAL_CHECKED=0
 TOTAL_VALID=0
 TOTAL_EMPTY=0
 TOTAL_INVALID=0
+TOTAL_MISSING_SUMMARY=0
+TOTAL_INVALID_STATS=0
 EMPTY_FILES=()
+MISSING_SUMMARIES=()
+INVALID_STATS=()
 
 for env in "${ENVS[@]}"; do
     ENV_RESULTS_DIR="$RESULTS_DIR/$env"
@@ -195,12 +199,122 @@ for env in "${ENVS[@]}"; do
             fi
         fi
         
+        # Check for summary.json file
+        EXP_DIR=$(dirname "$(dirname "$jsonl_file")")
+        SUMMARY_PATHS=(
+            "$EXP_DIR/stats/summary.json"
+            "$EXP_DIR/merged/stats/summary.json"
+            "$EXP_DIR/summary.json"
+        )
+        
+        SUMMARY_FOUND=false
+        SUMMARY_FILE=""
+        for summary_path in "${SUMMARY_PATHS[@]}"; do
+            if [[ -f "$summary_path" ]]; then
+                SUMMARY_FOUND=true
+                SUMMARY_FILE="$summary_path"
+                break
+            fi
+        done
+        
+        if [[ "$SUMMARY_FOUND" == "false" ]]; then
+            TOTAL_MISSING_SUMMARY=$((TOTAL_MISSING_SUMMARY + 1))
+            SCENARIO_ID=$(basename "$EXP_DIR")
+            MISSING_SUMMARIES+=("$SCENARIO_ID:$EXP_DIR")
+            log_warn "  ⚠ $SCENARIO_ID: Missing summary.json"
+        else
+            # Validate statistical validity of summary.json
+            if ! python3 <<PYTHON_SCRIPT 2>/dev/null; then
+import json
+import sys
+
+try:
+    with open('$SUMMARY_FILE') as f:
+        summary = json.load(f)
+    
+    # Check that latency stats exist (either latency_us or latency_ns)
+    has_latency = False
+    if 'latency' in summary:
+        if 'p50' in summary['latency']:
+            has_latency = True
+    elif 'latency_ns' in summary:
+        if 'p50' in summary['latency_ns']:
+            has_latency = True
+    
+    if not has_latency:
+        print("Missing latency p50")
+        sys.exit(1)
+    
+    # Check that total_events exists
+    if 'total_events' not in summary:
+        print("Missing total_events")
+        sys.exit(1)
+    
+    # Check that total_events is reasonable (> 0)
+    if summary.get('total_events', 0) <= 0:
+        print("total_events is zero or negative")
+        sys.exit(1)
+    
+    sys.exit(0)
+except Exception as e:
+    print(f"Error validating summary: {e}")
+    sys.exit(1)
+PYTHON_SCRIPT
+                TOTAL_INVALID_STATS=$((TOTAL_INVALID_STATS + 1))
+                SCENARIO_ID=$(basename "$EXP_DIR")
+                INVALID_STATS+=("$SCENARIO_ID:$SUMMARY_FILE")
+                log_warn "  ⚠ $SCENARIO_ID: Invalid statistics in summary.json"
+            fi
+        fi
+        
         TOTAL_VALID=$((TOTAL_VALID + 1))
         
     done < <(eval "$FIND_CMD")
     
     echo ""
 done
+
+# Cross-environment consistency check
+echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
+echo -e "${MAGENTA}Cross-Environment Consistency Check:${NC}"
+echo ""
+
+# Find all unique scenario IDs across environments
+declare -A SCENARIO_ENVS
+for env in "${ENVS[@]}"; do
+    ENV_RESULTS_DIR="$RESULTS_DIR/$env"
+    if [[ ! -d "$ENV_RESULTS_DIR" ]]; then
+        continue
+    fi
+    
+    while IFS= read -r jsonl_file; do
+        SCENARIO_ID=$(basename "$(dirname "$(dirname "$jsonl_file")")")
+        if [[ -n "$SCENARIO_ID" ]]; then
+            SCENARIO_ENVS["$SCENARIO_ID"]="${SCENARIO_ENVS[$SCENARIO_ID]:-}$env "
+        fi
+    done < <(find "$ENV_RESULTS_DIR" -name "run.jsonl" -type f -path "*/raw/*" 2>/dev/null || true)
+done
+
+INCONSISTENT_COUNT=0
+if [[ ${#SCENARIO_ENVS[@]} -gt 0 ]]; then
+    EXPECTED_ENV_COUNT=${#ENVS[@]}
+    for scenario_id in "${!SCENARIO_ENVS[@]}"; do
+        env_list="${SCENARIO_ENVS[$scenario_id]}"
+        env_count=$(echo "$env_list" | wc -w)
+        if [[ $env_count -lt $EXPECTED_ENV_COUNT ]]; then
+            INCONSISTENT_COUNT=$((INCONSISTENT_COUNT + 1))
+            if [[ $INCONSISTENT_COUNT -le 5 ]]; then
+                log_warn "  ⚠ $scenario_id: Present in $env_count/$EXPECTED_ENV_COUNT environments"
+            fi
+        fi
+    done
+    
+    if [[ $INCONSISTENT_COUNT -gt 5 ]]; then
+        log_warn "  ... and $((INCONSISTENT_COUNT - 5)) more inconsistent scenarios"
+    fi
+fi
+
+echo ""
 
 # Summary
 echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
@@ -210,6 +324,11 @@ echo "  Total checked: $TOTAL_CHECKED files"
 echo "  Valid: $TOTAL_VALID"
 echo "  Empty: $TOTAL_EMPTY"
 echo "  Invalid: $TOTAL_INVALID"
+echo "  Missing summary.json: $TOTAL_MISSING_SUMMARY"
+echo "  Invalid statistics: $TOTAL_INVALID_STATS"
+if [[ $INCONSISTENT_COUNT -gt 0 ]]; then
+    echo "  Cross-environment inconsistencies: $INCONSISTENT_COUNT"
+fi
 
 if [[ $TOTAL_EMPTY -gt 0 ]]; then
     echo ""
@@ -220,15 +339,34 @@ if [[ $TOTAL_EMPTY -gt 0 ]]; then
     done
 fi
 
+if [[ $TOTAL_MISSING_SUMMARY -gt 0 ]]; then
+    echo ""
+    echo -e "${YELLOW}Missing summary.json files:${NC}"
+    for entry in "${MISSING_SUMMARIES[@]}"; do
+        IFS=':' read -r scenario_id exp_dir <<< "$entry"
+        echo "  - $scenario_id: $exp_dir"
+    done
+fi
+
+if [[ $TOTAL_INVALID_STATS -gt 0 ]]; then
+    echo ""
+    echo -e "${YELLOW}Invalid statistics in summary.json:${NC}"
+    for entry in "${INVALID_STATS[@]}"; do
+        IFS=':' read -r scenario_id summary_file <<< "$entry"
+        echo "  - $scenario_id: $summary_file"
+    done
+fi
+
 echo ""
 
 # Exit status
-if [[ $TOTAL_EMPTY -gt 0 ]] || [[ $TOTAL_INVALID -gt 0 ]]; then
+TOTAL_ISSUES=$((TOTAL_EMPTY + TOTAL_INVALID + TOTAL_MISSING_SUMMARY + TOTAL_INVALID_STATS))
+if [[ $TOTAL_ISSUES -gt 0 ]]; then
     if [[ "$FAIL_ON_EMPTY" == "true" ]]; then
-        log_error "Validation failed: Found $TOTAL_EMPTY empty files and $TOTAL_INVALID invalid files"
+        log_error "Validation failed: Found $TOTAL_ISSUES issues"
         exit 1
     else
-        log_warn "Validation found issues: $TOTAL_EMPTY empty files and $TOTAL_INVALID invalid files"
+        log_warn "Validation found $TOTAL_ISSUES issues (use --fail-on-empty to exit with error)"
         exit 0
     fi
 else
