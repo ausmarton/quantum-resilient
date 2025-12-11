@@ -16,6 +16,7 @@ Usage:
 import argparse
 import json
 import sys
+import warnings
 from collections import defaultdict
 from pathlib import Path
 from typing import Optional
@@ -23,6 +24,8 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+# Don't suppress warnings - they're useful diagnostics for empty data
 
 # Publication-quality settings
 plt.rcParams.update({
@@ -65,32 +68,66 @@ ENV_LINESTYLES = {
 
 
 def load_latencies_from_jsonl(path: Path) -> Optional[np.ndarray]:
-    """Load latency values from merged JSONL file."""
+    """Load latency values from merged JSONL file.
+    
+    Returns:
+        numpy array of latency values in microseconds, or None if loading fails
+    """
     try:
         # Try parquet first
         parquet_path = path.parent / 'merged.parquet'
         if parquet_path.exists():
-            df = pd.read_parquet(parquet_path)
-            if 'latency_us' in df.columns:
-                return df['latency_us'].values
+            try:
+                df = pd.read_parquet(parquet_path)
+                # Prefer latency_ns (nanosecond precision), fall back to latency_us
+                if 'latency_ns' in df.columns:
+                    # Convert nanoseconds to microseconds
+                    return (df['latency_ns'].values / 1000.0)
+                elif 'latency_us' in df.columns:
+                    return df['latency_us'].values
+                else:
+                    print(f"  Warning: No latency column found in {parquet_path}", file=sys.stderr)
+                    return None
+            except Exception as e:
+                print(f"  Warning: Failed to read parquet {parquet_path}: {e}", file=sys.stderr)
         
         # Fall back to JSONL
         if not path.exists():
             return None
         
         latencies = []
+        missing_latency_ns = 0
+        missing_latency_us = 0
+        
         with open(path) as f:
-            for line in f:
+            for line_num, line in enumerate(f, 1):
                 try:
                     event = json.loads(line)
-                    if 'latency_us' in event:
+                    # Prefer latency_ns (nanosecond precision), fall back to latency_us
+                    if 'latency_ns' in event:
+                        # Convert nanoseconds to microseconds
+                        latencies.append(event['latency_ns'] / 1000.0)
+                    elif 'latency_us' in event:
                         latencies.append(event['latency_us'])
-                except json.JSONDecodeError:
+                    else:
+                        # Track missing columns for diagnostics
+                        if line_num == 1:  # Only warn on first line to avoid spam
+                            missing_latency_ns += 1
+                            missing_latency_us += 1
+                except json.JSONDecodeError as e:
+                    if line_num <= 3:  # Only show first few errors
+                        print(f"  Warning: JSON decode error at line {line_num} in {path}: {e}", file=sys.stderr)
                     continue
         
-        return np.array(latencies) if latencies else None
+        if latencies:
+            return np.array(latencies)
+        else:
+            # Provide diagnostic information
+            if missing_latency_ns > 0 and missing_latency_us > 0:
+                print(f"  Warning: No latency data found in {path} (missing both latency_ns and latency_us)", file=sys.stderr)
+            return None
     except Exception as e:
-        print(f"  Warning: Could not load {path}: {e}")
+        print(f"  Warning: Could not load {path}: {e}", file=sys.stderr)
         return None
 
 
@@ -129,7 +166,10 @@ def plot_combined_ecdf_by_algorithm(
         ax.set_xlabel('Latency (μs)')
         ax.set_ylabel('Cumulative Probability')
         ax.set_title(f'Latency ECDF: {algorithm}')
-        ax.legend(loc='lower right')
+        # Only add legend if there are labeled artists
+        handles, labels = ax.get_legend_handles_labels()
+        if labels:
+            ax.legend(loc='lower right')
         ax.set_xlim(left=0)
         ax.set_ylim(0, 1)
         
@@ -171,7 +211,10 @@ def plot_combined_ecdf_all_algorithms(
     ax.set_xlabel('Latency (μs)')
     ax.set_ylabel('Cumulative Probability')
     ax.set_title(f'Latency ECDF - All Algorithms ({environment.capitalize()})')
-    ax.legend(loc='lower right')
+    # Only add legend if there are labeled artists
+    handles, labels = ax.get_legend_handles_labels()
+    if labels:
+        ax.legend(loc='lower right')
     ax.set_xlim(left=0)
     ax.set_ylim(0, 1)
     
@@ -216,7 +259,10 @@ def plot_environment_comparison_panel(
         ax.set_ylim(0, 1)
         
         if idx == 2:
-            ax.legend(loc='lower right', fontsize=8)
+            # Only add legend if there are labeled artists
+            handles, labels = ax.get_legend_handles_labels()
+            if labels:
+                ax.legend(loc='lower right', fontsize=8)
     
     plt.suptitle('Latency Distribution by Environment', fontsize=14)
     plt.tight_layout()
@@ -294,7 +340,9 @@ def main():
     with open(args.index) as f:
         index = json.load(f)
     
-    print(f"Loaded index with {len(index.get('experiments', []))} experiments")
+    experiments = index.get('experiments', [])
+    total_experiments = len(experiments)
+    print(f"Loaded index with {total_experiments} experiments")
     
     # Organize data by algorithm -> environment -> list of latency arrays
     data: dict[str, dict[str, list[np.ndarray]]] = defaultdict(lambda: defaultdict(list))
@@ -302,8 +350,17 @@ def main():
         lambda: defaultdict(lambda: defaultdict(list))
     )
     
-    for entry in index.get('experiments', []):
+    # Track statistics for diagnostics
+    skipped_status = 0
+    skipped_missing_file = 0
+    skipped_no_data = 0
+    skipped_load_error = 0
+    loaded_successfully = 0
+    
+    for entry in experiments:
+        # Check status
         if entry.get('status') not in ['success', 'cached']:
+            skipped_status += 1
             continue
         
         output_dir = Path(entry['output_dir'])
@@ -313,17 +370,51 @@ def main():
         if not jsonl_path.exists():
             jsonl_path = output_dir / 'merged.jsonl'
         
+        # Check if file exists
+        if not jsonl_path.exists():
+            skipped_missing_file += 1
+            if skipped_missing_file <= 5:  # Only show first few
+                print(f"  Warning: Missing merged file for {entry.get('scenario_id', 'unknown')}: {jsonl_path}", file=sys.stderr)
+            continue
+        
         latencies = load_latencies_from_jsonl(jsonl_path)
         
-        if latencies is not None and len(latencies) > 0:
-            algorithm = entry['algorithm']
-            environment = entry['environment']
-            payload = entry['payload_size']
-            
-            data[algorithm][environment].append(latencies)
-            data_by_payload[payload][algorithm][environment].append(latencies)
+        if latencies is None:
+            skipped_load_error += 1
+            if skipped_load_error <= 5:  # Only show first few
+                print(f"  Warning: Failed to load latencies from {jsonl_path}", file=sys.stderr)
+            continue
+        
+        if len(latencies) == 0:
+            skipped_no_data += 1
+            continue
+        
+        # Successfully loaded data
+        algorithm = entry['algorithm']
+        environment = entry['environment']
+        payload = entry['payload_size']
+        
+        data[algorithm][environment].append(latencies)
+        data_by_payload[payload][algorithm][environment].append(latencies)
+        loaded_successfully += 1
     
-    print(f"Loaded latency data for {len(data)} algorithms")
+    # Print diagnostic summary
+    print(f"\nData loading summary:")
+    print(f"  Total experiments: {total_experiments}")
+    print(f"  Loaded successfully: {loaded_successfully}")
+    print(f"  Skipped (wrong status): {skipped_status}")
+    print(f"  Skipped (missing file): {skipped_missing_file}")
+    print(f"  Skipped (load error): {skipped_load_error}")
+    print(f"  Skipped (no data): {skipped_no_data}")
+    
+    if loaded_successfully == 0:
+        print("\n  ⚠️  WARNING: No data loaded! This may indicate:", file=sys.stderr)
+        print("     - Analysis pipeline failed for all experiments", file=sys.stderr)
+        print("     - Merged files are missing or empty", file=sys.stderr)
+        print("     - Data format issues (e.g., missing latency_ns column)", file=sys.stderr)
+        print("     - Path resolution issues in containerized environment", file=sys.stderr)
+    
+    print(f"\nLoaded latency data for {len(data)} algorithms")
     
     # Create output directory
     args.output.mkdir(parents=True, exist_ok=True)
@@ -367,7 +458,10 @@ def main():
     ax.set_xlabel('Latency (μs)')
     ax.set_ylabel('Cumulative Probability')
     ax.set_title('Complete Latency ECDF - All Algorithms and Environments')
-    ax.legend(loc='lower right', fontsize=7, ncol=2)
+    # Only add legend if there are labeled artists
+    handles, labels = ax.get_legend_handles_labels()
+    if labels:
+        ax.legend(loc='lower right', fontsize=7, ncol=2)
     ax.set_xlim(left=0)
     ax.set_ylim(0, 1)
     

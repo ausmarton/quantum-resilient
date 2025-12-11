@@ -84,8 +84,8 @@ while [[ $# -gt 0 ]]; do
     arg="$1"
     shift
     
-    # Check if this is a path argument (--input, --output, --input-dir, --output-dir, etc.)
-    if [[ "$arg" =~ ^--(input|output|input-dir|output-dir|data-dir|stats-dir|figures-dir)(=.*)?$ ]]; then
+    # Check if this is a path argument (--input, --output, --index, --matrix, etc.)
+    if [[ "$arg" =~ ^--(input|output|input-dir|output-dir|data-dir|stats-dir|figures-dir|index|matrix)(=.*)?$ ]]; then
         # This is a path argument
         if [[ "$arg" == *=* ]]; then
             # --arg=value format

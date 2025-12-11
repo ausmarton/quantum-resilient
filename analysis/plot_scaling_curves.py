@@ -16,11 +16,15 @@ Usage:
 import argparse
 import json
 import sys
+import warnings
 from collections import defaultdict
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+
+# Don't suppress warnings - they're useful diagnostics for empty data
+# Empty legend warnings indicate no data was loaded, which is a real issue to investigate
 
 # Publication-quality settings
 plt.rcParams.update({
@@ -77,14 +81,32 @@ def plot_throughput_vs_payload(
     # Group by algorithm -> environment -> payload -> throughput
     data: dict = defaultdict(lambda: defaultdict(dict))
     
+    entries_with_data = 0
+    entries_missing_throughput = 0
+    
     for entry in stats.get('aggregated', []):
         algo = entry['algorithm']
         env = entry['environment']
         payload = entry['payload_size']
-        throughput = entry['throughput']['mean']
-        throughput_std = entry['throughput']['std']
         
-        data[algo][env][payload] = (throughput, throughput_std)
+        # Check if throughput data exists
+        if 'throughput' not in entry:
+            entries_missing_throughput += 1
+            continue
+        
+        throughput = entry['throughput'].get('mean', 0)
+        throughput_std = entry['throughput'].get('std', 0)
+        
+        if throughput > 0:  # Only include non-zero throughput
+            data[algo][env][payload] = (throughput, throughput_std)
+            entries_with_data += 1
+    
+    if entries_missing_throughput > 0:
+        print(f"  Warning: {entries_missing_throughput} entries missing throughput data", file=sys.stderr)
+    
+    if len(data) == 0:
+        print("  Warning: No throughput data available for plotting", file=sys.stderr)
+        return
     
     # Plot per environment
     for env in ['native', 'minikube', 'gcp']:
@@ -109,7 +131,10 @@ def plot_throughput_vs_payload(
         ax.set_xlabel('Payload Size (bytes)')
         ax.set_ylabel('Throughput (ops/sec)')
         ax.set_title(f'Throughput vs Payload Size ({env.capitalize()})')
-        ax.legend(loc='upper right')
+        # Only add legend if there are labeled artists
+        handles, labels = ax.get_legend_handles_labels()
+        if labels:
+            ax.legend(loc='upper right')
         ax.set_xscale('log')
         
         plt.tight_layout()
@@ -141,7 +166,10 @@ def plot_throughput_vs_payload(
     ax.set_xlabel('Payload Size (bytes)')
     ax.set_ylabel('Throughput (ops/sec)')
     ax.set_title('Throughput Scaling with Payload Size')
-    ax.legend(loc='upper right', fontsize=7, ncol=2)
+    # Only add legend if there are labeled artists
+    handles, labels = ax.get_legend_handles_labels()
+    if labels:
+        ax.legend(loc='upper right', fontsize=7, ncol=2)
     ax.set_xscale('log')
     
     plt.tight_layout()
@@ -159,18 +187,36 @@ def plot_latency_vs_rate(
     # Group by algorithm -> environment -> rate -> latency
     data: dict = defaultdict(lambda: defaultdict(dict))
     
+    entries_with_data = 0
+    entries_missing_p95 = 0
+    
     for entry in stats.get('aggregated', []):
         algo = entry['algorithm']
         env = entry['environment']
         rate = entry['rate']
-        p95_mean = entry['p95']['mean']
-        p95_std = entry['p95']['std']
         
-        # Aggregate across payload sizes
-        if rate not in data[algo][env]:
-            data[algo][env][rate] = {'means': [], 'stds': []}
-        data[algo][env][rate]['means'].append(p95_mean)
-        data[algo][env][rate]['stds'].append(p95_std)
+        # Check if p95 data exists
+        if 'p95' not in entry:
+            entries_missing_p95 += 1
+            continue
+        
+        p95_mean = entry['p95'].get('mean', 0)
+        p95_std = entry['p95'].get('std', 0)
+        
+        if p95_mean > 0:  # Only include non-zero latency
+            # Aggregate across payload sizes
+            if rate not in data[algo][env]:
+                data[algo][env][rate] = {'means': [], 'stds': []}
+            data[algo][env][rate]['means'].append(p95_mean)
+            data[algo][env][rate]['stds'].append(p95_std)
+            entries_with_data += 1
+    
+    if entries_missing_p95 > 0:
+        print(f"  Warning: {entries_missing_p95} entries missing p95 latency data", file=sys.stderr)
+    
+    if len(data) == 0:
+        print("  Warning: No latency data available for plotting", file=sys.stderr)
+        return
     
     # Average across payload sizes
     for algo in data:
@@ -203,7 +249,10 @@ def plot_latency_vs_rate(
         ax.set_xlabel('Message Rate (msgs/sec)')
         ax.set_ylabel('p95 Latency (μs)')
         ax.set_title(f'Latency vs Message Rate ({env.capitalize()})')
-        ax.legend(loc='upper left')
+        # Only add legend if there are labeled artists
+        handles, labels = ax.get_legend_handles_labels()
+        if labels:
+            ax.legend(loc='upper left')
         ax.set_xscale('log')
         
         plt.tight_layout()
@@ -266,7 +315,10 @@ def plot_environment_scaling(
     ax.set_xlabel('Message Rate (msgs/sec)')
     ax.set_ylabel('Latency Ratio (Minikube / Native)')
     ax.set_title('Container Overhead: Minikube vs Native')
-    ax.legend(loc='upper left')
+    # Only add legend if there are labeled artists
+    handles, labels = ax.get_legend_handles_labels()
+    if labels:
+        ax.legend(loc='upper left')
     ax.set_xscale('log')
     
     # GCP vs Native
@@ -293,7 +345,10 @@ def plot_environment_scaling(
     ax.set_xlabel('Message Rate (msgs/sec)')
     ax.set_ylabel('Latency Ratio (GCP / Native)')
     ax.set_title('Cloud Overhead: GCP vs Native')
-    ax.legend(loc='upper left')
+    # Only add legend if there are labeled artists
+    handles, labels = ax.get_legend_handles_labels()
+    if labels:
+        ax.legend(loc='upper left')
     ax.set_xscale('log')
     
     plt.suptitle('Environment Overhead Scaling', fontsize=14)
@@ -353,7 +408,10 @@ def plot_classical_vs_pqc(
     ax.set_title('Classical vs Post-Quantum Cryptography Performance')
     ax.set_xticks(x + width)
     ax.set_xticklabels([a.replace('_', '\n') for a in classical + pqc], rotation=0)
-    ax.legend()
+    # Only add legend if there are labeled artists
+    handles, labels = ax.get_legend_handles_labels()
+    if labels:
+        ax.legend()
     
     # Add vertical line separating classical and PQC
     ax.axvline(x=len(classical) - 0.5, color='gray', linestyle='--', alpha=0.5)
@@ -384,7 +442,26 @@ def main():
         sys.exit(1)
     
     stats = load_aggregated_stats(stats_path)
-    print(f"Loaded aggregated stats with {len(stats.get('aggregated', []))} entries")
+    aggregated_entries = stats.get('aggregated', [])
+    print(f"Loaded aggregated stats with {len(aggregated_entries)} entries")
+    
+    if len(aggregated_entries) == 0:
+        print("\n  ⚠️  WARNING: No aggregated statistics found!", file=sys.stderr)
+        print("     This may indicate:", file=sys.stderr)
+        print("     - Analysis pipeline failed for all experiments", file=sys.stderr)
+        print("     - Summary files are missing or invalid", file=sys.stderr)
+        print("     - Aggregation script failed to process data", file=sys.stderr)
+        print("     - Data format issues preventing aggregation", file=sys.stderr)
+        print(f"     Stats file: {stats_path}", file=sys.stderr)
+    else:
+        # Count entries by environment and algorithm for diagnostics
+        by_env = defaultdict(int)
+        by_algo = defaultdict(int)
+        for entry in aggregated_entries:
+            by_env[entry.get('environment', 'unknown')] += 1
+            by_algo[entry.get('algorithm', 'unknown')] += 1
+        print(f"  By environment: {dict(by_env)}")
+        print(f"  By algorithm: {dict(by_algo)}")
     
     # Create output directory
     args.output.mkdir(parents=True, exist_ok=True)
