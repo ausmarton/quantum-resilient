@@ -75,6 +75,10 @@ final-results/
 **/stats/
 *.parquet
 
+# Legacy analysis directories (obsolete - replaced by results/ and final-results/)
+analysis/data/
+analysis/figures/
+
 # Experiment results (raw data and analysis outputs)
 # These are large and should be stored separately (e.g., GCS for GCP, local storage for native/minikube)
 results/

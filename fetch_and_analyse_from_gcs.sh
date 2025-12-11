@@ -171,12 +171,20 @@ if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" 2>/dev/nu
     log_warn "gcloud may not be authenticated. Run: gcloud auth login"
 fi
 
-# Check Python
-if ! command -v python3 &> /dev/null; then
-    log_error "Python 3 not found"
+# Determine Python command (use container wrapper if available, else system python3)
+CONTAINER_WRAPPER="$SCRIPT_DIR/scripts/lib/run-python-container.sh"
+USE_CONTAINER="${QR_USE_CONTAINER:-true}"
+
+if [[ "$USE_CONTAINER" == "true" ]] && [[ -f "$CONTAINER_WRAPPER" ]]; then
+    PYTHON_CMD="$CONTAINER_WRAPPER"
+    log_info "Using containerized Python environment"
+elif command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+    log_info "Using host Python: $(python3 --version)"
+else
+    log_error "python3 not found. Please install Python 3.10+ or use containerized environment"
     exit 1
 fi
-log_success "Python: $(python3 --version)"
 
 # =============================================================================
 # Step 2: Create output directories
@@ -296,7 +304,7 @@ if [[ ! -f "$OUT_DIR/merged/merged.jsonl" ]]; then
         
         # Validate JSONL format
         if [[ -n "$FIRST_LINE" ]]; then
-            if ! echo "$FIRST_LINE" | python3 -m json.tool >/dev/null 2>&1; then
+            if ! echo "$FIRST_LINE" | $PYTHON_CMD -m json.tool >/dev/null 2>&1; then
                 log_error "Invalid file (not valid JSONL): $(basename "$jsonl_file")"
                 log_error "  First line: ${FIRST_LINE:0:80}..."
                 INVALID_COUNT=$((INVALID_COUNT + 1))
@@ -342,7 +350,7 @@ else
         # Merge if needed
         if [[ ! -f "$OUT_DIR/merged/merged.jsonl" ]]; then
             log_info "Merging JSONL files..."
-            python3 "$SCRIPT_DIR/analysis/scripts/merge_jsonl.py" \
+            $PYTHON_CMD "$SCRIPT_DIR/analysis/scripts/merge_jsonl.py" \
                 --input "$OUT_DIR/raw" \
                 --output "$OUT_DIR/merged" 2>/dev/null || true
         fi
@@ -352,23 +360,23 @@ else
         [[ ! -f "$INPUT_FILE" ]] && INPUT_FILE="$OUT_DIR/merged/merged.jsonl"
         
         log_info "Computing statistics..."
-        python3 "$SCRIPT_DIR/analysis/scripts/compute_statistics.py" \
+        $PYTHON_CMD "$SCRIPT_DIR/analysis/scripts/compute_statistics.py" \
             --input "$INPUT_FILE" \
             --output "$OUT_DIR/stats" \
             --experiment-id "$EXP_ID" 2>/dev/null || \
-        python3 "$SCRIPT_DIR/analysis/scripts/compute_stats.py" \
+        $PYTHON_CMD "$SCRIPT_DIR/analysis/scripts/compute_stats.py" \
             --input "$INPUT_FILE" \
             --output "$OUT_DIR/stats" \
             --experiment-id "$EXP_ID" 2>/dev/null || true
         
         # Generate plots with cloud suffix
         log_info "Generating latency CDF plot..."
-        python3 "$SCRIPT_DIR/analysis/scripts/plot_ecdf.py" \
+        $PYTHON_CMD "$SCRIPT_DIR/analysis/scripts/plot_ecdf.py" \
             --input "$INPUT_FILE" \
             --output "$OUT_DIR/figures" \
             --experiment-id "$EXP_ID" \
             --suffix "_cloud" 2>/dev/null || \
-        python3 "$SCRIPT_DIR/analysis/scripts/plot_latency.py" \
+        $PYTHON_CMD "$SCRIPT_DIR/analysis/scripts/plot_latency.py" \
             --input "$INPUT_FILE" \
             --output "$OUT_DIR/figures" \
             --experiment-id "$EXP_ID" 2>/dev/null || true
@@ -379,12 +387,12 @@ else
         fi
         
         log_info "Generating throughput plot..."
-        python3 "$SCRIPT_DIR/analysis/scripts/plot_throughput.py" \
+        $PYTHON_CMD "$SCRIPT_DIR/analysis/scripts/plot_throughput.py" \
             --input "$INPUT_FILE" \
             --output "$OUT_DIR/figures" \
             --experiment-id "$EXP_ID" \
             --suffix "_cloud" 2>/dev/null || \
-        python3 "$SCRIPT_DIR/analysis/scripts/plot_throughput.py" \
+        $PYTHON_CMD "$SCRIPT_DIR/analysis/scripts/plot_throughput.py" \
             --input "$INPUT_FILE" \
             --output "$OUT_DIR/figures" \
             --experiment-id "$EXP_ID" 2>/dev/null || true

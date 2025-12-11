@@ -1,14 +1,14 @@
 {
-  "generated_at": "2025-12-11T03:15:09.046396+00:00",
+  "generated_at": "2025-12-11T09:16:19.391299+00:00",
   "generator_version": "2.0.0",
   "matrix_file": "orchestration/experiment_matrix.yaml",
   "total_scenarios": 44,
   "validation_errors": 0,
   "algorithms": [
-    "hybrid_kyber_dilithium",
     "rsa2048",
-    "dilithium2",
-    "kyber512"
+    "kyber512",
+    "hybrid_kyber_dilithium",
+    "dilithium2"
   ],
   "payload_sizes": [
     256,

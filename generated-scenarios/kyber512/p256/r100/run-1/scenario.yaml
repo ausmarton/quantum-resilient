@@ -32,6 +32,6 @@ metadata:
   scaling_experiment: false
   seed: 3396977605294975925
   seed_hash: 7ffd4c31
-  generated_at: '2025-12-11T03:15:09.017467+00:00'
+  generated_at: '2025-12-11T09:16:19.362753+00:00'
   generator_version: 2.0.0
   kem_paramset: kyber512
