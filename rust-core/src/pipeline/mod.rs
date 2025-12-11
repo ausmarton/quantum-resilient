@@ -196,7 +196,7 @@ impl Pipeline {
         });
 
         // Run the execution engine
-        let (events_processed, total_latency_us, elapsed) = execution_engine
+        let (events_processed, total_latency_ns, elapsed) = execution_engine
             .run(
                 scenario,
                 adapter.clone(),
@@ -211,8 +211,9 @@ impl Pipeline {
         // Wait for producer to finish
         let _ = producer_handle.await;
 
+        // Compute average latency from nanoseconds, convert to microseconds for display
         let avg_latency = if events_processed > 0 {
-            total_latency_us as f64 / events_processed as f64
+            (total_latency_ns as f64 / events_processed as f64) / 1000.0  // Convert ns to μs
         } else {
             0.0
         };

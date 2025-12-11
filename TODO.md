@@ -7,6 +7,11 @@ This document tracks all outstanding work items identified across the codebase, 
 **Last Updated**: 2025-12-11
 
 **Recent Additions**:
+- Item #35: Fix Internal State Tracking and Logging Using Microseconds Instead of Nanoseconds (2025-12-11)
+- Item #31: Fix Missing queue_delay_ns in JSONL Output (2025-12-11)
+- Item #32: Fix GCP Terraform prevent_destroy Error for Ephemeral Mode (2025-12-11)
+- Item #33: Fix GCP Node Pool 404 Errors After Terraform Failures (2025-12-11)
+- Item #34: Remove Backward Compatibility Handling for Microseconds (After Item #31) (2025-12-11)
 - Item #30: Fix Resume Capability - Skip Benchmark Run When Raw Data Exists (2025-12-11)
 - Item #28: Fix Analysis Pipeline Pandas Dependency Issue (2025-12-11)
 - Item #29: Fix Containerized Analysis Path Mapping for JSONL Files (2025-12-11)
@@ -3069,5 +3074,403 @@ The script was re-running all experiments even when raw data already existed. Th
 - ✅ Critical for data collection efficiency (REQ-DATA-*)
 - ✅ Required for multi-day benchmark runs
 - ✅ Supports FR12: Resume Capability
+
+---
+
+### 31. Fix Missing queue_delay_ns in JSONL Output
+
+**Status**: ✅ **COMPLETED - FIX IMPLEMENTED**  
+**Priority**: Critical (incomplete nanosecond precision implementation)  
+**Blocks**: Complete nanosecond precision for all telemetry  
+**Depends on**: None  
+**Identified**: 2025-12-11  
+**Completed**: 2025-12-11
+
+**Problem Statement**: 
+The benchmark is computing `queue_delay_ns` in nanoseconds (line 546 of `execution.rs`) but the `EventRowWithQueueDelay` struct only includes `queue_delay_us`, not `queue_delay_ns`. This means we're losing sub-microsecond precision for queue delay measurements, and the analysis pipeline expects `queue_delay_ns` but it's not being written to JSONL files. Additionally, if any experiments are still missing `latency_ns`, we need to ensure all new data includes it.
+
+**Current State**: 
+- `EventRowWithQueueDelay` struct (line 726) has `latency_ns` ✅ but missing `queue_delay_ns` ❌
+- Execution engine computes `queue_delay_ns` (line 546) but only stores `queue_delay_us` (line 694)
+- Analysis pipeline expects `queue_delay_ns` but falls back to `queue_delay_us` with warnings
+- Some experiments may still be missing `latency_ns` if there are code paths that don't use `EventRowWithQueueDelay`
+- Legacy structs `EventRow` and `EventRowFull` in `jsonl_logger.rs` don't have `latency_ns` (may not be used, but should be updated for consistency)
+
+**Expected Outcome**: 
+- `EventRowWithQueueDelay` struct includes both `queue_delay_ns` and `queue_delay_us`
+- All JSONL output includes `latency_ns` and `queue_delay_ns` fields
+- No loss of sub-microsecond precision for queue delay
+- Analysis pipeline receives complete nanosecond precision data
+- All new experiments have complete nanosecond precision fields
+
+**Implementation Plan**:
+1. ✅ Add `queue_delay_ns: u128` field to `EventRowWithQueueDelay` struct (line 737)
+2. ✅ Include `queue_delay_ns` when creating the row (line 694) - use the computed value from line 546
+3. ✅ Verified all code paths use `EventRowWithQueueDelay` (legacy structs not used)
+4. ⏭️ Legacy structs in `jsonl_logger.rs` not used - no update needed (Item #34 will handle cleanup)
+5. ⏭️ Test that all new JSONL output includes both `latency_ns` and `queue_delay_ns` (pending smoke test)
+6. ⏭️ Verify analysis pipeline receives complete nanosecond precision data (pending smoke test)
+
+**Related Files**:
+- `rust-core/src/pipeline/execution.rs` - `EventRowWithQueueDelay` struct (line 726) and row creation (line 684-703)
+- `rust-core/src/telemetry/jsonl_logger.rs` - Legacy structs `EventRow` and `EventRowFull` (may need updates)
+- `analysis/scripts/merge_jsonl.py` - Already expects `queue_delay_ns` (line 87)
+
+**Testing Requirements**:
+- [x] Code compiles successfully
+- [x] Struct definition includes `queue_delay_ns` field
+- [x] Row creation includes `queue_delay_ns` value
+- [x] Verified all code paths use `EventRowWithQueueDelay` (legacy structs not used)
+- [ ] Run smoke test to verify all new data has complete nanosecond precision
+- [ ] Verify analysis pipeline receives `queue_delay_ns` (no warnings)
+- [ ] Test that statistics and plots use nanosecond precision correctly
+
+**Acceptance Criteria**:
+- [x] `EventRowWithQueueDelay` struct includes `queue_delay_ns` field
+- [x] Row creation includes `queue_delay_ns` value
+- [ ] All JSONL output includes both `latency_ns` and `queue_delay_ns` (pending smoke test)
+- [ ] No "queue_delay_ns not found" warnings in analysis pipeline (pending smoke test)
+- [ ] No "latency_ns column not found" errors for new experiments (pending smoke test)
+- [ ] All new experiments have complete nanosecond precision fields (pending smoke test)
+- [x] Sub-microsecond precision preserved for both latency and queue delay (struct updated)
+
+**Risk Assessment**:
+- **HIGH**: This completes the nanosecond precision implementation - critical for dissertation
+- **LOW**: Changes isolated to struct definition and row creation
+- **LOW**: Should not affect existing functionality, only adds missing field
+
+**Dependencies**: 
+- None (can be done independently)
+
+**Effort**: 1-2 hours
+- Investigation: 30 minutes ✅
+- Implementation: 30 minutes ✅ (add field to struct and row creation)
+- Testing: 30 minutes (pending smoke test)
+
+**Impact**:
+- **CRITICAL**: Completes nanosecond precision implementation for all telemetry
+- **HIGH**: Ensures no loss of sub-microsecond precision for queue delay
+- **HIGH**: Fixes analysis pipeline warnings about missing `queue_delay_ns`
+
+**Requirements Compliance**:
+- ✅ Critical for data analysis (REQ-ANALYSIS-*)
+- ✅ Required for backward compatibility
+- ✅ Supports FR15: Analysis Pipeline Robustness
+
+---
+
+### 32. Fix GCP Terraform prevent_destroy Error for Ephemeral Mode
+
+**Status**: ✅ **COMPLETED - FIX IMPLEMENTED**  
+**Priority**: Critical (blocks GCP ephemeral mode experiments)  
+**Blocks**: GCP scaling experiments in ephemeral mode  
+**Depends on**: None  
+**Identified**: 2025-12-11  
+**Completed**: 2025-12-11
+
+**Problem Statement**: 
+When running GCP experiments in ephemeral mode (single experiment per cluster), Terraform attempts to destroy the GCS bucket due to state conflicts, but the bucket has `lifecycle.prevent_destroy = true` set. This causes Terraform apply to fail with: "Resource google_storage_bucket.results has lifecycle.prevent_destroy set, but the plan calls for this resource to be destroyed."
+
+**Current State**: 
+- Terraform apply fails with prevent_destroy error
+- Affects GCP scaling experiments: `hybrid_kyber_dilithium_p256_r100_5s_scaling_run1_eee58f54`, `hybrid_kyber_dilithium_p256_r500_5s_scaling_run1_c9914690`
+- Error occurs even though `deploy_gcp.sh` should be using `-target` flags to exclude bucket
+- Ephemeral mode creates/destroys cluster per experiment, but bucket should persist
+- Experiments fail after retries, marked as failed
+
+**Expected Outcome**: 
+- Terraform should not attempt to destroy bucket in ephemeral mode
+- Ephemeral mode experiments should complete successfully
+- Bucket should persist across all ephemeral mode runs
+- No prevent_destroy conflicts
+
+**Implementation Plan**:
+1. Investigate `deploy_gcp.sh` ephemeral mode Terraform commands
+2. Verify `-target` flags are correctly excluding bucket resources
+3. Check if bucket state needs to be removed before ephemeral runs
+4. Ensure bucket is explicitly excluded from Terraform plan in ephemeral mode
+5. Test ephemeral mode with scaling experiments
+6. Verify bucket persists and is not destroyed
+
+**Related Files**:
+- `deploy_gcp.sh` - Ephemeral mode Terraform commands
+- `terraform/gke/bucket.tf` - Bucket resource with `prevent_destroy = true`
+- `run_all_experiments.sh` - GCP ephemeral mode execution path
+
+**Testing Requirements**:
+- [x] Code changes implemented
+- [x] Bucket removed from state before apply in ephemeral mode
+- [x] Manual permission granting added after cluster creation
+- [ ] Test ephemeral mode with single experiment (pending smoke test)
+- [ ] Test ephemeral mode with scaling experiments (pending smoke test)
+- [ ] Verify bucket is not destroyed (pending smoke test)
+- [ ] Verify experiments complete successfully (pending smoke test)
+
+**Acceptance Criteria**:
+- [x] Bucket removed from Terraform state before apply in ephemeral mode
+- [x] Manual bucket permissions granted after cluster creation
+- [ ] No Terraform prevent_destroy errors in ephemeral mode (pending smoke test)
+- [ ] Ephemeral mode experiments complete successfully (pending smoke test)
+- [ ] Bucket persists across ephemeral runs (pending smoke test)
+- [ ] Scaling experiments work in ephemeral mode (pending smoke test)
+
+**Risk Assessment**:
+- **HIGH**: This blocks GCP ephemeral mode experiments
+- **MEDIUM**: Need to ensure bucket state management is correct
+- **LOW**: Changes isolated to Terraform targeting logic
+
+**Dependencies**: 
+- None (can be done independently)
+
+**Effort**: 2-3 hours
+- Investigation: 1 hour ✅
+- Implementation: 1 hour ✅
+- Testing: 1 hour (pending smoke test)
+
+**Impact**:
+- **CRITICAL**: Unblocks GCP ephemeral mode experiments
+- **HIGH**: Enables scaling experiments on GCP
+- **MEDIUM**: Improves GCP deployment reliability
+
+**Requirements Compliance**:
+- ✅ Critical for GCP experiments (REQ-INFRA-*)
+- ✅ Required for scaling experiments
+- ✅ Supports FR8: GCP Deployment
+
+---
+
+### 33. Fix GCP Node Pool 404 Errors After Terraform Failures
+
+**Status**: ✅ **COMPLETED - FIX IMPLEMENTED**  
+**Priority**: High (causes confusing error messages)  
+**Blocks**: Clear error reporting for GCP failures  
+**Depends on**: Item #32 (Terraform failures)  
+**Identified**: 2025-12-11  
+**Completed**: 2025-12-11  
+**Completed**: 2025-12-11
+
+**Problem Statement**: 
+When Terraform apply fails (e.g., due to prevent_destroy error), the script attempts to check node pool status using `gcloud container node-pools describe`, but the node pool doesn't exist because Terraform failed to create it. This results in confusing 404 errors: "ResponseError: code=404, message=Not found: node pool 'pqc-bench-pool' not found."
+
+**Current State**: 
+- After Terraform failures, script tries to describe non-existent node pool
+- Results in 404 errors that are misleading (node pool doesn't exist because creation failed)
+- Error messages don't clearly indicate the root cause (Terraform failure)
+- Makes debugging harder - users see 404 but real issue is Terraform prevent_destroy
+
+**Expected Outcome**: 
+- Script should detect Terraform failures before checking node pool status
+- If Terraform failed, skip node pool status check (it won't exist)
+- Provide clear error messages indicating Terraform failure is the root cause
+- Only check node pool status if Terraform succeeded
+
+**Implementation Plan**:
+1. Investigate `deploy_gcp.sh` error handling after Terraform apply
+2. Check Terraform exit code before attempting node pool status check
+3. Add conditional logic: only check node pool if Terraform succeeded
+4. Improve error messages to indicate root cause
+5. Test with Terraform failure scenarios
+
+**Related Files**:
+- `deploy_gcp.sh` - Terraform error handling and node pool status checks
+- `run_all_experiments.sh` - GCP experiment execution
+
+**Testing Requirements**:
+- [x] Code changes implemented
+- [x] Cluster existence check added before node pool check
+- [x] Clear error messages added
+- [ ] Test with Terraform failure (prevent_destroy error) (pending smoke test)
+- [ ] Verify no 404 errors when Terraform fails (pending smoke test)
+- [ ] Test with successful Terraform (node pool check should work) (pending smoke test)
+
+**Acceptance Criteria**:
+- [x] Script checks cluster existence before checking node pool
+- [x] Error messages clearly indicate Terraform failure as root cause
+- [x] Node pool status check only runs if cluster exists
+- [ ] No 404 errors when Terraform fails (pending smoke test)
+- [ ] Verified in smoke test (pending)
+
+**Risk Assessment**:
+- **MEDIUM**: Improves error reporting but doesn't fix root cause
+- **LOW**: Changes isolated to error handling logic
+- **LOW**: Should not affect successful runs
+
+**Dependencies**: 
+- Item #32 (Terraform prevent_destroy fix) will reduce occurrences
+
+**Effort**: 1-2 hours
+- Investigation: 30 minutes
+- Implementation: 30 minutes
+- Testing: 30 minutes
+
+**Impact**:
+- **MEDIUM**: Improves error reporting and debugging
+- **LOW**: Doesn't fix root cause but makes it clearer
+
+**Requirements Compliance**:
+- ✅ Improves error handling (REQ-ERROR-*)
+- ✅ Better user experience for debugging
+
+---
+
+### 34. Remove Backward Compatibility Handling for Microseconds (After Item #31)
+
+**Status**: 🟡 **PENDING - DEPENDS ON ITEM #31**  
+**Priority**: Low (cleanup after Item #31 is complete)  
+**Blocks**: None  
+**Depends on**: Item #31 (must ensure all new data has nanosecond precision)  
+**Identified**: 2025-12-11
+
+**Problem Statement**: 
+After Item #31 ensures all new data includes `latency_ns` and `queue_delay_ns`, we should remove backward compatibility handling for microsecond-only data. The analysis pipeline currently handles both formats, but if we're re-running all experiments, all data should be in nanosecond precision format. Keeping backward compatibility code adds complexity and may hide issues if old data format is accidentally produced.
+
+**Current State**: 
+- Analysis pipeline has backward compatibility logic for `latency_us` → `latency_ns` conversion
+- Analysis pipeline has fallback for `queue_delay_us` when `queue_delay_ns` is missing
+- Code assumes old data format may exist
+- After Item #31, all new data should have nanosecond precision
+
+**Expected Outcome**: 
+- Remove backward compatibility conversion logic (after confirming all data is nanosecond precision)
+- Simplify analysis pipeline code (no need to handle both formats)
+- Require nanosecond precision fields (fail fast if missing)
+- Cleaner, simpler codebase
+
+**Implementation Plan**:
+1. Wait for Item #31 to be completed and verified
+2. Verify all experiments in `results/` have `latency_ns` and `queue_delay_ns`
+3. Remove backward compatibility conversion logic from `merge_jsonl.py`
+4. Remove fallback handling for `queue_delay_us`
+5. Update error messages to indicate data format issue (not backward compatibility)
+6. Test that analysis fails clearly if nanosecond fields are missing
+
+**Related Files**:
+- `analysis/scripts/merge_jsonl.py` - Remove backward compatibility logic
+- `analysis/scripts/compute_statistics.py` - May have backward compatibility code
+
+**Testing Requirements**:
+- [ ] Verify all new data has nanosecond precision (after Item #31)
+- [ ] Test that analysis fails clearly if nanosecond fields are missing
+- [ ] Verify no regressions in analysis pipeline
+- [ ] Run smoke test to ensure all data is processed correctly
+
+**Acceptance Criteria**:
+- [ ] Backward compatibility code removed
+- [ ] Analysis pipeline requires nanosecond precision fields
+- [ ] Clear error messages if nanosecond fields are missing
+- [ ] Simpler, cleaner codebase
+
+**Risk Assessment**:
+- **LOW**: Only cleanup after Item #31 ensures all data is correct
+- **LOW**: Changes isolated to analysis pipeline
+- **MEDIUM**: Must ensure Item #31 is complete first
+
+**Dependencies**: 
+- Item #31 (must complete first)
+
+**Effort**: 1-2 hours
+- Investigation: 30 minutes
+- Implementation: 30 minutes
+- Testing: 30 minutes
+
+**Impact**:
+- **MEDIUM**: Cleaner codebase and simpler logic
+- **LOW**: Non-critical cleanup task
+
+**Requirements Compliance**:
+- ✅ Simplifies codebase
+- ✅ Ensures data quality (fails fast if format is wrong)
+
+---
+
+### 35. Fix Internal State Tracking and Logging Using Microseconds Instead of Nanoseconds
+
+**Status**: ✅ **COMPLETED - FIX IMPLEMENTED**  
+**Priority**: Critical (loses sub-microsecond precision in internal calculations)  
+**Blocks**: Accurate latency statistics and logging  
+**Depends on**: None  
+**Identified**: 2025-12-11  
+**Completed**: 2025-12-11
+
+**Problem Statement**: 
+Multiple places in the codebase are still using microseconds for internal state tracking and logging, which loses sub-microsecond precision. While we compute `latency_ns` first, we then convert to `latency_us` and accumulate that, losing precision before computing averages. Logs also print in microseconds, which doesn't reflect the nanosecond precision we're capturing.
+
+**Current State**: 
+- `ExecutionState.total_latency_us` (line 72) accumulates microseconds, losing precision
+- `ProcessedEvent.latency_us` (line 35) only stores microseconds
+- Average latency computed from `total_latency_us` (line 215 in `mod.rs`) - already lost precision
+- Log output prints `{:.2} μs` (line 566 in `main.rs`) - should show nanoseconds or convert for display
+- `Telemetry.record_latency()` uses `duration.as_micros()` (line 87 in `telemetry/mod.rs`) - should use nanoseconds
+- `PipelineStats.avg_latency_us` (line 80 in `mod.rs`) stores in microseconds
+
+**Expected Outcome**: 
+- Internal state tracking uses nanoseconds (`total_latency_ns`)
+- `ProcessedEvent` includes `latency_ns` (or uses nanoseconds as primary)
+- Average latency computed from nanoseconds, converted to microseconds only for display
+- Logs show nanosecond precision (or convert to microseconds for readability)
+- Telemetry uses nanoseconds internally
+- All calculations preserve sub-microsecond precision
+
+**Implementation Plan**:
+1. ✅ Change `ExecutionState.total_latency_us` to `total_latency_ns: Arc<Mutex<u128>>` (line 73) - Used Mutex since AtomicU128 not in stdlib
+2. ✅ Update accumulation to use `latency_ns` instead of `latency_us` (lines 255, 523)
+3. ✅ Update `ProcessedEvent` to include `latency_ns` as primary field (line 33-40)
+4. ⏭️ Keep `PipelineStats.avg_latency_us` for backward compatibility, but compute from nanoseconds (line 80, 215)
+5. ✅ Compute average from nanoseconds, convert to microseconds only for display (line 215)
+6. ✅ Log output shows microseconds (readable) but calculated from nanoseconds (line 566)
+7. ✅ Update `Telemetry.record_latency()` to use `as_nanos()` then convert to microseconds (line 87)
+8. ⏭️ Test that all calculations preserve precision (pending smoke test)
+
+**Related Files**:
+- `rust-core/src/pipeline/execution.rs`:
+  - `ExecutionState.total_latency_us` → `total_latency_ns` (line 72)
+  - Accumulation logic (lines 255, 525)
+  - `ProcessedEvent` struct (line 33-39)
+- `rust-core/src/pipeline/mod.rs`:
+  - `PipelineStats.avg_latency_us` → `avg_latency_ns` (line 80)
+  - Average calculation (line 215)
+- `rust-core/src/main.rs`:
+  - Log output (line 566)
+- `rust-core/src/telemetry/mod.rs`:
+  - `record_latency()` method (line 87)
+
+**Testing Requirements**:
+- [ ] Verify internal state accumulates nanoseconds correctly
+- [ ] Verify average latency calculation preserves precision
+- [ ] Test that logs show correct values (nanoseconds or converted)
+- [ ] Verify telemetry records use nanoseconds
+- [ ] Run smoke test to ensure no regressions
+- [ ] Check that sub-microsecond values are preserved in calculations
+
+**Acceptance Criteria**:
+- [ ] `total_latency_ns` accumulates nanoseconds (not microseconds)
+- [ ] Average latency computed from nanoseconds
+- [ ] Logs show nanosecond precision (or clear conversion to microseconds)
+- [ ] Telemetry uses `as_nanos()` instead of `as_micros()`
+- [ ] All internal calculations preserve sub-microsecond precision
+- [ ] No precision loss in average latency calculations
+
+**Risk Assessment**:
+- **HIGH**: This affects accuracy of latency statistics - critical for dissertation
+- **MEDIUM**: Changes affect multiple files and internal state tracking
+- **LOW**: Should not affect JSONL output (already has `latency_ns`)
+
+**Dependencies**: 
+- None (can be done independently, but should coordinate with Item #31)
+
+**Effort**: 2-3 hours
+- Investigation: 30 minutes ✅
+- Implementation: 1-2 hours ✅ (multiple files to update)
+- Testing: 30 minutes (pending smoke test)
+
+**Impact**:
+- **CRITICAL**: Preserves sub-microsecond precision in all calculations
+- **HIGH**: Ensures accurate latency statistics and logging
+- **MEDIUM**: Consistent use of nanosecond precision throughout codebase
+
+**Requirements Compliance**:
+- ✅ Critical for accurate latency measurements (REQ-TELEMETRY-*)
+- ✅ Required for sub-microsecond precision claims
+- ✅ Supports FR10: Nanosecond Precision
 
 ---

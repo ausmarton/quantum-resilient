@@ -12,7 +12,7 @@ use crate::scenario::{ExecutionConfig, ExecutionMode};
 use crate::telemetry::{JsonlWriter, Metrics, SysInfoSampler};
 use chrono::Utc;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::sync::Notify;
@@ -32,7 +32,8 @@ pub struct QueuedEvent {
 #[derive(Debug)]
 pub struct ProcessedEvent {
     pub event_id: u64,
-    pub latency_us: u128,
+    pub latency_ns: u128,  // Primary: nanosecond precision
+    pub latency_us: u128,  // Computed: microsecond precision (for backward compatibility)
     pub queue_delay_us: u128,
     pub success: bool,
     pub output_size: Option<usize>,
@@ -68,8 +69,9 @@ pub struct ExecutionState {
     pub queue_length: Arc<AtomicUsize>,
     /// Total events processed
     pub events_processed: Arc<AtomicU64>,
-    /// Total latency accumulated (for average calculation)
-    pub total_latency_us: Arc<AtomicU64>,
+    /// Total latency accumulated in nanoseconds (for average calculation)
+    /// Uses Mutex instead of AtomicU128 since AtomicU128 is not in standard library
+    pub total_latency_ns: Arc<Mutex<u128>>,
     /// Queue capacity
     pub queue_capacity: usize,
     /// Shutdown completion notification
@@ -87,7 +89,7 @@ impl ExecutionState {
             active_workers: Arc::new(AtomicUsize::new(0)),
             queue_length: Arc::new(AtomicUsize::new(0)),
             events_processed: Arc::new(AtomicU64::new(0)),
-            total_latency_us: Arc::new(AtomicU64::new(0)),
+            total_latency_ns: Arc::new(Mutex::new(0u128)),
             queue_capacity,
             shutdown_complete: Arc::new(Notify::new()),
             pipeline_started: Arc::new(AtomicBool::new(false)),
@@ -119,7 +121,7 @@ impl Clone for ExecutionState {
             active_workers: self.active_workers.clone(),
             queue_length: self.queue_length.clone(),
             events_processed: self.events_processed.clone(),
-            total_latency_us: self.total_latency_us.clone(),
+            total_latency_ns: self.total_latency_ns.clone(),
             queue_capacity: self.queue_capacity,
             shutdown_complete: self.shutdown_complete.clone(),
             pipeline_started: self.pipeline_started.clone(),
@@ -165,7 +167,7 @@ impl ExecutionEngine {
         sampler: SysInfoSampler,
         context: ExecutionContext,
         mut event_rx: mpsc::Receiver<QueuedEvent>,
-    ) -> (u64, u64, Duration) {
+    ) -> (u64, u128, Duration) {
         // Set initial metrics
         metrics.set_queue_capacity(self.config.queue_capacity);
         metrics.set_active_workers(0);
@@ -213,11 +215,11 @@ impl ExecutionEngine {
 
         let elapsed = start_time.elapsed();
         let processed = self.state.events_processed.load(Ordering::Relaxed);
-        let total_lat = self.state.total_latency_us.load(Ordering::Relaxed);
+        let total_lat_ns = *self.state.total_latency_ns.lock().unwrap();
 
         self.state.notify_shutdown_complete();
 
-        (processed, total_lat, elapsed)
+        (processed, total_lat_ns, elapsed)
     }
 
     /// Single processor mode (existing behavior)
@@ -250,9 +252,7 @@ impl ExecutionEngine {
             .await;
 
             self.state.events_processed.fetch_add(1, Ordering::Relaxed);
-            self.state
-                .total_latency_us
-                .fetch_add(result.latency_us as u64, Ordering::Relaxed);
+            *self.state.total_latency_ns.lock().unwrap() += result.latency_ns;
         }
 
         self.state.active_workers.store(0, Ordering::Relaxed);
@@ -520,9 +520,7 @@ async fn worker_task(
                 .await;
 
                 state.events_processed.fetch_add(1, Ordering::Relaxed);
-                state
-                    .total_latency_us
-                    .fetch_add(result.latency_us as u64, Ordering::Relaxed);
+                *state.total_latency_ns.lock().unwrap() += result.latency_ns;
             }
             None => {
                 // Channel closed, exit
@@ -691,7 +689,8 @@ async fn process_event(
             algorithm: context.algorithm.clone(),
             latency_ns,  // Primary: nanosecond precision
             latency_us,  // Computed: microsecond precision (for backward compatibility)
-            queue_delay_us,
+            queue_delay_ns,  // Primary: nanosecond precision
+            queue_delay_us,  // Computed: microsecond precision (for backward compatibility)
             worker_id,
             payload_size_bytes: event.payload.len(),
             ciphertext_size_bytes: ciphertext_size,
@@ -708,7 +707,8 @@ async fn process_event(
 
         ProcessedEvent {
             event_id: event.event_id,
-            latency_us,  // Keep as u128 microseconds for internal state tracking
+            latency_ns,  // Primary: nanosecond precision for internal state tracking
+            latency_us,  // Computed: microsecond precision (for backward compatibility)
             queue_delay_us,
             success,
             output_size,
@@ -733,7 +733,8 @@ struct EventRowWithQueueDelay {
     pub algorithm: String,
     pub latency_ns: u128,  // Primary: nanosecond precision for sub-microsecond measurements
     pub latency_us: u128,  // Computed: microsecond precision (for backward compatibility)
-    pub queue_delay_us: u128,
+    pub queue_delay_ns: u128,  // Primary: nanosecond precision for sub-microsecond queue delay measurements
+    pub queue_delay_us: u128,  // Computed: microsecond precision (for backward compatibility)
     pub worker_id: usize,
     pub payload_size_bytes: usize,
     #[serde(skip_serializing_if = "Option::is_none")]

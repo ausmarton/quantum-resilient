@@ -608,6 +608,22 @@ else
         log_info "No Kubernetes service account in state (this is expected)"
     fi
     
+    # CRITICAL: For ephemeral mode, remove bucket from state before applying
+    # This prevents Terraform from trying to destroy/replace the bucket due to prevent_destroy
+    # The bucket is a persistent resource that should never be destroyed
+    if [[ "$EPHEMERAL" == "true" ]]; then
+        log_info "Ephemeral mode: Removing bucket from Terraform state to prevent prevent_destroy conflicts..."
+        if terraform state show google_storage_bucket.results &>/dev/null 2>&1; then
+            log_info "Removing bucket from Terraform state (bucket will persist, permissions granted manually)"
+            terraform state rm google_storage_bucket.results 2>/dev/null || true
+            terraform state rm google_storage_bucket_iam_member.gcs_admin 2>/dev/null || true
+            terraform state rm google_storage_bucket_object.experiments_marker 2>/dev/null || true
+            log_success "Bucket removed from Terraform state"
+        else
+            log_info "Bucket not in Terraform state (this is expected)"
+        fi
+    fi
+    
     log_info "Applying Terraform configuration..."
     # CRITICAL: machine_type, disk_size_gb, disk_type MUST stay identical
     # Only node_count may differ (horizontal scaling only)
@@ -624,26 +640,61 @@ else
         -var="disk_size_gb=$DISK_SIZE_GB" \
         -var="ephemeral=$EPHEMERAL"; then
         log_success "Infrastructure deployed"
-    else
-        log_error "Terraform apply failed. Checking node pool status..."
         
-        # Try to get the actual error from GCP
+        # Grant bucket permissions manually if bucket was removed from state
+        # (This happens in ephemeral mode to prevent prevent_destroy conflicts)
+        if [[ "$EPHEMERAL" == "true" ]]; then
+            log_info "Ensuring service account has bucket permissions..."
+            SERVICE_ACCOUNT_EMAIL="pqc-bench-worker@${PROJECT}.iam.gserviceaccount.com"
+            if gsutil iam ch "serviceAccount:${SERVICE_ACCOUNT_EMAIL}:roles/storage.objectAdmin" "gs://${BUCKET}" 2>&1; then
+                log_success "Bucket permissions granted to service account"
+            else
+                log_warn "Failed to grant bucket permissions via gsutil (may already be set)"
+                log_info "Verifying permissions..."
+                if gsutil iam get "gs://${BUCKET}" 2>/dev/null | grep -q "$SERVICE_ACCOUNT_EMAIL"; then
+                    log_success "Service account already has bucket permissions"
+                else
+                    log_error "Service account does not have bucket permissions!"
+                    log_info "Please grant manually:"
+                    log_info "  gsutil iam ch serviceAccount:${SERVICE_ACCOUNT_EMAIL}:roles/storage.objectAdmin gs://${BUCKET}"
+                fi
+            fi
+        fi
+    else
+        log_error "Terraform apply failed."
+        TERRAFORM_FAILED=true
+        
+        # Only check node pool/cluster status if cluster actually exists
+        # If Terraform failed, the cluster/node pool may not exist, causing misleading 404 errors
         if command -v gcloud &> /dev/null; then
-            log_info "Fetching node pool status from GCP..."
-            gcloud container node-pools describe pqc-bench-pool \
-                --cluster "$CLUSTER_NAME" \
+            # Check if cluster exists before trying to describe node pool
+            if gcloud container clusters describe "$CLUSTER_NAME" \
                 --region "$REGION" \
-                --project "$PROJECT" 2>&1 | head -50 || true
-            
-            log_info "Checking cluster operations..."
-            gcloud container operations list \
-                --filter="clusterName=$CLUSTER_NAME AND location=$REGION" \
-                --project "$PROJECT" \
-                --limit 5 \
-                --format="table(name,status,operationType)" || true
+                --project "$PROJECT" &>/dev/null 2>&1; then
+                log_info "Cluster exists, checking node pool status..."
+                gcloud container node-pools describe pqc-bench-pool \
+                    --cluster "$CLUSTER_NAME" \
+                    --region "$REGION" \
+                    --project "$PROJECT" 2>&1 | head -50 || true
+                
+                log_info "Checking cluster operations..."
+                gcloud container operations list \
+                    --filter="clusterName=$CLUSTER_NAME AND location=$REGION" \
+                    --project "$PROJECT" \
+                    --limit 5 \
+                    --format="table(name,status,operationType)" || true
+            else
+                log_warn "Cluster $CLUSTER_NAME does not exist (Terraform failed before cluster creation)"
+                log_info "Root cause: Terraform apply failed - check Terraform error messages above"
+                log_info "Common causes:"
+                log_info "  - prevent_destroy conflicts (bucket lifecycle)"
+                log_info "  - Insufficient GCP quotas"
+                log_info "  - Network/permissions issues"
+            fi
         fi
         
         log_error "See docs/troubleshooting/gke-node-pool.md for troubleshooting steps"
+        log_error "Root cause: Terraform apply failed - see error messages above"
         exit 1
     fi
     
