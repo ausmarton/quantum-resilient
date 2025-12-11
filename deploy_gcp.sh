@@ -333,9 +333,44 @@ if [[ "$CREATE_CLUSTER" == "true" ]]; then
         log_info "No Kubernetes service account in state (this is expected)"
     fi
     
+    # When using -target to exclude bucket from plan, we must ensure bucket is NOT in state
+    # This prevents Terraform from trying to replace it due to name mismatches or prevent_destroy conflicts
+    # We'll grant bucket permissions manually after cluster creation instead
+    log_info "Preparing Terraform state for cluster creation (excluding bucket)..."
+    
+    # Remove bucket and related resources from state if they exist
+    # This is safe because we're using -target flags to exclude them from the plan
+    if terraform state show google_storage_bucket.results &>/dev/null 2>&1; then
+        log_info "Removing bucket from Terraform state (not managing with Terraform for cluster creation)"
+        terraform state rm google_storage_bucket.results 2>/dev/null || true
+        terraform state rm google_storage_bucket_iam_member.gcs_admin 2>/dev/null || true
+        terraform state rm google_storage_bucket_object.experiments_marker 2>/dev/null || true
+        log_success "Bucket removed from Terraform state"
+    else
+        log_info "Bucket not in Terraform state (this is expected)"
+    fi
+    
+    # Verify bucket exists (we'll grant permissions manually)
+    if gsutil ls -b "gs://${BUCKET}" &>/dev/null 2>&1; then
+        log_info "Bucket $BUCKET exists - will grant permissions manually after cluster creation"
+    else
+        log_warn "Bucket $BUCKET does not exist"
+        log_info "Bucket will need to be created separately or permissions granted manually"
+    fi
+    
     log_info "Applying Terraform configuration to create cluster..."
     DISK_SIZE_GB="${DISK_SIZE_GB:-50}"
+    # Use -target to exclude bucket from plan (bucket may already exist with different name)
+    # This prevents Terraform from trying to replace the bucket when only creating cluster
+    # Also include service account, IAM bindings, and artifact registry as they're needed for the cluster
+    # Include bucket IAM binding so service account can access the bucket (even if bucket name differs)
     if terraform apply -auto-approve \
+        -target=google_service_account.pqc_bench \
+        -target=google_project_iam_member.ar_reader \
+        -target=google_artifact_registry_repository.pqc \
+        -target=google_container_cluster.primary \
+        -target=google_container_node_pool.primary \
+        -target=google_service_account_iam_member.workload_identity \
         -var="project_id=$PROJECT" \
         -var="region=$REGION" \
         -var="bucket_name=$BUCKET" \
@@ -346,6 +381,24 @@ if [[ "$CREATE_CLUSTER" == "true" ]]; then
         -var="disk_size_gb=$DISK_SIZE_GB" \
         -var="ephemeral=$EPHEMERAL"; then
         log_success "Cluster created successfully"
+        
+        # Grant bucket permissions manually if bucket IAM binding wasn't created
+        # (This happens if bucket wasn't in Terraform state)
+        log_info "Ensuring service account has bucket permissions..."
+        SERVICE_ACCOUNT_EMAIL="pqc-bench-worker@${PROJECT}.iam.gserviceaccount.com"
+        if gsutil iam ch "serviceAccount:${SERVICE_ACCOUNT_EMAIL}:roles/storage.objectAdmin" "gs://${BUCKET}" 2>&1; then
+            log_success "Bucket permissions granted to service account"
+        else
+            log_warn "Failed to grant bucket permissions via gsutil (may already be set)"
+            log_info "Verifying permissions..."
+            if gsutil iam get "gs://${BUCKET}" 2>/dev/null | grep -q "$SERVICE_ACCOUNT_EMAIL"; then
+                log_success "Service account already has bucket permissions"
+            else
+                log_error "Service account does not have bucket permissions!"
+                log_info "Please grant manually:"
+                log_info "  gsutil iam ch serviceAccount:${SERVICE_ACCOUNT_EMAIL}:roles/storage.objectAdmin gs://${BUCKET}"
+            fi
+        fi
     else
         log_error "Cluster creation failed"
         exit 1

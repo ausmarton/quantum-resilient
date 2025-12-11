@@ -32,7 +32,7 @@ def load_data(filepath: Path) -> pd.DataFrame:
     else:
         # Try to load JSONL with error handling for malformed lines
         try:
-            return pd.read_json(filepath, lines=True)
+        return pd.read_json(filepath, lines=True)
         except ValueError as e:
             # If pandas fails, try reading line by line and skipping bad lines
             console.print(f"[yellow]Warning: pandas read_json failed, trying line-by-line parsing: {e}[/yellow]")
@@ -314,10 +314,10 @@ def compute_statistics(
     # Latency stats - handle both nanosecond precision (new) and microsecond precision (old) formats
     if "latency_ns" in df.columns:
         # New format: nanosecond precision
-        # Convert nanoseconds to microseconds for analysis
-        df["latency_us"] = df["latency_ns"] / 1000.0
-        summary["latency"] = compute_basic_stats(df["latency_us"])
-        summary["latency_ns"] = compute_basic_stats(df["latency_ns"])  # Store nanosecond stats
+    # Convert nanoseconds to microseconds for analysis
+    df["latency_us"] = df["latency_ns"] / 1000.0
+    summary["latency"] = compute_basic_stats(df["latency_us"])
+    summary["latency_ns"] = compute_basic_stats(df["latency_ns"])  # Store nanosecond stats
     elif "latency_us" in df.columns:
         # Old format: microsecond precision only (backward compatibility)
         # Convert microseconds to nanoseconds for consistency (approximate)
@@ -491,17 +491,17 @@ def compute_statistics(
     console.print("[cyan]Generating plots...[/cyan]")
 
     try:
-        plot_latency_histogram(df, output_dir / "latency_hist.png")
+    plot_latency_histogram(df, output_dir / "latency_hist.png")
     except Exception as e:
         console.print(f"[yellow]Warning: Failed to generate latency histogram: {e}[/yellow]")
     
     try:
-        plot_queue_histogram(df, output_dir / "queue_hist.png")
+    plot_queue_histogram(df, output_dir / "queue_hist.png")
     except Exception as e:
         console.print(f"[yellow]Warning: Failed to generate queue histogram: {e}[/yellow]")
     
     try:
-        plot_throughput_curve(df, output_dir / "throughput_curve.png")
+    plot_throughput_curve(df, output_dir / "throughput_curve.png")
     except Exception as e:
         console.print(f"[yellow]Warning: Failed to generate throughput curve: {e}[/yellow]")
 

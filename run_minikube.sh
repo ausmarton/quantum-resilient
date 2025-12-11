@@ -30,6 +30,8 @@ source "$SCRIPT_DIR/scripts/lib/analysis.sh"
 source "$SCRIPT_DIR/scripts/lib/manifest.sh"
 source "$SCRIPT_DIR/scripts/lib/k8s-configmap.sh"
 source "$SCRIPT_DIR/scripts/lib/k8s-job.sh"
+source "$SCRIPT_DIR/scripts/lib/k8s-image.sh"
+source "$SCRIPT_DIR/scripts/lib/k8s-cluster.sh"
 
 IMAGE_NAME="pqc-bench"
 IMAGE_TAG="latest"
@@ -238,20 +240,20 @@ START_TIME=$(date +%s)
 START_ISO=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 if [[ "$QUIET" != "true" ]]; then
-    echo -e "${BLUE}"
-    echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║           PQC Benchmark - Minikube Experiment Runner         ║"
-    echo "╚══════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
+echo -e "${BLUE}"
+echo "╔══════════════════════════════════════════════════════════════╗"
+echo "║           PQC Benchmark - Minikube Experiment Runner         ║"
+echo "╚══════════════════════════════════════════════════════════════╝"
+echo -e "${NC}"
 
-    log_info "Experiment ID: $EXP_ID"
-    log_info "Scenario: $SCENARIO"
-    log_info "Output: $OUT_DIR"
-    log_info "Runs: $RUNS"
-    log_info "Replicas: $REPLICAS"
-    [[ "$SMOKE_TEST" == "true" ]] && log_info "Mode: SMOKE-TEST (reduced scale)"
-    [[ -n "$SEED" ]] && log_info "Base RNG seed: $SEED"
-    log_info "Started: $START_ISO"
+log_info "Experiment ID: $EXP_ID"
+log_info "Scenario: $SCENARIO"
+log_info "Output: $OUT_DIR"
+log_info "Runs: $RUNS"
+log_info "Replicas: $REPLICAS"
+[[ "$SMOKE_TEST" == "true" ]] && log_info "Mode: SMOKE-TEST (reduced scale)"
+[[ -n "$SEED" ]] && log_info "Base RNG seed: $SEED"
+log_info "Started: $START_ISO"
 fi
 
 # Determine if we're doing a scaling test
@@ -272,7 +274,7 @@ fi
 # Step 1: Verify prerequisites
 # =============================================================================
 if [[ "$QUIET" != "true" ]]; then
-    log_step "Step 1/9: Verifying prerequisites"
+log_step "Step 1/9: Verifying prerequisites"
 fi
 
 # Check Podman
@@ -308,35 +310,18 @@ if [[ "$MINIKUBE_STATUS" != "Running" ]]; then
     }
 fi
 
-# CRITICAL: Ensure kubectl is pointing to Minikube (not GCP or other cluster)
-log_info "Ensuring kubectl context is set to Minikube..."
-minikube update-context >/dev/null 2>&1 || {
-    log_warn "minikube update-context failed, trying manual switch..."
-    kubectl config use-context minikube >/dev/null 2>&1 || {
-        log_error "Failed to switch to Minikube context"
-        log_info "Current context: $(kubectl config current-context 2>/dev/null || echo 'unknown')"
-        log_info "Available contexts:"
-        kubectl config get-contexts 2>&1 | head -5 || true
-        exit 1
-    }
-}
-
-# Verify we're connected to Minikube
-CURRENT_CONTEXT=$(kubectl config current-context 2>/dev/null || echo "")
-if [[ "$CURRENT_CONTEXT" != "minikube" ]]; then
-    log_error "kubectl context is not Minikube (current: $CURRENT_CONTEXT)"
-    log_error "This will cause connection timeouts to GCP API server"
-    log_info "Please run: kubectl config use-context minikube"
+# Use unified cluster check function
+if ! ensure_minikube_cluster; then
     exit 1
 fi
 
-log_success "Minikube cluster is running (context: $CURRENT_CONTEXT)"
+CURRENT_CONTEXT=$(kubectl config current-context 2>/dev/null || echo "minikube")
 
 # =============================================================================
 # Step 2: Create output directories
 # =============================================================================
 if [[ "$QUIET" != "true" ]]; then
-    log_step "Step 2/9: Creating output directories"
+log_step "Step 2/9: Creating output directories"
 fi
 
 mkdir -p "$OUT_DIR/raw"
@@ -347,99 +332,33 @@ mkdir -p "$OUT_DIR/figures"
 log_success "Created: $OUT_DIR/{raw,merged,stats,figures}"
 
 # =============================================================================
-# Step 3: Build container image
+# Step 3-4: Build and load container image
 # =============================================================================
 if [[ "$QUIET" != "true" ]]; then
-    log_step "Step 3/9: Building container image"
+log_step "Step 3-4/9: Building and loading container image"
 fi
 
-# Check if image already exists
-if podman image exists "$IMAGE_NAME:$IMAGE_TAG" 2>/dev/null; then
-    if [[ "$SKIP_BUILD" == "true" ]]; then
-        log_info "Image $IMAGE_NAME:$IMAGE_TAG already exists, skipping build (--skip-build)"
-    else
-        log_info "Image $IMAGE_NAME:$IMAGE_TAG already exists"
-        log_info "Use --skip-build to avoid this check, or rebuild with --force-build"
-        
-        # Check if we should rebuild anyway (e.g., if source changed)
-        if [[ "${FORCE_BUILD:-false}" == "true" ]]; then
-            log_info "Force rebuilding image (--force-build)..."
-            cd "$SCRIPT_DIR"
-            podman build -t "$IMAGE_NAME:$IMAGE_TAG" -f Containerfile . 2>&1 | while read -r line; do
-                echo "  $line"
-            done
-            
-            if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
-                log_error "Container build failed"
-                exit 1
-            fi
-            
-            log_success "Image rebuilt: $IMAGE_NAME:$IMAGE_TAG"
-        else
-            log_success "Using existing image: $IMAGE_NAME:$IMAGE_TAG"
-            log_info "  (To rebuild, use --force-build flag)"
-        fi
-    fi
-else
-    log_info "Building $IMAGE_NAME:$IMAGE_TAG with Podman..."
-    
-    cd "$SCRIPT_DIR"
-    podman build -t "$IMAGE_NAME:$IMAGE_TAG" -f Containerfile . 2>&1 | while read -r line; do
-        echo "  $line"
-    done
-    
-    if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
-        log_error "Container build failed"
-        exit 1
-    fi
-    
-    log_success "Image built: $IMAGE_NAME:$IMAGE_TAG"
-    
-    # Optionally tag with git commit hash for reproducibility
-    if [[ "${TAG_WITH_GIT:-false}" == "true" ]]; then
-        GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-        if [[ "$GIT_COMMIT" != "unknown" ]]; then
-            GIT_TAG="${IMAGE_NAME}:git-${GIT_COMMIT}"
-            log_info "Tagging image with git commit: $GIT_TAG"
-            podman tag "$IMAGE_NAME:$IMAGE_TAG" "$GIT_TAG" 2>/dev/null || true
-        fi
-    fi
-fi
-
-# =============================================================================
-# Step 4: Load image into Minikube
-# =============================================================================
-if [[ "$QUIET" != "true" ]]; then
-    log_step "Step 4/9: Loading image into Minikube"
-fi
-
-log_info "Loading image into Minikube..."
-# Tag with localhost/ prefix (Minikube expects this for local images)
-LOCAL_IMAGE="localhost/${IMAGE_NAME}:${IMAGE_TAG}"
-if ! podman image exists "$LOCAL_IMAGE" 2>/dev/null; then
-    log_info "Tagging image as $LOCAL_IMAGE..."
-    podman tag "$IMAGE_NAME:$IMAGE_TAG" "$LOCAL_IMAGE" 2>/dev/null || {
-        log_error "Failed to tag image"
-        exit 1
-    }
-fi
-
-# Load into Minikube using podman save/load
-TEMP_TAR=$(mktemp --suffix=.tar)
-if podman save "$LOCAL_IMAGE" -o "$TEMP_TAR" 2>/dev/null; then
-    if minikube image load "$TEMP_TAR" >/dev/null 2>&1; then
-log_success "Image loaded into Minikube"
-    else
-        log_error "Failed to load image into Minikube"
-        rm -f "$TEMP_TAR"
-        exit 1
-    fi
-    rm -f "$TEMP_TAR"
-else
-    log_error "Failed to save image to tar"
+# Use unified image handling function
+# Capture only stdout (image name), let stderr (log messages) go to terminal
+LOCAL_IMAGE=$(build_and_load_image_minikube \
+    "$IMAGE_NAME" \
+    "$IMAGE_TAG" \
+    "Containerfile" \
+    "$SKIP_BUILD" \
+    "${FORCE_BUILD:-false}" 2>&3) 3>&2 || {
+    log_error "Failed to build and load image"
     exit 1
-fi
+}
 
+# Optionally tag with git commit hash for reproducibility
+if [[ "${TAG_WITH_GIT:-false}" == "true" ]]; then
+    GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    if [[ "$GIT_COMMIT" != "unknown" ]]; then
+        GIT_TAG="${IMAGE_NAME}:git-${GIT_COMMIT}"
+        log_info "Tagging image with git commit: $GIT_TAG"
+        podman tag "$IMAGE_NAME:$IMAGE_TAG" "$GIT_TAG" 2>/dev/null || true
+    fi
+fi
 
 # =============================================================================
 # Multi-Run Execution Loop
@@ -477,7 +396,7 @@ for ((RUN_INDEX = 1; RUN_INDEX <= RUNS; RUN_INDEX++)); do
 # Step 5: Deploy Kubernetes resources
 # =============================================================================
 if [[ "$QUIET" != "true" ]]; then
-    log_step "Step 5/9: Deploying Kubernetes resources (Run $RUN_INDEX/$RUNS)"
+log_step "Step 5/9: Deploying Kubernetes resources (Run $RUN_INDEX/$RUNS)"
 fi
 
 # Determine job name early so cleanup can use it
@@ -567,30 +486,21 @@ if [[ "$SCALING_MODE" == "true" ]]; then
         kubectl apply --validate=false -f - -n "$NAMESPACE"
 else
     log_info "Creating Job..."
-    JOB_NAME="pqc-bench-worker"
     
-    # Generate Job YAML using unified generator
-    TEMP_JOB=$(mktemp)
-    "$SCRIPT_DIR/scripts/lib/k8s-job-generator.py" \
-        --environment minikube \
-        --job-name "$JOB_NAME" \
-        --namespace "$NAMESPACE" \
-        --image "$LOCAL_IMAGE" \
-        --scenario-configmap "$CONFIGMAP_NAME" \
-        --experiment-id "$RUN_EXP_ID" \
-        --output "$TEMP_JOB" || {
-        log_error "Failed to generate Job YAML"
-        rm -f "$TEMP_JOB"
+    # Use unified job submission function
+    JOB_NAME=$(submit_k8s_job \
+        "minikube" \
+        "$SCENARIO" \
+        "$RUN_EXP_ID" \
+        "$LOCAL_IMAGE" \
+        "$NAMESPACE" \
+        "$REPLICAS" \
+        "$SMOKE_TEST" \
+        "${RUN_SEED:-}" \
+        "${DURATION:-}") || {
+        log_error "Failed to submit job"
         exit 1
     }
-    
-    # Apply generated Job YAML
-    kubectl apply --validate=false -f "$TEMP_JOB" -n "$NAMESPACE" || {
-        log_error "Failed to apply Job YAML"
-        rm -f "$TEMP_JOB"
-        exit 1
-    }
-    rm -f "$TEMP_JOB"
 fi
 
 log_success "Kubernetes resources deployed"
@@ -599,7 +509,7 @@ log_success "Kubernetes resources deployed"
 # Step 6: Wait for Job completion
 # =============================================================================
 if [[ "$QUIET" != "true" ]]; then
-    log_step "Step 6/9: Waiting for Job completion"
+log_step "Step 6/9: Waiting for Job completion"
 fi
 
 # Use unified job waiting function
@@ -613,7 +523,7 @@ fi
 # Step 7: Copy results from PVC
 # =============================================================================
 if [[ "$QUIET" != "true" ]]; then
-    log_step "Step 7/9: Copying results from PVC"
+log_step "Step 7/9: Copying results from PVC"
 fi
 
 # Get pod name for later use (manifest generation)
@@ -664,7 +574,7 @@ log_success "Verified $JSONL_COUNT JSONL file(s) with valid data"
 # Step 8: Generate manifest
 # =============================================================================
 if [[ "$QUIET" != "true" ]]; then
-    log_step "Step 8/9: Generating experiment manifest"
+log_step "Step 8/9: Generating experiment manifest"
 fi
 
 END_TIME=$(date +%s)
@@ -713,7 +623,7 @@ generate_manifest "$RUN_OUT_DIR" "$RUN_EXP_ID" "$SCENARIO" "minikube" "$RUN_INDE
 # Step 9: Run analysis pipeline
 # =============================================================================
 if [[ "$QUIET" != "true" ]]; then
-    log_step "Step 9/9: Running analysis pipeline"
+log_step "Step 9/9: Running analysis pipeline"
 fi
 
 run_analysis_pipeline "$RUN_OUT_DIR" "$RUN_EXP_ID" "$SKIP_ANALYSIS"

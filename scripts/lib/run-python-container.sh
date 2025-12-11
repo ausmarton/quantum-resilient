@@ -57,6 +57,59 @@ else
     SCRIPT_PATH="${SCRIPT_ARG#$SCRIPT_DIR/}"
 fi
 
+# Convert path arguments from host absolute paths to container paths
+# Container mounts project root as /workspace, so paths under project root
+# need to be converted from /absolute/host/path to /workspace/relative/path
+convert_path_to_container() {
+    local path="$1"
+    if [[ "$path" == /* ]]; then
+        # Absolute path - check if it's under project root
+        if [[ "$path" == "$SCRIPT_DIR"* ]]; then
+            # Convert to container path: /workspace/relative/path
+            echo "/workspace/${path#$SCRIPT_DIR/}"
+        else
+            # Path outside project root - return as-is (might be /tmp, etc.)
+            echo "$path"
+        fi
+    else
+        # Already relative - assume it's relative to /workspace
+        echo "$path"
+    fi
+}
+
+# Convert path arguments from host absolute paths to container paths
+# Only convert explicit path arguments (--input, --output, etc.) to avoid false positives
+CONVERTED_ARGS=()
+while [[ $# -gt 0 ]]; do
+    arg="$1"
+    shift
+    
+    # Check if this is a path argument (--input, --output, --input-dir, --output-dir, etc.)
+    if [[ "$arg" =~ ^--(input|output|input-dir|output-dir|data-dir|stats-dir|figures-dir)(=.*)?$ ]]; then
+        # This is a path argument
+        if [[ "$arg" == *=* ]]; then
+            # --arg=value format
+            arg_name="${arg%%=*}"
+            arg_value="${arg#*=}"
+            converted_value=$(convert_path_to_container "$arg_value")
+            CONVERTED_ARGS+=("${arg_name}=${converted_value}")
+        else
+            # --arg value format
+            CONVERTED_ARGS+=("$arg")
+            if [[ $# -gt 0 ]]; then
+                next_arg="$1"
+                shift
+                converted_value=$(convert_path_to_container "$next_arg")
+                CONVERTED_ARGS+=("$converted_value")
+            fi
+        fi
+    else
+        # Not a known path argument - pass as-is
+        # (Don't try to auto-detect paths, as this could break non-path arguments)
+        CONVERTED_ARGS+=("$arg")
+    fi
+done
+
 # Run script in container
 # Mount project root as /workspace
 # Mount results directory if it exists
@@ -72,4 +125,4 @@ $DOCKER_CMD run --rm \
     $VOLUME_FLAGS \
     -w /workspace \
     "$ANALYSIS_IMAGE" \
-    "$SCRIPT_PATH" "$@"
+    "$SCRIPT_PATH" "${CONVERTED_ARGS[@]}"

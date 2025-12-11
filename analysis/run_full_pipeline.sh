@@ -24,6 +24,18 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Get project root (parent of analysis directory)
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Determine Python command (containerized if available, fallback to host Python)
+# Use containerized Python by default to ensure consistent dependencies
+PYTHON_CMD="python3"
+if [[ -f "$PROJECT_ROOT/scripts/lib/run-python-container.sh" ]] && \
+   [[ "${QR_USE_CONTAINER:-true}" != "false" ]]; then
+    PYTHON_CMD="$PROJECT_ROOT/scripts/lib/run-python-container.sh"
+    echo -e "${BLUE}Using containerized analysis environment${NC}"
+fi
+
 # Check arguments
 if [[ $# -lt 2 ]]; then
     echo -e "${RED}Error: Missing arguments${NC}"
@@ -94,7 +106,7 @@ if [[ "$IS_LOCAL" == "true" ]]; then
 else
     echo -e "${YELLOW}[1/6] Fetching results...${NC}"
     mkdir -p "$DATA_DIR"
-    python "$SCRIPTS_DIR/fetch_results.py" \
+    $PYTHON_CMD "$SCRIPTS_DIR/fetch_results.py" \
         --experiment-id "$EXPERIMENT_ID" \
         --uri "$URI" \
         --out "$DATA_DIR" \
@@ -114,7 +126,7 @@ echo ""
 # Step 2: Merge JSONL files
 echo -e "${YELLOW}[2/6] Merging JSONL files...${NC}"
 MERGED_DIR="$DATA_DIR/merged"
-python "$SCRIPTS_DIR/merge_jsonl.py" \
+$PYTHON_CMD "$SCRIPTS_DIR/merge_jsonl.py" \
     --input "$RAW_PATH" \
     --output "$MERGED_DIR"
 
@@ -140,11 +152,11 @@ else
     INPUT_FILE="$MERGED_DIR/merged.jsonl"
 fi
 
-python "$SCRIPTS_DIR/compute_statistics.py" \
+$PYTHON_CMD "$SCRIPTS_DIR/compute_statistics.py" \
     --input "$INPUT_FILE" \
     --output "$STATS_DIR" \
     --experiment-id "$EXPERIMENT_ID" 2>/dev/null || \
-python "$SCRIPTS_DIR/compute_stats.py" \
+$PYTHON_CMD "$SCRIPTS_DIR/compute_stats.py" \
     --input "$INPUT_FILE" \
     --output "$STATS_DIR" \
     --experiment-id "$EXPERIMENT_ID" 2>/dev/null || \
@@ -162,24 +174,24 @@ echo -e "${YELLOW}[4/6] Generating plots...${NC}"
 mkdir -p "$FIGURES_DIR"
 
 # Try ECDF plot first
-python "$SCRIPTS_DIR/plot_ecdf.py" \
+$PYTHON_CMD "$SCRIPTS_DIR/plot_ecdf.py" \
     --input "$INPUT_FILE" \
     --output "$FIGURES_DIR" \
     --experiment-id "$EXPERIMENT_ID" 2>/dev/null || \
-python "$SCRIPTS_DIR/plot_latency.py" \
+$PYTHON_CMD "$SCRIPTS_DIR/plot_latency.py" \
     --input "$INPUT_FILE" \
     --output "$FIGURES_DIR" \
     --experiment-id "$EXPERIMENT_ID" 2>/dev/null || \
 echo -e "${YELLOW}  Warning: Latency plot script not found${NC}"
 
-python "$SCRIPTS_DIR/plot_throughput.py" \
+$PYTHON_CMD "$SCRIPTS_DIR/plot_throughput.py" \
     --input "$INPUT_FILE" \
     --output "$FIGURES_DIR" \
     --experiment-id "$EXPERIMENT_ID" 2>/dev/null || \
 echo -e "${YELLOW}  Warning: Throughput plot script not found${NC}"
 
 # Optional plots
-python "$SCRIPTS_DIR/plot_queue_delay.py" \
+$PYTHON_CMD "$SCRIPTS_DIR/plot_queue_delay.py" \
     --input "$INPUT_FILE" \
     --output "$FIGURES_DIR" \
     --experiment-id "$EXPERIMENT_ID" 2>/dev/null || true
@@ -192,7 +204,7 @@ echo ""
 echo -e "${YELLOW}[5/6] Exporting dataset...${NC}"
 EXPORTS_DIR="$DATA_DIR/exports"
 if [[ -f "$SCRIPTS_DIR/export_dataset.py" ]]; then
-    python "$SCRIPTS_DIR/export_dataset.py" \
+    $PYTHON_CMD "$SCRIPTS_DIR/export_dataset.py" \
         --input "$MERGED_DIR" \
         --output "$EXPORTS_DIR" \
         --experiment-id "$EXPERIMENT_ID" \

@@ -81,6 +81,10 @@ results/
 **/results/
 # Note: Raw JSONL files are benchmark data but too large for git. Store in external storage.
 
+# Test results (temporary test outputs from development/testing)
+test-results/
+**/test-results/
+
 # Temporary files
 *.tmp
 *.temp
@@ -106,6 +110,10 @@ logs/
 # These are temporary artifacts created by run_full_scale_data_collection.sh
 data-collection-*/
 **/data-collection-*/
+
+# Experiment run tracking directories (created by run_all_experiments.sh)
+run-*/
+**/run-*/
 
 # Large binary data files (but keep JSONL which is text-based)
 *.h5

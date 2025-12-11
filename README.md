@@ -1720,6 +1720,10 @@ See the [Full-Scale Data Collection Guide](FULL_SCALE_DATA_COLLECTION_GUIDE.md) 
 
 The framework includes a master orchestration system that can execute all experiments across all environments with a single command.
 
+**⭐ PRIMARY SCRIPT: `run_all_experiments.sh`** - Use this for all experiment runs.
+
+For script architecture and when to use each script, see [Script Architecture Guide](docs/guides/script-architecture.md).
+
 ### Experiment Matrix
 
 Define your complete experiment configuration in `orchestration/experiment_matrix.yaml`:
@@ -1747,11 +1751,25 @@ experiments:
 Run all experiments across all environments:
 
 ```bash
+# Smoke test (quick validation)
 ./run_all_experiments.sh \
-  --matrix orchestration/experiment_matrix.yaml \
+  --smoke-test \
   --envs native,minikube,gcp \
   --project my-gcp-project \
   --bucket pqc-bench-results
+
+# Full-scale with analysis
+./run_all_experiments.sh \
+  --envs native,minikube,gcp \
+  --project my-gcp-project \
+  --bucket pqc-bench-results
+
+# Full-scale data collection only (no analysis)
+./run_all_experiments.sh \
+  --envs native,minikube,gcp \
+  --project my-gcp-project \
+  --bucket pqc-bench-results \
+  --skip-analysis
 ```
 
 ### What It Does

@@ -495,3 +495,275 @@ wait_for_multiple_jobs() {
     return 0
 }
 
+# =============================================================================
+# Unified Job Submission Function
+# =============================================================================
+
+submit_k8s_job() {
+    # Submit a Kubernetes job for either Minikube or GKE.
+    #
+    # Args:
+    #   environment: "minikube" or "gcp"
+    #   scenario: Path to scenario YAML file
+    #   exp_id: Experiment identifier
+    #   image: Container image name (full path for GCP, localhost/ prefix for Minikube)
+    #   namespace: Kubernetes namespace (default: default)
+    #   replicas: Number of replicas (default: 1)
+    #   smoke_test: Enable smoke-test mode (default: false)
+    #   seed: RNG seed (optional)
+    #   duration: Override duration (optional)
+    #   project: GCP project (required for GCP)
+    #   bucket: GCS bucket (required for GCP)
+    #   region: GCP region (required for GCP)
+    #   job_name: Custom job name (optional, will be generated if not provided)
+    #
+    # Returns:
+    #   0 on success, 1 on failure
+    #   Outputs job name to stdout on success
+    local environment="$1"
+    local scenario="$2"
+    local exp_id="$3"
+    local image="$4"
+    local namespace="${5:-default}"
+    local replicas="${6:-1}"
+    local smoke_test="${7:-false}"
+    local seed="${8:-}"
+    local duration="${9:-}"
+    local project="${10:-}"
+    local bucket="${11:-}"
+    local region="${12:-}"
+    local job_name="${13:-}"
+    
+    if [[ -z "$environment" ]] || [[ -z "$scenario" ]] || [[ -z "$exp_id" ]] || [[ -z "$image" ]]; then
+        log_error "submit_k8s_job: environment, scenario, exp_id, and image are required"
+        return 1
+    fi
+    
+    if [[ "$environment" != "minikube" ]] && [[ "$environment" != "gcp" ]]; then
+        log_error "submit_k8s_job: environment must be 'minikube' or 'gcp'"
+        return 1
+    fi
+    
+    if [[ "$environment" == "gcp" ]]; then
+        if [[ -z "$project" ]] || [[ -z "$bucket" ]] || [[ -z "$region" ]]; then
+            log_error "submit_k8s_job: project, bucket, and region are required for GCP"
+            return 1
+        fi
+    fi
+    
+    # Source k8s-configmap.sh for ConfigMap creation
+    local script_dir="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+    source "$script_dir/scripts/lib/k8s-configmap.sh" 2>/dev/null || {
+        log_error "Failed to source k8s-configmap.sh"
+        return 1
+    }
+    
+    # Generate job name if not provided
+    if [[ -z "$job_name" ]]; then
+        # Source common.sh for sanitize_k8s_name function
+        source "$script_dir/scripts/lib/common.sh" 2>/dev/null || {
+            log_error "Failed to source common.sh"
+            return 1
+        }
+        
+        # Extract replica suffix if present (e.g., _r4, _r8)
+        local replica_suffix=""
+        local base_exp_id="$exp_id"
+        if [[ "$exp_id" =~ _r([0-9]+)$ ]]; then
+            replica_suffix="_r${BASH_REMATCH[1]}"
+            base_exp_id="${exp_id%_r*}"
+        else
+            if [[ "$replicas" -gt 1 ]]; then
+                replica_suffix="_r${replicas}"
+            fi
+        fi
+        
+        # Sanitize and truncate (Kubernetes job names max 63 chars)
+        # "pqc-bench-" is 10 chars, replica suffix is max 4 chars (_r8), so we have 49 chars for base ID
+        local sanitized_base=$(sanitize_k8s_name "$base_exp_id" | cut -c1-49)
+        local sanitized_suffix=$(sanitize_k8s_name "$replica_suffix" | sed 's/^_//')
+        job_name="pqc-bench-${sanitized_base}${sanitized_suffix}"
+    fi
+    
+    # Determine JSONL output path (scaling mode uses different path)
+    local jsonl_out="/results/raw/run.jsonl"
+    if [[ "$replicas" -gt 1 ]]; then
+        jsonl_out="/results/current/raw/run.jsonl"
+    fi
+    
+    # Create scenario ConfigMap
+    local scenario_cm_sanitized=$(sanitize_k8s_name "$exp_id" | cut -c1-230)
+    local scenario_cm="pqc-scenario-${scenario_cm_sanitized}"
+    
+    log_info "Creating scenario ConfigMap..." >&2
+    scenario_cm=$(create_scenario_configmap \
+        "$scenario" \
+        "$exp_id" \
+        "$namespace" \
+        "$smoke_test" \
+        "$seed" \
+        "$scenario_cm" \
+        "$jsonl_out" \
+        "$duration") || {
+        log_error "Failed to create scenario ConfigMap" >&2
+        return 1
+    }
+    
+    # Create GCP config ConfigMap (only for GCP)
+    local gcp_cm=""
+    if [[ "$environment" == "gcp" ]]; then
+        local gcp_cm_sanitized=$(sanitize_k8s_name "$exp_id" | cut -c1-228)
+        gcp_cm="pqc-gcp-config-${gcp_cm_sanitized}"
+        
+        log_info "Creating GCP config ConfigMap..." >&2
+        gcp_cm=$(create_gcp_config_configmap \
+            "$exp_id" \
+            "$bucket" \
+            "$region" \
+            "$project" \
+            "$namespace" \
+            "$smoke_test" \
+            "$gcp_cm") || {
+            log_error "Failed to create GCP config ConfigMap" >&2
+            return 1
+        }
+    fi
+    
+    # Generate Job YAML using unified generator
+    local temp_job=$(mktemp)
+    local generator_args=(
+        --environment "$environment"
+        --job-name "$job_name"
+        --namespace "$namespace"
+        --image "$image"
+        --scenario-configmap "$scenario_cm"
+        --experiment-id "$exp_id"
+        --output "$temp_job"
+    )
+    
+    if [[ "$environment" == "gcp" ]] && [[ -n "$gcp_cm" ]]; then
+        generator_args+=(--gcp-config-configmap "$gcp_cm")
+    fi
+    
+    log_info "Generating Job YAML..." >&2
+    if ! "$script_dir/scripts/lib/k8s-job-generator.py" "${generator_args[@]}" >&2; then
+        log_error "Failed to generate Job YAML" >&2
+        rm -f "$temp_job"
+        return 1
+    fi
+    
+    # Apply Job YAML
+    log_info "Submitting Job '$job_name' to Kubernetes..." >&2
+    local job_output=$(kubectl apply --validate=false -f "$temp_job" -n "$namespace" 2>&1)
+    local job_exit_code=$?
+    rm -f "$temp_job"
+    
+    if [[ $job_exit_code -ne 0 ]]; then
+        log_error "Failed to submit job" >&2
+        log_error "Experiment ID: $exp_id" >&2
+        log_error "Job name: $job_name" >&2
+        log_error "Replicas: $replicas" >&2
+        log_error "kubectl output:" >&2
+        echo "$job_output" >&2
+        return 1
+    fi
+    
+    log_success "Job '$job_name' submitted successfully" >&2
+    echo "$job_name"
+    return 0
+}
+
+# =============================================================================
+# Service Account Management (GCP)
+# =============================================================================
+
+ensure_gcp_service_account() {
+    # Ensure GCP service account exists with Workload Identity binding.
+    #
+    # Args:
+    #   project: GCP project ID
+    #   namespace: Kubernetes namespace (default: default)
+    #   sa_email: Service account email (optional, will be derived if not provided)
+    #
+    # Returns:
+    #   0 on success, 1 on failure
+    local project="$1"
+    local namespace="${2:-default}"
+    local sa_email="${3:-}"
+    
+    if [[ -z "$project" ]]; then
+        log_error "ensure_gcp_service_account: project is required"
+        return 1
+    fi
+    
+    # Get service account email from Terraform if not provided
+    if [[ -z "$sa_email" ]]; then
+        local script_dir="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+        local terraform_dir="$script_dir/terraform/gke"
+        if [[ -d "$terraform_dir" ]] && [[ -d "$terraform_dir/.terraform" ]]; then
+            sa_email=$(cd "$terraform_dir" && terraform output -raw service_account_email 2>/dev/null || echo "")
+        fi
+        if [[ -z "$sa_email" ]]; then
+            # Default service account email format
+            sa_email="pqc-bench-worker@${project}.iam.gserviceaccount.com"
+        fi
+    fi
+    
+    # Create/update Kubernetes ServiceAccount with Workload Identity annotation
+    if ! kubectl get serviceaccount pqc-bench-sa -n "$namespace" &>/dev/null; then
+        log_info "Creating Kubernetes ServiceAccount 'pqc-bench-sa' in namespace '$namespace'..."
+        if ! cat <<EOF | kubectl apply -f - 2>&1; then
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pqc-bench-sa
+  namespace: $namespace
+  annotations:
+    iam.gke.io/gcp-service-account: "$sa_email"
+EOF
+            log_error "Failed to create ServiceAccount"
+            return 1
+        fi
+        log_success "ServiceAccount created successfully"
+    else
+        # Update annotation if service account exists but annotation is missing/wrong
+        local current_annotation=$(kubectl get serviceaccount pqc-bench-sa -n "$namespace" -o jsonpath='{.metadata.annotations.iam\.gke\.io/gcp-service-account}' 2>/dev/null || echo "")
+        if [[ "$current_annotation" != "$sa_email" ]]; then
+            log_info "Updating ServiceAccount annotation to point to $sa_email..."
+            if ! kubectl annotate serviceaccount pqc-bench-sa -n "$namespace" \
+                "iam.gke.io/gcp-service-account=$sa_email" --overwrite 2>&1; then
+                log_error "Failed to update ServiceAccount annotation"
+                return 1
+            fi
+        fi
+    fi
+    
+    # Create IAM binding for Workload Identity if it doesn't exist (for non-default namespaces)
+    # For default namespace, Terraform should have already created the binding
+    if [[ "$namespace" != "default" ]]; then
+        local k8s_sa="${project}.svc.id.goog[${namespace}/pqc-bench-sa]"
+        if ! gcloud iam service-accounts get-iam-policy "$sa_email" \
+            --project="$project" \
+            --format="json" 2>/dev/null | grep -q "$k8s_sa"; then
+            log_info "Creating Workload Identity IAM binding for $k8s_sa..."
+            if ! gcloud iam service-accounts add-iam-policy-binding "$sa_email" \
+                --project="$project" \
+                --role="roles/iam.workloadIdentityUser" \
+                --member="serviceAccount:${k8s_sa}" 2>&1; then
+                log_warn "Failed to create Workload Identity binding"
+                log_warn "This may cause GCS upload failures"
+                log_warn "You may need to create it manually:"
+                echo "  gcloud iam service-accounts add-iam-policy-binding $sa_email \\" >&2
+                echo "    --project=$project \\" >&2
+                echo "    --role=roles/iam.workloadIdentityUser \\" >&2
+                echo "    --member=serviceAccount:${k8s_sa}" >&2
+                # Don't exit - the binding might already exist from Terraform for default namespace
+            else
+                log_success "Workload Identity binding created successfully"
+            fi
+        fi
+    fi
+    
+    return 0
+}
+

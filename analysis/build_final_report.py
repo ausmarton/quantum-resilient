@@ -105,8 +105,8 @@ def create_styles() -> dict:
         styles['BodyText'].alignment = TA_JUSTIFY
         styles['BodyText'].leading = 14
     else:
-        styles.add(ParagraphStyle(
-            name='BodyText',
+    styles.add(ParagraphStyle(
+        name='BodyText',
         parent=styles['Normal'],
         fontSize=10,
         spaceAfter=8,

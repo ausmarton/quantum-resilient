@@ -45,6 +45,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GENERATED_SCENARIOS_DIR="$SCRIPT_DIR/generated-scenarios"
 RESULTS_BASE="$SCRIPT_DIR/results"
 
+# Source unified Kubernetes job management functions
+source "$SCRIPT_DIR/scripts/lib/k8s-job.sh" 2>/dev/null || true
+source "$SCRIPT_DIR/scripts/lib/k8s-image.sh" 2>/dev/null || true
+source "$SCRIPT_DIR/scripts/lib/analysis.sh" 2>/dev/null || true
+
 # Default values
 MATRIX="$SCRIPT_DIR/orchestration/experiment_matrix.yaml"
 ENVS="native"
@@ -280,28 +285,69 @@ run_experiment() {
                     $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 || exit_code=$?
                 ;;
             minikube)
-                # Use --quiet flag to suppress verbose output, allowing progress updates to show
-                # Errors are still logged by run_minikube.sh internally
-                if "$SCRIPT_DIR/run_minikube.sh" \
-                    --scenario "$scenario_path" \
-                    --out "$output_dir" \
-                    --replicas "$replicas" \
-                    --exp-id "$scenario_id" \
-                    --quiet \
-                    $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") >/dev/null 2>&1; then
-                    exit_code=0
+                # Minikube supports conditional parallelism (limited to prevent overutilization)
+                # Check if parallelism is enabled and if we should use it
+                if [[ "${MINIKUBE_USE_PARALLELISM:-false}" == "true" ]]; then
+                    # Parallel mode: Submit job non-blocking and track it
+                    # Use unified job submission function
+                    if [[ -z "${MINIKUBE_IMAGE_NAME:-}" ]]; then
+                        # Build and load image (this should be done once before the loop)
+                        log_error "Minikube image not set for parallel mode - this should not happen"
+                        exit_code=1
+                    else
+                        # Determine namespace
+                        if [[ "$SMOKE_TEST" == "true" ]]; then
+                            MINIKUBE_NAMESPACE="pqc-smoke-test"
+                        else
+                            MINIKUBE_NAMESPACE="default"
+                        fi
+                        
+                        # Submit job using unified function (non-blocking)
+                        JOB_NAME=$(submit_k8s_job \
+                            "minikube" \
+                            "$scenario_path" \
+                            "$scenario_id" \
+                            "$MINIKUBE_IMAGE_NAME" \
+                            "$MINIKUBE_NAMESPACE" \
+                            "$replicas" \
+                            "$SMOKE_TEST" \
+                            "" \
+                            "" 2>&1) || exit_code=$?
+                        
+                        if [[ $exit_code -eq 0 ]] && [[ -n "$JOB_NAME" ]]; then
+                            # Track job for batch waiting
+                            echo "$JOB_NAME|$scenario_id|$output_dir" >> "${MINIKUBE_JOB_TRACKING_FILE:-/tmp/minikube_jobs.txt}"
+                            exit_code=0
+                        else
+                            log_error "Job submission failed for $scenario_id"
+                            exit_code=1
+                        fi
+                    fi
                 else
-                    exit_code=$?
+                    # Sequential mode: Run experiment and wait for completion
+                    # Use --quiet flag to suppress verbose output, allowing progress updates to show
+                    # Errors are still logged by run_minikube.sh internally
+                    if "$SCRIPT_DIR/run_minikube.sh" \
+                        --scenario "$scenario_path" \
+                        --out "$output_dir" \
+                        --replicas "$replicas" \
+                        --exp-id "$scenario_id" \
+                        --quiet \
+                        $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") >/dev/null 2>&1; then
+                        exit_code=0
+                    else
+                        exit_code=$?
+                    fi
                 fi
                 ;;
             gcp)
                 # Unified execution: Always use Kubernetes Job submission
-                # PARALLEL_JOBS=1 = sequential (submit one, wait, submit next)
-                # PARALLEL_JOBS>1 = parallel (submit multiple, wait for all)
-                # This eliminates redundant code paths
+                # For persistent cluster mode: Submit ALL jobs at once, let Kubernetes scheduler handle parallelism
+                # For ephemeral mode: Use deploy_gcp.sh (creates/destroys cluster per experiment)
                 
                 if [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
-                    # Persistent cluster mode: use direct Kubernetes Job submission
+                    # Persistent cluster mode: Submit all jobs immediately (non-blocking)
+                    # Kubernetes scheduler will determine parallelism based on available nodes
                     if [[ -z "${GCP_IMAGE_NAME:-}" ]]; then
                         # Get image name if not set
                         IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/pqc"
@@ -315,7 +361,9 @@ run_experiment() {
                         GCP_NAMESPACE="default"
                     fi
                     
-                    # Submit job (non-blocking for parallel, blocking for sequential)
+                    # Submit job immediately (non-blocking) - all jobs submitted, then wait for all at end
+                    # Export cluster name so submit_gcp_job_parallel.sh can refresh credentials
+                    export GCP_CLUSTER_NAME="$CLUSTER_NAME"
                     JOB_SUBMIT_OUTPUT=$("$SCRIPT_DIR/scripts/submit_gcp_job_parallel.sh" \
                         --scenario "$scenario_path" \
                         --exp-id "$scenario_id" \
@@ -346,37 +394,10 @@ run_experiment() {
                     fi
                     
                     if [[ $exit_code -eq 0 ]]; then
-                        # Store job for tracking (used for parallel mode)
-                        if [[ $PARALLEL_JOBS -gt 1 ]]; then
-                            echo "$JOB_NAME|$scenario_id|$output_dir" >> "${JOB_TRACKING_FILE:-/tmp/gcp_jobs_${env}.txt}"
-                            # For parallel mode, wait for all jobs at the end
-                            exit_code=0  # Job submission succeeded
-                        else
-                            # Sequential mode: wait for this job to complete, then download
-                            log_info "  Waiting for job $JOB_NAME to complete..."
-                            while true; do
-                                STATUS=$(kubectl get job "$JOB_NAME" -n "$GCP_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "")
-                                FAILED_STATUS=$(kubectl get job "$JOB_NAME" -n "$GCP_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "")
-                                
-                                if [[ "$STATUS" == "True" ]]; then
-                                    # Job completed, download results
-                                    if "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
-                                        --exp-id "$scenario_id" \
-                                        --bucket "$BUCKET" \
-                                        --out "$output_dir" 2>&1; then
-                                        exit_code=0
-                                    else
-                                        exit_code=1
-                                    fi
-                                    break
-                                elif [[ "$FAILED_STATUS" == "True" ]]; then
-                                    log_error "  Job $JOB_NAME failed"
-                                    exit_code=1
-                                    break
-                                fi
-                                sleep 5
-                            done
-                        fi
+                        # Always track job for batch waiting (all jobs submitted, wait for all at end)
+                        echo "$JOB_NAME|$scenario_id|$output_dir" >> "${JOB_TRACKING_FILE:-/tmp/gcp_jobs_${env}.txt}"
+                        # Job submission succeeded - will wait for all jobs at the end
+                        exit_code=0
                     fi
                 else
                     # Ephemeral mode: use deploy_gcp.sh (for single experiments or when cluster doesn't exist)
@@ -608,6 +629,11 @@ if [[ -f "$GENERATED_SCENARIOS_DIR/manifest.json" ]]; then
     log_info "Total scenarios: $TOTAL_SCENARIOS"
 fi
 
+# Create run tracking directory with timestamp
+RUN_TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+RUN_DIR="$SCRIPT_DIR/run-${RUN_TIMESTAMP}"
+mkdir -p "$RUN_DIR"
+
 # Unified final results directory (same for both smoke-test and full-scale)
 # Initialize early so progress tracking can use it
 FINAL_RESULTS_DIR="$SCRIPT_DIR/final-results"
@@ -660,6 +686,65 @@ for env in "${ENV_ARRAY[@]}"; do
     esac
     
     log_step "Environment: ${env^^}"
+    
+    # For Minikube: Check if parallelism should be enabled
+    if [[ "$env" == "minikube" ]]; then
+        MINIKUBE_USE_PARALLELISM=false
+        MINIKUBE_MAX_PARALLEL=4
+        
+        if [[ $PARALLEL_JOBS -gt 1 ]]; then
+            # Limit parallelism for Minikube to prevent overutilization
+            if [[ $PARALLEL_JOBS -gt $MINIKUBE_MAX_PARALLEL ]]; then
+                log_warn "Limiting Minikube parallelism to $MINIKUBE_MAX_PARALLEL (requested: $PARALLEL_JOBS)"
+                PARALLEL_JOBS=$MINIKUBE_MAX_PARALLEL
+            fi
+            
+            # Check system load before enabling parallelism
+            if [[ -f "$SCRIPT_DIR/scripts/check_system_load.sh" ]]; then
+                if "$SCRIPT_DIR/scripts/check_system_load.sh" --warn-threshold 1.0 --fail-threshold 2.0 >/dev/null 2>&1; then
+                    MINIKUBE_USE_PARALLELISM=true
+                    log_info "Minikube parallelism enabled: $PARALLEL_JOBS jobs (system load check passed)"
+                else
+                    log_warn "System load check failed or load is high - using sequential mode for Minikube"
+                    log_info "  (Minikube should be closer to native to avoid noisy neighbors)"
+                    MINIKUBE_USE_PARALLELISM=false
+                fi
+            else
+                # If check script doesn't exist, enable parallelism with warning
+                log_warn "System load check script not found - enabling parallelism with caution"
+                MINIKUBE_USE_PARALLELISM=true
+            fi
+            
+            if [[ "$MINIKUBE_USE_PARALLELISM" == "true" ]]; then
+                # Create job tracking file for Minikube parallel mode
+                TEMP_DIR=$(mktemp -d)
+                export TEMP_DIR
+                export MINIKUBE_JOB_TRACKING_FILE="${TEMP_DIR}/minikube_jobs.txt"
+                > "$MINIKUBE_JOB_TRACKING_FILE"
+                
+                # Build and load image once for all jobs
+                log_info "Building and loading Minikube image for parallel execution..."
+                IMAGE_NAME="pqc-bench"
+                IMAGE_TAG="latest"
+                MINIKUBE_IMAGE_NAME=$(build_and_load_image_minikube \
+                    "$IMAGE_NAME" \
+                    "$IMAGE_TAG" \
+                    "Containerfile" \
+                    "false" \
+                    "false" 2>&3) 3>&2 || {
+                    log_error "Failed to build and load Minikube image"
+                    MINIKUBE_USE_PARALLELISM=false
+                }
+                export MINIKUBE_IMAGE_NAME
+                if [[ -n "$MINIKUBE_IMAGE_NAME" ]]; then
+                    log_success "Minikube image ready: $MINIKUBE_IMAGE_NAME"
+                fi
+            fi
+        else
+            log_info "Minikube: Sequential mode (PARALLEL_JOBS=1, closer to native baseline)"
+        fi
+        export MINIKUBE_USE_PARALLELISM
+    fi
     
     # Read scenarios from manifest
     if [[ ! -f "$GENERATED_SCENARIOS_DIR/manifest.json" ]]; then
@@ -740,22 +825,36 @@ print(total_experiments)
         fi
         
         # Check if cluster already exists
-        # Calculate node count based on parallel jobs for proper isolation
-        # Each job needs ~1 CPU (800m request), n2-standard-2 has 2 vCPUs
-        # To avoid noisy neighbor: max 1 job per node (or 2 if we allow some sharing)
-        # For safety and isolation: use 1 job per node
+        # Calculate node count for reasonable parallelism - Kubernetes will queue and schedule jobs
+        # We submit ALL jobs at once, but only create enough nodes for reasonable parallelism
+        # Kubernetes scheduler will queue jobs and schedule them as nodes become available
+        # Each job needs ~1 CPU (800m request), n2-standard-2 has ~1.5 vCPUs available
+        # So 1 job per node for optimal isolation
         # Add 1 extra node for system overhead
         if [[ $PARALLEL_JOBS -gt 1 ]]; then
+            # For explicit parallelism, use PARALLEL_JOBS as a hint
             CALCULATED_NODE_COUNT=$((PARALLEL_JOBS + 1))
-            log_info "Calculated node count: $CALCULATED_NODE_COUNT (for $PARALLEL_JOBS parallel jobs + 1 overhead)"
+            log_info "Calculated node count: $CALCULATED_NODE_COUNT (based on PARALLEL_JOBS=$PARALLEL_JOBS)"
         else
-            CALCULATED_NODE_COUNT="${NODE_COUNT:-1}"
-            log_info "Using node count: $CALCULATED_NODE_COUNT (sequential mode)"
+            # For PARALLEL_JOBS=1, use a small but reasonable node count for queuing
+            # This allows Kubernetes to queue jobs and schedule them as nodes become available
+            # Without creating a massive cluster for all jobs to run simultaneously
+            CALCULATED_NODE_COUNT="${NODE_COUNT:-3}"
+            log_info "Using node count: $CALCULATED_NODE_COUNT (default for queuing, not all-at-once execution)"
+            log_info "  All $ENV_TOTAL_EXPERIMENTS jobs will be submitted at once"
+            log_info "  Kubernetes will queue and schedule them as nodes become available"
+            log_info "  This provides reasonable parallelism without over-provisioning the cluster"
         fi
         
+        # Check if cluster exists (suppress stderr to avoid noise, but capture exit code)
+        CLUSTER_EXISTS=false
         if gcloud container clusters describe "$CLUSTER_NAME" \
             --region "$REGION" \
             --project "$PROJECT" &>/dev/null 2>&1; then
+            CLUSTER_EXISTS=true
+        fi
+        
+        if [[ "$CLUSTER_EXISTS" == "true" ]]; then
             log_warn "Cluster $CLUSTER_NAME already exists"
             
             # Detect the actual node pool name (could be pqc-bench-pool, default-pool, etc.)
@@ -896,16 +995,16 @@ print(total_experiments)
                 
                 log_info "Calculated: $NODES_PER_ZONE nodes per zone × $ZONES zones = $TOTAL_NODES total nodes"
                 
-                # For Terraform, node_count is TOTAL nodes (not per zone) for regional clusters
-                # GCP will distribute them across zones automatically
+                # For Terraform regional clusters, node_count is PER ZONE, not total
+                # So CURRENT_NODE_COUNT is already per-zone, multiply by zones to get total
                 CURRENT_TOTAL_NODES=$((CURRENT_NODE_COUNT * ZONES))
                 
                 # Compare current total nodes with required total nodes
-                # Use CALCULATED_NODE_COUNT directly (it's already the total we want)
+                # CALCULATED_NODE_COUNT is the total we want, convert to per-zone for Terraform
                 if [[ "$CURRENT_TOTAL_NODES" -ne "$CALCULATED_NODE_COUNT" ]]; then
                     log_info "Current cluster state: $CURRENT_NODE_COUNT nodes per zone (total: $CURRENT_TOTAL_NODES nodes)"
-                    log_info "Target cluster state: $CALCULATED_NODE_COUNT total nodes (will be distributed across $ZONES zones)"
-                    log_info "Scaling cluster from $CURRENT_TOTAL_NODES to $CALCULATED_NODE_COUNT total nodes (for $PARALLEL_JOBS parallel jobs)"
+                    log_info "Target cluster state: $CALCULATED_NODE_COUNT total nodes ($NODES_PER_ZONE per zone across $ZONES zones)"
+                    log_info "Scaling cluster from $CURRENT_TOTAL_NODES to $CALCULATED_NODE_COUNT total nodes"
                     
                     # Estimate resource requirements for quota checking
                     # n2-standard-2 has 2 vCPUs and 8GB RAM per node
@@ -916,7 +1015,7 @@ print(total_experiments)
                     log_info "If scaling fails due to quota, reduce PARALLEL_JOBS or increase GCP quotas"
                     
                     # Use Terraform to scale the cluster (keeps state in sync)
-                    log_info "Scaling cluster using Terraform (node_count=$CALCULATED_NODE_COUNT)..."
+                    log_info "Scaling cluster using Terraform (node_count=$NODES_PER_ZONE per zone = $CALCULATED_NODE_COUNT total)..."
                     TERRAFORM_DIR="$SCRIPT_DIR/terraform/gke"
                     cd "$TERRAFORM_DIR"
                     
@@ -1005,13 +1104,14 @@ print(total_experiments)
                         SCALE_EXIT_CODE=$?
                     else
                         # Use Terraform to update only the node pool (not the cluster)
+                        # Terraform node_count is PER ZONE for regional clusters
                         SCALE_OUTPUT=$(timeout 600 terraform apply -auto-approve \
                             -target=google_container_node_pool.primary \
                             -var="project_id=$PROJECT" \
                             -var="region=$REGION" \
                             -var="bucket_name=$BUCKET" \
                             -var="machine_type=${MACHINE_TYPE:-n2-standard-2}" \
-                            -var="node_count=$CALCULATED_NODE_COUNT" \
+                            -var="node_count=$NODES_PER_ZONE" \
                             -var="cluster_name=$CLUSTER_NAME" \
                             -var="smoke_test=$SMOKE_TEST" \
                             -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
@@ -1096,6 +1196,46 @@ print(total_experiments)
                             log_info "No ongoing operations detected. Scaling may have completed or failed."
                         fi
                         
+                        # CRITICAL: Wait for nodes to be fully Ready before submitting jobs
+                        # This prevents "unschedulable" pods when jobs are submitted before nodes are ready
+                        log_info "Waiting for nodes to be Ready before submitting jobs..."
+                        MAX_NODE_WAIT=600  # 10 minutes
+                        NODE_WAIT_START=$(date +%s)
+                        READY_NODES=0
+                        REQUIRED_READY_NODES=$CALCULATED_NODE_COUNT
+                        
+                        while [[ $(($(date +%s) - NODE_WAIT_START)) -lt $MAX_NODE_WAIT ]]; do
+                            # Get ready nodes count (nodes in Ready state)
+                            READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo "0")
+                            READY_NODES=${READY_NODES:-0}
+                            
+                            if [[ "$READY_NODES" =~ ^[0-9]+$ ]] && [[ "$READY_NODES" -ge "$REQUIRED_READY_NODES" ]]; then
+                                log_success "All $REQUIRED_READY_NODES nodes are Ready (found $READY_NODES ready nodes)"
+                                break
+                            fi
+                            
+                            ELAPSED=$(($(date +%s) - NODE_WAIT_START))
+                            if [[ $((ELAPSED % 30)) -eq 0 ]] && [[ $ELAPSED -gt 0 ]]; then
+                                log_info "Waiting for nodes to be Ready... ($READY_NODES/$REQUIRED_READY_NODES ready, $((ELAPSED / 60))m ${ELAPSED}s elapsed)"
+                                # Show node status for debugging
+                                kubectl get nodes --no-headers 2>/dev/null | head -5 | while IFS= read -r line || [[ -n "$line" ]]; do
+                                    log_info "  Node: $line"
+                                done || true
+                            fi
+                            sleep 5
+                        done
+                        
+                        if [[ $(($(date +%s) - NODE_WAIT_START)) -ge $MAX_NODE_WAIT ]]; then
+                            log_warn "Timeout waiting for nodes to be Ready. Found $READY_NODES/$REQUIRED_READY_NODES ready nodes."
+                            log_warn "Proceeding anyway, but some pods may be unschedulable."
+                        else
+                            # Double-check nodes are actually ready
+                            READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo "0")
+                            if [[ "$READY_NODES" -lt "$REQUIRED_READY_NODES" ]]; then
+                                log_warn "Only $READY_NODES nodes are Ready (expected $REQUIRED_READY_NODES). Some jobs may be unschedulable."
+                            fi
+                        fi
+                        
                         log_info "Check cluster status with:"
                         log_info "  gcloud container node-pools describe $NODE_POOL_NAME --cluster $CLUSTER_NAME --region $REGION"
                         log_warn "Continuing with existing cluster size ($CURRENT_TOTAL_NODES nodes). Performance may be degraded."
@@ -1173,7 +1313,7 @@ print(total_experiments)
                                     log_info "  gcloud container clusters resize $CLUSTER_NAME --node-pool $NODE_POOL_NAME --num-nodes $NODES_PER_ZONE --region $REGION"
                                 else
                                     log_info "To scale manually after fixing quota:"
-                                    log_info "  cd terraform/gke && terraform apply -var='node_count=$CALCULATED_NODE_COUNT' -auto-approve"
+                                    log_info "  cd terraform/gke && terraform apply -var='node_count=$NODES_PER_ZONE' -auto-approve"
                                 fi
                                 log_warn "Continuing with existing cluster size, but experiments may fail!"
                             else
@@ -1196,13 +1336,39 @@ print(total_experiments)
                                 log_info "  gcloud container clusters resize $CLUSTER_NAME --node-pool $NODE_POOL_NAME --num-nodes $NODES_PER_ZONE --region $REGION"
                             else
                                 log_info "To scale manually using Terraform:"
-                                log_info "  cd terraform/gke && terraform apply -var='node_count=$CALCULATED_NODE_COUNT' -auto-approve"
+                                log_info "  cd terraform/gke && terraform apply -var='node_count=$NODES_PER_ZONE' -auto-approve"
                             fi
                             log_warn "Continuing with existing cluster size ($CURRENT_TOTAL_NODES nodes). Performance may be degraded."
                         fi
                     fi
                 else
                     log_info "Cluster already has $CURRENT_TOTAL_NODES total nodes (matches required $CALCULATED_NODE_COUNT)"
+                    
+                    # Even if not scaling, verify nodes are ready before submitting jobs
+                    log_info "Verifying nodes are Ready before submitting jobs..."
+                    READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo "0")
+                    READY_NODES=${READY_NODES:-0}
+                    
+                    if [[ "$READY_NODES" -lt "$CURRENT_TOTAL_NODES" ]]; then
+                        log_warn "Only $READY_NODES/$CURRENT_TOTAL_NODES nodes are Ready. Waiting up to 5 minutes for nodes to be ready..."
+                        MAX_NODE_WAIT=300  # 5 minutes
+                        NODE_WAIT_START=$(date +%s)
+                        
+                        while [[ $(($(date +%s) - NODE_WAIT_START)) -lt $MAX_NODE_WAIT ]]; do
+                            READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo "0")
+                            if [[ "$READY_NODES" -ge "$CURRENT_TOTAL_NODES" ]]; then
+                                log_success "All $CURRENT_TOTAL_NODES nodes are Ready"
+                                break
+                            fi
+                            sleep 10
+                        done
+                        
+                        if [[ "$READY_NODES" -lt "$CURRENT_TOTAL_NODES" ]]; then
+                            log_warn "Only $READY_NODES/$CURRENT_TOTAL_NODES nodes are Ready. Some jobs may be unschedulable."
+                        fi
+                    else
+                        log_success "All $CURRENT_TOTAL_NODES nodes are Ready"
+                    fi
                 fi
             else
                 log_error "No node pool available. Cannot proceed with cluster scaling."
@@ -1306,21 +1472,24 @@ print(total_experiments)
             export GCP_USE_PERSISTENT_CLUSTER=true
             export GCP_CLUSTER_EXISTS=true
         else
-            
+            # Cluster doesn't exist - create it
+            log_info "Cluster $CLUSTER_NAME does not exist"
             log_info "Creating persistent cluster for batch run..."
-            # For Terraform, node_count is TOTAL nodes (not per zone) for regional clusters
-            # GCP will distribute them across zones automatically
-            # Calculate nodes per zone for logging, but pass total to Terraform
+            # For Terraform regional clusters, node_count is PER ZONE, not total
+            # We need to calculate nodes per zone from total nodes
+            # Example: 45 total nodes ÷ 3 zones = 15 nodes per zone
             ZONES=$(gcloud compute regions describe "$REGION" --project "$PROJECT" --format="value(zones)" 2>/dev/null | tr ';' '\n' | wc -l || echo "3")
             NODES_PER_ZONE=$(( (CALCULATED_NODE_COUNT + ZONES - 1) / ZONES ))
-            log_info "Will create cluster with $CALCULATED_NODE_COUNT total nodes (~$NODES_PER_ZONE per zone across $ZONES zones)"
+            TOTAL_NODES=$((NODES_PER_ZONE * ZONES))
+            log_info "Will create cluster with $TOTAL_NODES total nodes ($NODES_PER_ZONE per zone across $ZONES zones)"
+            log_info "  Terraform node_count=$NODES_PER_ZONE (per zone) → $TOTAL_NODES total nodes"
             if "$SCRIPT_DIR/deploy_gcp.sh" \
                 --create-cluster \
                 --project "$PROJECT" \
                 --bucket "$BUCKET" \
                 --region "$REGION" \
                 --machine-type "${MACHINE_TYPE:-n2-standard-2}" \
-                --node-count "$CALCULATED_NODE_COUNT" \
+                --node-count "$NODES_PER_ZONE" \
                 $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo ""); then
                 log_success "Cluster created successfully"
                 
@@ -1376,12 +1545,82 @@ print(total_experiments)
                 fi
                 log_success "kubectl is connected to cluster"
                 
+                # CRITICAL: Wait for nodes to be Ready before proceeding
+                # Newly created clusters need time for nodes to become Ready
+                log_info "Waiting for nodes to be Ready after cluster creation..."
+                MAX_NODE_WAIT=600  # 10 minutes
+                NODE_WAIT_START=$(date +%s)
+                READY_NODES=0
+                REQUIRED_READY_NODES=$CALCULATED_NODE_COUNT
+                
+                while [[ $(($(date +%s) - NODE_WAIT_START)) -lt $MAX_NODE_WAIT ]]; do
+                    # Get ready nodes count (nodes in Ready state)
+                    READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo "0")
+                    READY_NODES=${READY_NODES:-0}
+                    
+                    if [[ "$READY_NODES" =~ ^[0-9]+$ ]] && [[ "$READY_NODES" -ge "$REQUIRED_READY_NODES" ]]; then
+                        log_success "All $REQUIRED_READY_NODES nodes are Ready (found $READY_NODES ready nodes)"
+                        break
+                    fi
+                    
+                    ELAPSED=$(($(date +%s) - NODE_WAIT_START))
+                    if [[ $((ELAPSED % 30)) -eq 0 ]] && [[ $ELAPSED -gt 0 ]]; then
+                        log_info "Waiting for nodes to be Ready... ($READY_NODES/$REQUIRED_READY_NODES ready, $((ELAPSED / 60))m ${ELAPSED}s elapsed)"
+                        # Show node status for debugging
+                        kubectl get nodes --no-headers 2>/dev/null | head -5 | while IFS= read -r line || [[ -n "$line" ]]; do
+                            log_info "  Node: $line"
+                        done || true
+                    fi
+                    sleep 5
+                done
+                
+                if [[ $(($(date +%s) - NODE_WAIT_START)) -ge $MAX_NODE_WAIT ]]; then
+                    log_warn "Timeout waiting for nodes to be Ready. Found $READY_NODES/$REQUIRED_READY_NODES ready nodes."
+                    log_warn "Proceeding anyway, but some pods may be unschedulable."
+                else
+                    # Double-check nodes are actually ready
+                    READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo "0")
+                    if [[ "$READY_NODES" -lt "$REQUIRED_READY_NODES" ]]; then
+                        log_warn "Only $READY_NODES nodes are Ready (expected $REQUIRED_READY_NODES). Some jobs may be unschedulable."
+                    fi
+                fi
+                
                 export GCP_USE_PERSISTENT_CLUSTER=true
                 export GCP_CLUSTER_EXISTS=false  # We just created it
             else
-                log_error "Failed to create cluster, falling back to ephemeral mode"
+                log_error "Failed to create persistent cluster for batch run"
+                log_warn "Falling back to ephemeral mode (creates/destroys cluster per experiment)"
+                log_info "This will be slower but should work if cluster creation issues are transient"
                 export GCP_USE_PERSISTENT_CLUSTER=false
                 export GCP_CLUSTER_EXISTS=false
+            fi
+        fi
+        
+        # Verify cluster exists and is ready (only for persistent cluster mode)
+        if [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
+            # Double-check cluster actually exists and is accessible
+            if ! gcloud container clusters describe "$CLUSTER_NAME" \
+                --region "$REGION" \
+                --project "$PROJECT" &>/dev/null 2>&1; then
+                log_error "Cluster $CLUSTER_NAME does not exist despite GCP_USE_PERSISTENT_CLUSTER=true"
+                log_warn "Falling back to ephemeral mode for this batch run"
+                export GCP_USE_PERSISTENT_CLUSTER=false
+                export GCP_CLUSTER_EXISTS=false
+            else
+                # Verify cluster is RUNNING
+                CLUSTER_STATUS=$(gcloud container clusters describe "$CLUSTER_NAME" \
+                    --region "$REGION" \
+                    --project "$PROJECT" \
+                    --format="value(status)" 2>/dev/null || echo "")
+                
+                if [[ "$CLUSTER_STATUS" != "RUNNING" ]]; then
+                    log_warn "Cluster $CLUSTER_NAME exists but is not RUNNING (status: $CLUSTER_STATUS)"
+                    log_warn "Falling back to ephemeral mode for this batch run"
+                    export GCP_USE_PERSISTENT_CLUSTER=false
+                    export GCP_CLUSTER_EXISTS=false
+                else
+                    log_success "Cluster $CLUSTER_NAME verified: exists and is RUNNING"
+                fi
             fi
         fi
         
@@ -1429,17 +1668,14 @@ if manifest['scenarios']:
     fi
     
     # For GCP execution with persistent cluster, create temp file to track jobs
-    # Used for both sequential (PARALLEL_JOBS=1) and parallel (PARALLEL_JOBS>1) modes
+    # All jobs are submitted immediately, then we wait for all to complete
+    # Kubernetes scheduler determines parallelism based on available nodes
     if [[ "$env" == "gcp" ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
         TEMP_DIR=$(mktemp -d)
         export TEMP_DIR
         export JOB_TRACKING_FILE="${TEMP_DIR}/gcp_jobs_${env}.txt"
         > "$JOB_TRACKING_FILE"  # Create empty file
-        if [[ $PARALLEL_JOBS -gt 1 ]]; then
-            log_info "Parallel execution mode: Jobs will be submitted in batches of $PARALLEL_JOBS"
-        else
-            log_info "Sequential execution mode: Jobs will be submitted one at a time"
-        fi
+        log_info "All jobs will be submitted immediately; Kubernetes scheduler will determine parallelism based on available nodes"
     fi
     
     # Process scenarios
@@ -1543,9 +1779,10 @@ for s in manifest['scenarios']:
                     elif [[ -f "$merged_file" ]] && [[ -s "$merged_file" ]]; then
                         is_complete=true
                     elif [[ -f "$raw_file" ]] && [[ -s "$raw_file" ]]; then
-                        # Raw data exists but analysis hasn't run - this is OK, we'll run analysis
-                        # Don't mark as complete, but also don't delete - we'll complete the analysis
-                        log_info "  Found raw data for $run_scenario_id, will complete analysis"
+                        # Raw data exists but analysis hasn't run - skip benchmark, run analysis only
+                        log_info "  Found raw data for $run_scenario_id, skipping benchmark run, will complete analysis only"
+                        # Mark that we need to run analysis only (don't mark as complete yet)
+                        # We'll handle this after the check block
                     fi
                 fi
             fi
@@ -1567,24 +1804,67 @@ for s in manifest['scenarios']:
                     log_warn "  Found incomplete results for $run_scenario_id (no raw data), will re-run"
                     rm -rf "$output_dir"
                 elif [[ "$SKIP_ANALYSIS" != "true" ]] && [[ -f "$raw_file" ]] && [[ -s "$raw_file" ]]; then
-                    # Raw data exists but analysis hasn't run - this is OK, we'll run analysis
-                    # Don't delete, just log that we'll complete the analysis
-                    log_info "  Found raw data for $run_scenario_id, will complete analysis (data collection already done)"
-                    # Continue to run_experiment which should detect existing raw data and skip collection
+                    # Raw data exists but analysis hasn't run - skip benchmark, run analysis only
+                    log_info "  Found raw data for $run_scenario_id, skipping benchmark run, will complete analysis only (data collection already done)"
+                    # Mark that we need to run analysis only (don't mark as complete yet)
+                    # We'll handle this after the check block
                 fi
             fi
             
-            # Run experiment
-            # For GCP with persistent cluster: job submission is handled in run_experiment
-            # For parallel mode: jobs are submitted and tracked, then waited on at the end
-            # For sequential mode: each job is submitted and waited on immediately
+            # Check if we should skip benchmark run and only run analysis
+            # This happens when raw data exists but analysis hasn't been completed
+            SKIP_BENCHMARK_RUN=false
+            if [[ "$SKIP_ANALYSIS" != "true" ]] && [[ -f "$raw_file" ]] && [[ -s "$raw_file" ]]; then
+                # Check if analysis is already complete
+                if [[ ! -f "$stats_file" ]] && [[ ! -f "$merged_file" ]]; then
+                    # Raw data exists but analysis not done - skip benchmark, run analysis only
+                    SKIP_BENCHMARK_RUN=true
+                fi
+            fi
+            
+            if [[ "$SKIP_BENCHMARK_RUN" == "true" ]]; then
+                # Skip benchmark run, but run analysis pipeline
+                log_info "  Skipping benchmark run for $run_scenario_id (raw data exists), running analysis only..."
+                update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id (analysis only)"
+                
+                # Run analysis pipeline directly
+                if run_analysis_pipeline "$output_dir" "$run_scenario_id" "$SKIP_ANALYSIS"; then
+                    # Validate that analysis produced expected outputs
+                    if [[ -f "$stats_file" ]] || [[ -f "$merged_file" ]]; then
+                        log_success "  Completed analysis for $run_scenario_id (replicas: $replica_count)"
+                        add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "success" "$replica_count"
+                        env_completed=$((env_completed + 1))
+                        COMPLETED_SCENARIOS=$((COMPLETED_SCENARIOS + 1))
+                        update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id"
+                    else
+                        log_warn "  Analysis completed but expected outputs not found for $run_scenario_id"
+                        add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "partial" "$replica_count"
+                        env_completed=$((env_completed + 1))
+                    fi
+                else
+                    log_error "  Analysis pipeline failed for $run_scenario_id"
+                    add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                    env_failed=$((env_failed + 1))
+                    FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
+                fi
+                continue
+            fi
+            
+            # Run experiment (benchmark + analysis)
+            # For GCP with persistent cluster: all jobs are submitted immediately (non-blocking), then waited on at the end
+            # For Minikube with parallelism: jobs are submitted immediately (non-blocking), then waited on at the end
+            # For other environments: jobs run sequentially
             update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id"
             
             if run_experiment "$env" "$scenario_path" "$run_scenario_id" "$output_dir" "$replica_count"; then
                 # Validate data integrity immediately after collection
-                # NOTE: For GCP parallel jobs, skip this check - download happens later in the parallel job waiting loop
-                if [[ "$env" == "gcp" ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]] && [[ $PARALLEL_JOBS -gt 1 ]]; then
-                    # For parallel GCP jobs, data integrity is checked after download in the parallel job waiting loop
+                # NOTE: For GCP persistent cluster mode and Minikube parallel mode, skip this check - validation happens later
+                if [[ "$env" == "gcp" ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
+                    # For GCP persistent cluster, all jobs are submitted and tracked, then waited on at the end
+                    # Just mark as submitted for now
+                    log_info "  Submitted: $run_scenario_id (will be validated after job completion)"
+                elif [[ "$env" == "minikube" ]] && [[ "${MINIKUBE_USE_PARALLELISM:-false}" == "true" ]]; then
+                    # For Minikube parallel mode, all jobs are submitted and tracked, then waited on at the end
                     # Just mark as submitted for now
                     log_info "  Submitted: $run_scenario_id (will be validated after job completion)"
                 else
@@ -1643,10 +1923,12 @@ for s in manifest['scenarios']:
         
     done <<< "$scenarios"
     
-    # For GCP execution with persistent cluster and parallel jobs, wait for all jobs to complete
-    # For sequential mode (PARALLEL_JOBS=1), jobs are already waited on individually
-    if [[ "$env" == "gcp" ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]] && [[ $PARALLEL_JOBS -gt 1 ]] && [[ -f "${JOB_TRACKING_FILE:-}" ]]; then
-        log_info "Waiting for all parallel jobs to complete..."
+    # For GCP execution with persistent cluster, wait for all jobs to complete
+    # All jobs were submitted immediately; now wait for all to finish
+    if [[ "$env" == "gcp" ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]] && [[ -f "${JOB_TRACKING_FILE:-}" ]]; then
+        TOTAL_SUBMITTED=$(wc -l < "$JOB_TRACKING_FILE" 2>/dev/null || echo "0")
+        if [[ $TOTAL_SUBMITTED -gt 0 ]]; then
+            log_info "Waiting for all $TOTAL_SUBMITTED submitted jobs to complete (Kubernetes scheduler determines parallelism)..."
         
         # Determine namespace
         if [[ "$SMOKE_TEST" == "true" ]]; then
@@ -1680,18 +1962,111 @@ for s in manifest['scenarios']:
                 replica_count="${BASH_REMATCH[1]}"
             fi
             
-            # Wait for job to complete
-            while true; do
-                STATUS=$(kubectl get job "$job_name" -n "$GCP_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null || echo "")
-                FAILED_STATUS=$(kubectl get job "$job_name" -n "$GCP_NAMESPACE" -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "")
+            # Wait for job to complete using unified function
+            if wait_for_job "$job_name" "$GCP_NAMESPACE" "900s" "false"; then
+                # Job completed successfully, download results
+                if "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
+                    --exp-id "$scenario_id" \
+                    --bucket "$BUCKET" \
+                    --out "$output_dir" 2>&1; then
+                    # Validate data integrity after download
+                    raw_file="$output_dir/raw/run.jsonl"
+                    if [[ -f "$raw_file" ]]; then
+                        file_size=$(stat -f%z "$raw_file" 2>/dev/null || stat -c%s "$raw_file" 2>/dev/null || echo 0)
+                        if [[ $file_size -gt 0 ]]; then
+                            line_count=$(wc -l < "$raw_file" 2>/dev/null || echo 0)
+                            if [[ $line_count -gt 0 ]]; then
+                                COMPLETED_JOBS=$((COMPLETED_JOBS + 1))
+                                env_completed=$((env_completed + 1))
+                                log_success "  Completed: $scenario_id - $file_size bytes, $line_count events"
+                                # Add to index with success status
+                                add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "success" "$replica_count"
+                            else
+                                FAILED_JOBS=$((FAILED_JOBS + 1))
+                                env_failed=$((env_failed + 1))
+                                log_error "  Data integrity check FAILED: $scenario_id has no JSONL lines!"
+                                add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                            fi
+                        else
+                            FAILED_JOBS=$((FAILED_JOBS + 1))
+                            env_failed=$((env_failed + 1))
+                            log_error "  Data integrity check FAILED: $scenario_id has 0-byte file!"
+                            add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                        fi
+                    else
+                        FAILED_JOBS=$((FAILED_JOBS + 1))
+                        env_failed=$((env_failed + 1))
+                        log_error "  Data integrity check FAILED: $scenario_id - raw file not found after download!"
+                        add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                    fi
+                else
+                    FAILED_JOBS=$((FAILED_JOBS + 1))
+                    env_failed=$((env_failed + 1))
+                    log_error "  Failed to download results for: $scenario_id"
+                    add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                fi
+            else
+                # Job failed or timed out
+                FAILED_JOBS=$((FAILED_JOBS + 1))
+                env_failed=$((env_failed + 1))
+                log_error "  Job failed or timed out: $scenario_id"
+                add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+            fi
+            
+            # Update progress
+            update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$scenario_id"
+        done < "$JOB_TRACKING_FILE"
+        
+            log_info "Batch execution complete: $COMPLETED_JOBS succeeded, $FAILED_JOBS failed"
+            rm -rf "$TEMP_DIR"
+        else
+            log_warn "No jobs were tracked for GCP persistent cluster mode"
+        fi
+    fi
+    
+    # For Minikube execution with parallelism, wait for all jobs to complete
+    # All jobs were submitted immediately; now wait for all to finish
+    if [[ "$env" == "minikube" ]] && [[ "${MINIKUBE_USE_PARALLELISM:-false}" == "true" ]] && [[ -f "${MINIKUBE_JOB_TRACKING_FILE:-}" ]]; then
+        TOTAL_SUBMITTED=$(wc -l < "$MINIKUBE_JOB_TRACKING_FILE" 2>/dev/null || echo "0")
+        if [[ $TOTAL_SUBMITTED -gt 0 ]]; then
+            log_info "Waiting for all $TOTAL_SUBMITTED submitted Minikube jobs to complete..."
+            
+            # Determine namespace
+            if [[ "$SMOKE_TEST" == "true" ]]; then
+                MINIKUBE_NAMESPACE="pqc-smoke-test"
+            else
+                MINIKUBE_NAMESPACE="default"
+            fi
+            
+            # Track job completion
+            TOTAL_JOBS=$(wc -l < "$MINIKUBE_JOB_TRACKING_FILE" 2>/dev/null || echo "0")
+            COMPLETED_JOBS=0
+            FAILED_JOBS=0
+            
+            while IFS='|' read -r job_name scenario_id output_dir; do
+                # Extract algorithm, payload, rate, and replica count from scenario_id
+                algorithm="unknown"
+                payload=0
+                rate=0
+                replica_count=1
                 
-                if [[ "$STATUS" == "True" ]]; then
-                    # Job completed successfully, download results
-                    if "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
-                        --exp-id "$scenario_id" \
-                        --bucket "$BUCKET" \
-                        --out "$output_dir" 2>&1; then
-                        # Validate data integrity after download
+                # Parse scenario_id: <algorithm>_p<payload>_r<rate>_run<N>_<hash>
+                if [[ "$scenario_id" =~ ^([^_]+)_p([0-9]+)_r([0-9]+)_ ]]; then
+                    algorithm="${BASH_REMATCH[1]}"
+                    payload="${BASH_REMATCH[2]}"
+                    rate="${BASH_REMATCH[3]}"
+                fi
+                
+                # Check if scenario_id has replica suffix: _r<replicas>
+                if [[ "$scenario_id" =~ _r([0-9]+)$ ]]; then
+                    replica_count="${BASH_REMATCH[1]}"
+                fi
+                
+                # Wait for job to complete using unified function
+                if wait_for_job "$job_name" "$MINIKUBE_NAMESPACE" "900s" "false"; then
+                    # Job completed successfully, retrieve results
+                    if retrieve_job_results "minikube" "$job_name" "$MINIKUBE_NAMESPACE" "$output_dir" 2>&1; then
+                        # Validate data integrity after retrieval
                         raw_file="$output_dir/raw/run.jsonl"
                         if [[ -f "$raw_file" ]]; then
                             file_size=$(stat -f%z "$raw_file" 2>/dev/null || stat -c%s "$raw_file" 2>/dev/null || echo 0)
@@ -1701,7 +2076,6 @@ for s in manifest['scenarios']:
                                     COMPLETED_JOBS=$((COMPLETED_JOBS + 1))
                                     env_completed=$((env_completed + 1))
                                     log_success "  Completed: $scenario_id - $file_size bytes, $line_count events"
-                                    # Add to index with success status
                                     add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "success" "$replica_count"
                                 else
                                     FAILED_JOBS=$((FAILED_JOBS + 1))
@@ -1718,31 +2092,32 @@ for s in manifest['scenarios']:
                         else
                             FAILED_JOBS=$((FAILED_JOBS + 1))
                             env_failed=$((env_failed + 1))
-                            log_error "  Data integrity check FAILED: $scenario_id - raw file not found after download!"
+                            log_error "  Data integrity check FAILED: $scenario_id - raw file not found after retrieval!"
                             add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
                         fi
                     else
                         FAILED_JOBS=$((FAILED_JOBS + 1))
                         env_failed=$((env_failed + 1))
-                        log_error "  Failed to download results for: $scenario_id"
+                        log_error "  Failed to retrieve results for: $scenario_id"
                         add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
                     fi
-                    break
-                elif [[ "$FAILED_STATUS" == "True" ]]; then
+                else
+                    # Job failed or timed out
                     FAILED_JOBS=$((FAILED_JOBS + 1))
                     env_failed=$((env_failed + 1))
-                    log_error "  Job failed: $scenario_id"
-                    break
+                    log_error "  Job failed or timed out: $scenario_id"
+                    add_to_index "$scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
                 fi
-                sleep 5
-            done
+                
+                # Update progress
+                update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$scenario_id"
+            done < "$MINIKUBE_JOB_TRACKING_FILE"
             
-            # Update progress
-            update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$scenario_id"
-        done < "$JOB_TRACKING_FILE"
-        
-        log_info "Parallel execution complete: $COMPLETED_JOBS succeeded, $FAILED_JOBS failed"
-        rm -rf "$TEMP_DIR"
+            log_info "Minikube parallel execution complete: $COMPLETED_JOBS succeeded, $FAILED_JOBS failed"
+            rm -rf "$TEMP_DIR"
+        else
+            log_warn "No jobs were tracked for Minikube parallel mode"
+        fi
     fi
     
     echo ""
@@ -1992,6 +2367,7 @@ echo "╚═══════════════════════�
 echo -e "${NC}"
 
 log_info "Duration: ${ELAPSED_MIN}m ${ELAPSED_SEC}s"
+log_info "Run directory: $RUN_DIR"
 echo ""
 log_phase "Final Summary"
 echo ""
@@ -2088,6 +2464,87 @@ if [[ $FAILED_SCENARIOS -gt 0 ]]; then
 fi
 
 log_success "Done!"
+
+# =============================================================================
+# Generate Run Summary
+# =============================================================================
+SUMMARY_FILE="$RUN_DIR/summary.txt"
+MANIFEST_FILE="$RUN_DIR/manifest.json"
+
+{
+    echo "======================================================================"
+    echo "Experiment Run Summary"
+    echo "======================================================================"
+    echo ""
+    echo "Run timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "Run directory: $RUN_DIR"
+    echo "Matrix file: $MATRIX"
+    echo "Environments: ${ENVS}"
+    echo "Mode: $([ "$SMOKE_TEST" == "true" ] && echo "Smoke test" || echo "Full scale")"
+    echo "Started: $(date -u -d "@$START_TIME" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "N/A")"
+    echo "Duration: ${ELAPSED_MIN}m ${ELAPSED_SEC}s"
+    echo ""
+    echo "Experiment Counts:"
+    echo "----------------------------------------------------------------------"
+    for env_item in "${ENV_ARRAY[@]}"; do
+        env_completed=$(find "results/$env_item" -name "run.jsonl" -type f 2>/dev/null | wc -l)
+        env_failed=$(find "results/$env_item" -type d -mindepth 1 -maxdepth 1 2>/dev/null | while read dir; do
+            if [[ ! -f "$dir/raw/run.jsonl" ]] && [[ -d "$dir" ]]; then
+                echo "failed"
+            fi
+        done | wc -l)
+        if [[ $env_completed -gt 0 ]] || [[ $env_failed -gt 0 ]]; then
+            echo "  ${env_item}: $env_completed completed, $env_failed failed"
+        fi
+    done
+    echo ""
+    echo "----------------------------------------------------------------------"
+    echo "Total scenarios: $TOTAL_SCENARIOS"
+    echo "Completed: $COMPLETED_SCENARIOS"
+    echo "Failed: $FAILED_SCENARIOS"
+    echo ""
+    echo "Output Locations:"
+    echo "----------------------------------------------------------------------"
+    echo "  Final results: $FINAL_RESULTS_DIR/"
+    echo "  Individual experiments: $RESULTS_BASE/<env>/<scenario-id>/"
+    echo ""
+    if [[ -f "$FINAL_RESULTS_DIR/index.json" ]]; then
+        echo "Key Outputs:"
+        echo "  - index.json: $FINAL_RESULTS_DIR/index.json"
+        [[ -f "$FINAL_RESULTS_DIR/aggregated_stats.json" ]] && echo "  - aggregated_stats.json"
+        [[ -f "$FINAL_RESULTS_DIR/hypothesis_tests.json" ]] && echo "  - hypothesis_tests.json"
+        [[ -d "$FINAL_RESULTS_DIR/figures" ]] && echo "  - figures/ (dissertation-ready)"
+        echo ""
+    fi
+    echo "======================================================================"
+} > "$SUMMARY_FILE"
+
+# Create manifest JSON
+python3 <<EOF
+import json
+from pathlib import Path
+from datetime import datetime, timezone
+
+manifest = {
+    "run_timestamp": datetime.now(timezone.utc).isoformat(),
+    "run_directory": str(Path("$RUN_DIR")),
+    "matrix_file": "$MATRIX",
+    "environments": "$ENVS".split(","),
+    "smoke_test": $([ "$SMOKE_TEST" == "true" ] && echo "True" || echo "False"),
+    "total_scenarios": $TOTAL_SCENARIOS,
+    "completed_scenarios": $COMPLETED_SCENARIOS,
+    "failed_scenarios": $FAILED_SCENARIOS,
+    "duration_seconds": $ELAPSED,
+    "final_results_dir": str(Path("$FINAL_RESULTS_DIR")),
+    "results_base": str(Path("$RESULTS_BASE")),
+}
+
+with open("$MANIFEST_FILE", 'w') as f:
+    json.dump(manifest, f, indent=2)
+EOF
+
+log_info "Run summary: $SUMMARY_FILE"
+log_info "Run manifest: $MANIFEST_FILE"
 
 exit 0
 
