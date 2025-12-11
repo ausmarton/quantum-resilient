@@ -352,7 +352,10 @@ def generate_interpretation(results: list[TestResult]) -> str:
     lines.append("=" * 70)
     lines.append("")
     lines.append(f"Total comparisons: {total}")
-    lines.append(f"Significant (any test): {any_sig} ({any_sig/total*100:.1f}%)")
+    if total > 0:
+        lines.append(f"Significant (any test): {any_sig} ({any_sig/total*100:.1f}%)")
+    else:
+        lines.append(f"Significant (any test): {any_sig} (N/A - no comparisons)")
     lines.append(f"  - Kolmogorov-Smirnov: {ks_sig}")
     lines.append(f"  - Mann-Whitney U: {mw_sig}")
     lines.append(f"  - Welch's t-test: {welch_sig}")

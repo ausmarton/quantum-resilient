@@ -157,18 +157,18 @@ spec:
             - name: PQC_SMOKE_TEST
               valueFrom:
                 configMapKeyRef:
-                  name: pqc-gcp-config
+                  name: pqc-bench-config
                   key: smoke_test
                   optional: true
             - name: GCS_BUCKET
               valueFrom:
                 configMapKeyRef:
-                  name: pqc-gcp-config
+                  name: pqc-bench-config
                   key: bucket_name
             - name: EXP_ID
               valueFrom:
                 configMapKeyRef:
-                  name: pqc-gcp-config
+                  name: pqc-bench-config
                   key: experiment_id
             - name: NODE_NAME
               valueFrom:
@@ -506,23 +506,23 @@ spec:
             - name: GCS_BUCKET
               valueFrom:
                 configMapKeyRef:
-                  name: pqc-gcp-config
+                  name: pqc-bench-config
                   key: bucket_name
             - name: EXP_ID
               valueFrom:
                 configMapKeyRef:
-                  name: pqc-gcp-config
+                  name: pqc-bench-config
                   key: experiment_id
             - name: GIT_COMMIT
               valueFrom:
                 configMapKeyRef:
-                  name: pqc-gcp-config
+                  name: pqc-bench-config
                   key: git_commit
                   optional: true
             - name: CONTAINER_IMAGE
               valueFrom:
                 configMapKeyRef:
-                  name: pqc-gcp-config
+                  name: pqc-bench-config
                   key: container_image
                   optional: true
             # CRITICAL: Set gcloud/gsutil config to writable location (readOnlyRootFilesystem prevents /.config and /.gsutil)
@@ -562,8 +562,9 @@ spec:
             sizeLimit: 2Gi
 
       # Node selection
-      nodeSelector:
-        cloud.google.com/gke-nodepool: pqc-bench-pool
+      # Note: Node pool name is dynamic based on cluster name (${gke_name}-primary-pool)
+      # Removed hardcoded nodeSelector to allow pods to run on any available node pool
+      # This provides flexibility when cluster/node pool names vary
 
       # Pod anti-affinity: Spread jobs across nodes for isolation
       # This ensures experiments don't interfere with each other (noisy neighbor prevention)

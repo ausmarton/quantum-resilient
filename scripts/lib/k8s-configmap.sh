@@ -38,11 +38,13 @@ create_scenario_configmap() {
     fi
     
     # Create temporary patched scenario
-    local temp_scenario=$(mktemp)
+    # Use project directory for temp file so container can access it
+    local script_dir="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+    local temp_scenario=$(mktemp -p "$script_dir" -t scenario-patch-XXXXXX.yaml)
     trap "rm -f '$temp_scenario'" EXIT
     
     # Patch scenario using unified Python script
-    local script_dir="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+    # script_dir already set above
     local patch_args=(
         --input "$scenario_path"
         --output "$temp_scenario"
@@ -101,6 +103,7 @@ create_gcp_config_configmap() {
     local namespace="${5:-default}"
     local smoke_test="${6:-false}"
     local cm_name="${7:-}"
+    local container_image="${8:-}"  # Optional container image
     
     if [[ -z "$exp_id" ]] || [[ -z "$bucket" ]] || [[ -z "$region" ]] || [[ -z "$project" ]]; then
         log_error "Experiment ID, bucket, region, and project required for GCP ConfigMap"
@@ -110,23 +113,31 @@ create_gcp_config_configmap() {
     # Generate ConfigMap name if not provided
     if [[ -z "$cm_name" ]]; then
         local sanitized=$(sanitize_k8s_name "$exp_id")
-        # Truncate to 228 chars (leaving room for "pqc-gcp-config-" prefix)
-        cm_name="pqc-gcp-config-$(echo "$sanitized" | cut -c1-228)"
+        # Truncate to 228 chars (leaving room for "pqc-bench-config-" prefix)
+        cm_name="pqc-bench-config-$(echo "$sanitized" | cut -c1-228)"
     fi
     
+    # Build ConfigMap creation command
+    local cm_cmd="kubectl create configmap \"$cm_name\" \
+        --from-literal=bucket_name=\"$bucket\" \
+        --from-literal=experiment_id=\"$exp_id\" \
+        --from-literal=region=\"$region\" \
+        --from-literal=project_id=\"$project\" \
+        --from-literal=smoke_test=\"$([ "$smoke_test" == "true" ] && echo "true" || echo "false")\""
+    
+    # Add container_image if provided
+    if [[ -n "$container_image" ]]; then
+        cm_cmd="$cm_cmd --from-literal=container_image=\"$container_image\""
+    fi
+    
+    cm_cmd="$cm_cmd --namespace=\"$namespace\" --dry-run=client -o yaml | kubectl apply -f -"
+    
     # Create ConfigMap
-    local cm_output=$(kubectl create configmap "$cm_name" \
-        --from-literal=bucket_name="$bucket" \
-        --from-literal=experiment_id="$exp_id" \
-        --from-literal=region="$region" \
-        --from-literal=project_id="$project" \
-        --from-literal=smoke_test="$([ "$smoke_test" == "true" ] && echo "true" || echo "false")" \
-        --namespace="$namespace" \
-        --dry-run=client -o yaml | kubectl apply -f - 2>&1)
+    local cm_output=$(eval "$cm_cmd" 2>&1)
     local cm_exit_code=$?
     
     if [[ $cm_exit_code -ne 0 ]]; then
-        log_error "Failed to create GCP config ConfigMap '$cm_name'"
+        log_error "Failed to create benchmark config ConfigMap '$cm_name'"
         log_error "Original experiment ID: '$exp_id'"
         log_error "Sanitized ConfigMap name: '$cm_name'"
         log_error "ConfigMap creation output:"
@@ -134,7 +145,7 @@ create_gcp_config_configmap() {
         return 1
     fi
     
-    log_success "GCP ConfigMap created: $cm_name" >&2  # Send log to stderr, not stdout
+    log_success "Benchmark config ConfigMap created: $cm_name" >&2  # Send log to stderr, not stdout
     echo "$cm_name"  # Only output the name to stdout
     return 0
 }

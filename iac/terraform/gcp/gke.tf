@@ -7,9 +7,10 @@ resource "google_container_cluster" "primary" {
   location = var.region
   project  = var.project_id
 
-  # We manage node pools separately
-  remove_default_node_pool = true
-  initial_node_count       = 1
+  # Keep default node pool and configure it directly (avoids destroy/recreate cycle)
+  # This saves 2-5 minutes during cluster creation
+  remove_default_node_pool = false
+  initial_node_count       = var.gke_initial_node_count
 
   network    = google_compute_network.vpc.name
   subnetwork = google_compute_subnetwork.subnet.name
@@ -82,37 +83,9 @@ resource "google_container_cluster" "primary" {
   # Deletion protection (disable for testing)
   deletion_protection = false
 
-  depends_on = [
-    google_compute_network.vpc,
-    google_compute_subnetwork.subnet,
-  ]
-}
-
-# -----------------------------------------------------------------------------
-# Primary Node Pool
-# -----------------------------------------------------------------------------
-
-resource "google_container_node_pool" "primary" {
-  name       = "${var.gke_name}-primary-pool"
-  location   = var.region
-  cluster    = google_container_cluster.primary.name
-  project    = var.project_id
-
-  initial_node_count = var.gke_initial_node_count
-
-  # Autoscaling configuration
-  autoscaling {
-    min_node_count = var.gke_node_min_count
-    max_node_count = var.gke_node_max_count
-  }
-
-  # Node management
-  management {
-    auto_repair  = true
-    auto_upgrade = true
-  }
-
-  # Node configuration
+  # Configure default node pool directly (avoids destroy/recreate cycle)
+  # Note: Autoscaling and upgrade settings are managed via gcloud commands if needed
+  # This is a trade-off: faster cluster creation vs. less Terraform control over node pool
   node_config {
     machine_type = var.gke_node_machine_type
     disk_size_gb = var.gke_disk_size_gb
@@ -135,7 +108,7 @@ resource "google_container_node_pool" "primary" {
 
     # Labels
     labels = merge(var.labels, {
-      "node-pool" = "primary"
+      "node-pool" = "default"
     })
 
     # Metadata
@@ -150,12 +123,34 @@ resource "google_container_node_pool" "primary" {
     }
   }
 
-  # Upgrade settings
-  upgrade_settings {
-    max_surge       = 1
-    max_unavailable = 0
-  }
+  depends_on = [
+    google_compute_network.vpc,
+    google_compute_subnetwork.subnet,
+  ]
 }
+
+# -----------------------------------------------------------------------------
+# Default Node Pool Configuration
+# -----------------------------------------------------------------------------
+# NOTE: The default node pool is now configured directly in google_container_cluster.primary
+# This avoids the destroy/recreate cycle (saves 2-5 minutes during cluster creation).
+#
+# Trade-offs:
+# - Faster cluster creation (no destroy/recreate cycle)
+# - Simpler configuration (one less resource to manage)
+# - Autoscaling must be configured via gcloud commands if needed (see deploy_gcp.sh)
+# - Upgrade settings use GKE defaults (acceptable for ephemeral clusters)
+#
+# For autoscaling, use:
+#   gcloud container node-pools update default-pool \
+#     --cluster <cluster-name> \
+#     --region <region> \
+#     --enable-autoscaling \
+#     --min-nodes <min> \
+#     --max-nodes <max>
+#
+# This approach aligns with using defaults as much as possible while maintaining
+# the required node configurations (GCS Fuse, Workload Identity, etc.)
 
 # -----------------------------------------------------------------------------
 # Optional: Dedicated Worker Node Pool (for high-throughput experiments)

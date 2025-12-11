@@ -7,7 +7,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: pqc-gcp-config
+  name: pqc-bench-config
   namespace: default
   labels:
     app: pqc-bench

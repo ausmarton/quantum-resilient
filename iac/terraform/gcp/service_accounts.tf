@@ -34,7 +34,7 @@ resource "kubernetes_namespace" "qr" {
     }
   }
 
-  depends_on = [google_container_node_pool.primary]
+  depends_on = [google_container_cluster.primary]
 }
 
 # Orchestrator KSA

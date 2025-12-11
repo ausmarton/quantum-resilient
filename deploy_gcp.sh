@@ -34,7 +34,7 @@ source "$SCRIPT_DIR/scripts/lib/analysis.sh"
 source "$SCRIPT_DIR/scripts/lib/manifest.sh"
 source "$SCRIPT_DIR/scripts/lib/k8s-job.sh"
 
-TERRAFORM_DIR="$SCRIPT_DIR/terraform/gke"
+TERRAFORM_DIR="$SCRIPT_DIR/iac/terraform/gcp"
 K8S_GCP_DIR="$SCRIPT_DIR/k8s/gcp"
 JOB_NAME="pqc-bench-worker"
 JOB_TIMEOUT="900s"
@@ -262,8 +262,9 @@ fi
 # Derived values
 # CRITICAL: Hardware MUST remain identical between smoke-test and full runs
 # Only horizontal scaling (node_count, replicas) may change
+# Use consistent cluster name for all test types and environments
+CLUSTER_NAME="pqc-bench"
 if [[ "$SMOKE_TEST" == "true" ]]; then
-    CLUSTER_NAME="pqc-smoke-test"
     # DO NOT change MACHINE_TYPE - must stay identical to full runs
     # Only reduce node_count (horizontal scaling)
     NODE_COUNT=1
@@ -271,8 +272,6 @@ if [[ "$SMOKE_TEST" == "true" ]]; then
     REPLICAS=1
     JOB_TIMEOUT="300s"  # 5 minutes
     log_info "Smoke-test mode: reduced duration, runs, replicas (hardware identical)"
-else
-    CLUSTER_NAME="pqc-bench-gke"
 fi
 
 # Ephemeral mode overrides
@@ -351,41 +350,75 @@ if [[ "$CREATE_CLUSTER" == "true" ]]; then
     fi
     
     # Verify bucket exists (we'll grant permissions manually)
-    if gsutil ls -b "gs://${BUCKET}" &>/dev/null 2>&1; then
+    # Use timeout to prevent hanging if gsutil is slow/unresponsive
+    if timeout 10 gsutil ls -b "gs://${BUCKET}" &>/dev/null 2>&1; then
         log_info "Bucket $BUCKET exists - will grant permissions manually after cluster creation"
     else
-        log_warn "Bucket $BUCKET does not exist"
+        log_warn "Bucket $BUCKET check timed out or bucket does not exist"
         log_info "Bucket will need to be created separately or permissions granted manually"
+        log_info "Continuing with cluster creation (bucket permissions can be granted later)"
     fi
     
     log_info "Applying Terraform configuration to create cluster..."
     DISK_SIZE_GB="${DISK_SIZE_GB:-50}"
     # Use -target to exclude bucket from plan (bucket may already exist with different name)
     # This prevents Terraform from trying to replace the bucket when only creating cluster
-    # Also include service account, IAM bindings, and artifact registry as they're needed for the cluster
-    # Include bucket IAM binding so service account can access the bucket (even if bucket name differs)
-    if terraform apply -auto-approve \
-        -target=google_service_account.pqc_bench \
-        -target=google_project_iam_member.ar_reader \
-        -target=google_artifact_registry_repository.pqc \
-        -target=google_container_cluster.primary \
-        -target=google_container_node_pool.primary \
-        -target=google_service_account_iam_member.workload_identity \
-        -var="project_id=$PROJECT" \
-        -var="region=$REGION" \
-        -var="bucket_name=$BUCKET" \
-        -var="machine_type=$MACHINE_TYPE" \
-        -var="node_count=$NODE_COUNT" \
-        -var="cluster_name=$CLUSTER_NAME" \
-        -var="smoke_test=$SMOKE_TEST" \
-        -var="disk_size_gb=$DISK_SIZE_GB" \
-        -var="ephemeral=$EPHEMERAL"; then
-        log_success "Cluster created successfully"
+    # Target only the cluster resource - Terraform will create dependencies automatically
+    # Use stdbuf to ensure output is unbuffered so we can see progress
+    log_info "Running terraform apply (this may take 5-10 minutes for GKE cluster creation)..."
+    # Use stdbuf to ensure output is unbuffered so we can see progress in real-time
+    # Pipe through tee to both show output and capture it
+    TERRAFORM_OUTPUT=$(mktemp)
+    MAX_RETRIES=3
+    RETRY_COUNT=0
+    TERRAFORM_SUCCESS=false
+    
+    while [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; do
+        if [[ $RETRY_COUNT -gt 0 ]]; then
+            log_info "Retrying Terraform apply (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)..."
+            sleep 10  # Wait before retry
+        fi
+        
+        if stdbuf -oL -eL terraform apply -auto-approve \
+            -target=google_service_account.worker \
+            -target=google_service_account.orchestrator \
+            -target=google_container_cluster.primary \
+            -var="project_id=$PROJECT" \
+            -var="region=$REGION" \
+            -var="bucket_name=$BUCKET" \
+            -var="gke_node_machine_type=$MACHINE_TYPE" \
+            -var="gke_initial_node_count=$NODE_COUNT" \
+            -var="gke_node_min_count=$NODE_COUNT" \
+            -var="gke_name=$CLUSTER_NAME" \
+            -var="gke_disk_size_gb=$DISK_SIZE_GB" 2>&1 | tee "$TERRAFORM_OUTPUT"; then
+            rm -f "$TERRAFORM_OUTPUT"
+            log_success "Cluster created successfully"
+            TERRAFORM_SUCCESS=true
+            break
+        else
+            # Check if error is HTTP2 connection lost (retryable)
+            if grep -q "http2: client connection lost" "$TERRAFORM_OUTPUT" 2>/dev/null; then
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                if [[ $RETRY_COUNT -lt $MAX_RETRIES ]]; then
+                    log_warn "HTTP2 connection lost during cluster creation. Will retry..."
+                    continue
+                else
+                    log_error "HTTP2 connection lost after $MAX_RETRIES attempts"
+                fi
+            else
+                # Non-retryable error
+                log_error "Terraform apply failed with non-retryable error"
+                break
+            fi
+        fi
+    done
+    
+    if [[ "$TERRAFORM_SUCCESS" == "true" ]]; then
         
         # Grant bucket permissions manually if bucket IAM binding wasn't created
         # (This happens if bucket wasn't in Terraform state)
         log_info "Ensuring service account has bucket permissions..."
-        SERVICE_ACCOUNT_EMAIL="pqc-bench-worker@${PROJECT}.iam.gserviceaccount.com"
+        SERVICE_ACCOUNT_EMAIL="qr-worker@${PROJECT}.iam.gserviceaccount.com"
         if gsutil iam ch "serviceAccount:${SERVICE_ACCOUNT_EMAIL}:roles/storage.objectAdmin" "gs://${BUCKET}" 2>&1; then
             log_success "Bucket permissions granted to service account"
         else
@@ -418,28 +451,30 @@ if [[ "$DESTROY_CLUSTER" == "true" ]]; then
     # First, try Terraform destroy (if Terraform state exists)
     cd "$TERRAFORM_DIR"
     if [[ -f terraform.tfstate ]] || [[ -f .terraform/terraform.tfstate ]]; then
-        # CRITICAL: Remove persistent resources from state before destroy
-        log_info "Protecting persistent resources from destruction..."
+        # CRITICAL: Only protect GCS bucket from destruction
+        # All other resources (service account, Artifact Registry, cluster, nodes, etc.) are ephemeral
+        log_info "Protecting GCS bucket from destruction (all other resources will be destroyed)..."
         terraform state rm google_storage_bucket.results 2>/dev/null || true
         terraform state rm google_storage_bucket_object.experiments_marker 2>/dev/null || true
-        terraform state rm google_service_account.pqc_bench 2>/dev/null || true
-        terraform state rm google_project_iam_member.ar_reader 2>/dev/null || true
         terraform state rm google_storage_bucket_iam_member.gcs_admin 2>/dev/null || true
-        terraform state rm google_service_account_iam_member.workload_identity 2>/dev/null || true
-        terraform state rm google_artifact_registry_repository.pqc 2>/dev/null || true
+        # Remove kubernetes_manifest resources from state to prevent REST client errors when cluster is gone
+        terraform state rm 'kubernetes_manifest.orchestrator_service_monitor[0]' 2>/dev/null || true
+        terraform state rm 'kubernetes_manifest.worker_service_monitor[0]' 2>/dev/null || true
+        terraform state rm 'kubernetes_manifest.worker_pod_monitor[0]' 2>/dev/null || true
+        # Note: Service account, Artifact Registry, and IAM bindings are NOT protected
+        # They will be destroyed along with the cluster to ensure complete cleanup
         
         log_info "Running Terraform destroy (cluster and node pool only)..."
         if terraform destroy -auto-approve \
             -var="project_id=$PROJECT" \
             -var="region=$REGION" \
             -var="bucket_name=$BUCKET" \
-            -var="machine_type=$MACHINE_TYPE" \
-            -var="node_count=$NODE_COUNT" \
-            -var="cluster_name=$CLUSTER_NAME" \
-            -var="smoke_test=$SMOKE_TEST" \
-            -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
-            -var="ephemeral=true" 2>&1; then
-            log_success "Terraform destroy completed (persistent resources preserved)"
+            -var="gke_node_machine_type=$MACHINE_TYPE" \
+            -var="gke_initial_node_count=$NODE_COUNT" \
+            -var="gke_node_min_count=$NODE_COUNT" \
+            -var="gke_name=$CLUSTER_NAME" \
+            -var="gke_disk_size_gb=${DISK_SIZE_GB:-50}" 2>&1; then
+            log_success "Terraform destroy completed (GCS bucket preserved, all other resources destroyed)"
         else
             log_warn "Terraform destroy had errors (cluster may not be in Terraform state)"
         fi
@@ -537,12 +572,11 @@ else
                 -var="project_id=$PROJECT" \
                 -var="region=$REGION" \
                 -var="bucket_name=$BUCKET" \
-                -var="machine_type=$MACHINE_TYPE" \
-                -var="node_count=$NODE_COUNT" \
-                -var="cluster_name=$CLUSTER_NAME" \
-                -var="smoke_test=$SMOKE_TEST" \
-                -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
-                -var="ephemeral=$EPHEMERAL" \
+                -var="gke_node_machine_type=$MACHINE_TYPE" \
+                -var="gke_initial_node_count=$NODE_COUNT" \
+                -var="gke_node_min_count=$NODE_COUNT" \
+                -var="gke_name=$CLUSTER_NAME" \
+                -var="gke_disk_size_gb=${DISK_SIZE_GB:-50}" \
                 google_storage_bucket.results "$BUCKET" 2>/dev/null || log_warn "Bucket import failed (may already be in state)"
         else
             log_info "Bucket already in Terraform state, skipping import"
@@ -550,21 +584,20 @@ else
     fi
     
     # Import service account if it exists and not in state
-    SA_EMAIL="pqc-bench-worker@${PROJECT}.iam.gserviceaccount.com"
+    SA_EMAIL="qr-worker@${PROJECT}.iam.gserviceaccount.com"
     if gcloud iam service-accounts describe "$SA_EMAIL" \
         --project "$PROJECT" >/dev/null 2>&1; then
-        if ! terraform state show google_service_account.pqc_bench &>/dev/null; then
+        if ! terraform state show google_service_account.worker &>/dev/null; then
             log_info "Service account exists but not in state, importing..."
             terraform import \
                 -var="project_id=$PROJECT" \
                 -var="region=$REGION" \
                 -var="bucket_name=$BUCKET" \
-                -var="machine_type=$MACHINE_TYPE" \
-                -var="node_count=$NODE_COUNT" \
-                -var="cluster_name=$CLUSTER_NAME" \
-                -var="smoke_test=$SMOKE_TEST" \
-                -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
-                -var="ephemeral=$EPHEMERAL" \
+                -var="gke_node_machine_type=$MACHINE_TYPE" \
+                -var="gke_initial_node_count=$NODE_COUNT" \
+                -var="gke_node_min_count=$NODE_COUNT" \
+                -var="gke_name=$CLUSTER_NAME" \
+                -var="gke_disk_size_gb=${DISK_SIZE_GB:-50}" \
                 google_service_account.pqc_bench "projects/${PROJECT}/serviceAccounts/${SA_EMAIL}" 2>/dev/null || log_warn "Service account import failed (may already be in state)"
         else
             log_info "Service account already in Terraform state, skipping import"
@@ -583,12 +616,11 @@ else
                 -var="project_id=$PROJECT" \
                 -var="region=$REGION" \
                 -var="bucket_name=$BUCKET" \
-                -var="machine_type=$MACHINE_TYPE" \
-                -var="node_count=$NODE_COUNT" \
-                -var="cluster_name=$CLUSTER_NAME" \
-                -var="smoke_test=$SMOKE_TEST" \
-                -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
-                -var="ephemeral=$EPHEMERAL" \
+                -var="gke_node_machine_type=$MACHINE_TYPE" \
+                -var="gke_initial_node_count=$NODE_COUNT" \
+                -var="gke_node_min_count=$NODE_COUNT" \
+                -var="gke_name=$CLUSTER_NAME" \
+                -var="gke_disk_size_gb=${DISK_SIZE_GB:-50}" \
                 google_artifact_registry_repository.pqc "${AR_LOCATION}/${AR_REPO}" 2>/dev/null || log_warn "Artifact Registry import failed (may already be in state)"
         else
             log_info "Artifact Registry repository already in Terraform state, skipping import"
@@ -628,24 +660,29 @@ else
     # CRITICAL: machine_type, disk_size_gb, disk_type MUST stay identical
     # Only node_count may differ (horizontal scaling only)
     # Use consistent disk_size_gb for both smoke-test and full runs
+    # Use -target to create cluster first, then configure kubectl, then apply Kubernetes resources
+    # Note: Default node pool is now configured in google_container_cluster.primary (no separate node pool resource)
     DISK_SIZE_GB="${DISK_SIZE_GB:-50}"
+    # Include service accounts so they're created before cluster
     if terraform apply -auto-approve \
+        -target=google_service_account.worker \
+        -target=google_service_account.orchestrator \
+        -target=google_container_cluster.primary \
         -var="project_id=$PROJECT" \
         -var="region=$REGION" \
         -var="bucket_name=$BUCKET" \
-        -var="machine_type=$MACHINE_TYPE" \
-        -var="node_count=$NODE_COUNT" \
-        -var="cluster_name=$CLUSTER_NAME" \
-        -var="smoke_test=$SMOKE_TEST" \
-        -var="disk_size_gb=$DISK_SIZE_GB" \
-        -var="ephemeral=$EPHEMERAL"; then
+        -var="gke_node_machine_type=$MACHINE_TYPE" \
+        -var="gke_initial_node_count=$NODE_COUNT" \
+        -var="gke_node_min_count=$NODE_COUNT" \
+        -var="gke_name=$CLUSTER_NAME" \
+        -var="gke_disk_size_gb=$DISK_SIZE_GB"; then
         log_success "Infrastructure deployed"
         
         # Grant bucket permissions manually if bucket was removed from state
         # (This happens in ephemeral mode to prevent prevent_destroy conflicts)
         if [[ "$EPHEMERAL" == "true" ]]; then
             log_info "Ensuring service account has bucket permissions..."
-            SERVICE_ACCOUNT_EMAIL="pqc-bench-worker@${PROJECT}.iam.gserviceaccount.com"
+            SERVICE_ACCOUNT_EMAIL="qr-worker@${PROJECT}.iam.gserviceaccount.com"
             if gsutil iam ch "serviceAccount:${SERVICE_ACCOUNT_EMAIL}:roles/storage.objectAdmin" "gs://${BUCKET}" 2>&1; then
                 log_success "Bucket permissions granted to service account"
             else
@@ -672,7 +709,13 @@ else
                 --region "$REGION" \
                 --project "$PROJECT" &>/dev/null 2>&1; then
                 log_info "Cluster exists, checking node pool status..."
-                gcloud container node-pools describe pqc-bench-pool \
+                # Default pool name is "default-pool" (GKE standard)
+                DEFAULT_POOL_NAME=$(gcloud container node-pools list \
+                    --cluster "$CLUSTER_NAME" \
+                    --region "$REGION" \
+                    --project "$PROJECT" \
+                    --format="value(name)" 2>/dev/null | head -1 || echo "default-pool")
+                gcloud container node-pools describe "$DEFAULT_POOL_NAME" \
                     --cluster "$CLUSTER_NAME" \
                     --region "$REGION" \
                     --project "$PROJECT" 2>&1 | head -50 || true
@@ -772,7 +815,7 @@ done
 
 # Get service account email from Terraform if not already set
 if [[ -z "${SA_EMAIL:-}" ]]; then
-    SA_EMAIL=$(cd "$TERRAFORM_DIR" && terraform output -raw service_account_email 2>/dev/null || echo "pqc-bench-worker@${PROJECT}.iam.gserviceaccount.com")
+    SA_EMAIL=$(cd "$TERRAFORM_DIR" && terraform output -raw worker_sa_email 2>/dev/null || echo "qr-worker@${PROJECT}.iam.gserviceaccount.com")
 fi
 
 # =============================================================================
@@ -783,6 +826,31 @@ log_step "Step 4/8: Building and pushing container image"
 if [[ "$SKIP_BUILD" == "true" ]]; then
     log_warn "Skipping build (--skip-build)"
 else
+    # CRITICAL: Ensure Artifact Registry repository exists before pushing
+    # Extract repository name from image (e.g., europe-west2-docker.pkg.dev/project/pqc/pqc-bench:latest -> pqc)
+    AR_REPO="pqc"
+    AR_LOCATION="${REGION}"
+    
+    log_info "Ensuring Artifact Registry repository exists..."
+    if ! gcloud artifacts repositories describe "$AR_REPO" \
+        --location "$AR_LOCATION" \
+        --project "$PROJECT" &>/dev/null; then
+        log_info "Artifact Registry repository '$AR_REPO' does not exist. Creating it..."
+        if gcloud artifacts repositories create "$AR_REPO" \
+            --repository-format=docker \
+            --location="$AR_LOCATION" \
+            --project="$PROJECT" \
+            --description="PQC benchmark container images" 2>&1; then
+            log_success "Artifact Registry repository created: $AR_REPO"
+        else
+            log_error "Failed to create Artifact Registry repository"
+            log_error "Please create it manually or run Terraform to create it"
+            exit 1
+        fi
+    else
+        log_info "Artifact Registry repository '$AR_REPO' already exists"
+    fi
+    
     # Configure Podman for Artifact Registry
     log_info "Configuring Podman authentication..."
     gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
@@ -796,9 +864,17 @@ else
     
     # Push image
     log_info "Pushing image to Artifact Registry..."
-    podman push "$IMAGE_NAME"
-    
-    log_success "Image pushed: $IMAGE_NAME"
+    if podman push "$IMAGE_NAME" 2>&1; then
+        log_success "Image pushed: $IMAGE_NAME"
+    else
+        log_error "Failed to push image to Artifact Registry"
+        log_error "Image: $IMAGE_NAME"
+        log_error "Please verify:"
+        log_error "  1. Artifact Registry repository exists: gcloud artifacts repositories describe $AR_REPO --location $AR_LOCATION --project $PROJECT"
+        log_error "  2. You have push permissions"
+        log_error "  3. Podman is authenticated: podman login ${REGION}-docker.pkg.dev"
+        exit 1
+    fi
 fi
 
 # =============================================================================
@@ -812,14 +888,8 @@ fi
 
 log_step "Step 5/8: Deploying Kubernetes resources"
 
-# Set namespace based on smoke-test mode
-if [[ "$SMOKE_TEST" == "true" ]]; then
-    NAMESPACE="pqc-smoke-test"
-    log_info "Creating smoke-test namespace..."
-    kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-else
-    NAMESPACE="default"
-fi
+# Use consistent namespace for all test types
+NAMESPACE="default"
 
 # Clean up any existing job
 cleanup_job "$NAMESPACE"
@@ -886,13 +956,13 @@ kubectl create configmap pqc-scenario \
     --dry-run=client -o yaml | kubectl apply -f -
 rm -f "$TEMP_SCENARIO"
 
-# Create GCP config ConfigMap
-log_info "Creating GCP config ConfigMap..."
+# Create benchmark config ConfigMap
+log_info "Creating benchmark config ConfigMap..."
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: pqc-gcp-config
+  name: pqc-bench-config
   namespace: $NAMESPACE
 data:
   bucket_name: "$BUCKET"
@@ -917,8 +987,7 @@ metadata:
 EOF
 
 # CRITICAL: Create IAM binding for Workload Identity
-# The Terraform binding only covers 'default' namespace, so we need to create
-# bindings for other namespaces (like 'pqc-smoke-test') dynamically
+# Ensure binding exists for the target namespace
 log_info "Creating Workload Identity IAM binding for namespace '$NAMESPACE'..."
 K8S_SA="${PROJECT}.svc.id.goog[${NAMESPACE}/pqc-bench-sa]"
 
@@ -1249,26 +1318,25 @@ echo ""
 if [[ "$DESTROY_AFTER" == "true" || "$EPHEMERAL" == "true" ]]; then
     log_step "Step 9/9: Destroying infrastructure and cleaning up resources"
     
-    # CRITICAL: Remove bucket from state before destroy to prevent deletion
-    # The bucket is a persistent resource that should never be destroyed
+    # CRITICAL: Only protect GCS bucket from destruction
+    # All other resources (service account, Artifact Registry, cluster, nodes, etc.) are ephemeral
     cd "$TERRAFORM_DIR"
-    log_info "Protecting GCS bucket from destruction..."
+    log_info "Protecting GCS bucket from destruction (all other resources will be destroyed)..."
     if terraform state list 2>/dev/null | grep -q "google_storage_bucket.results"; then
-        log_info "Removing bucket from Terraform state (bucket will persist)"
+        log_info "Removing bucket from Terraform state (bucket will persist, all other resources will be destroyed)"
         terraform state rm google_storage_bucket.results 2>/dev/null || \
         terraform state rm 'google_storage_bucket.results' 2>/dev/null || true
         # Also remove bucket object marker
         terraform state rm google_storage_bucket_object.experiments_marker 2>/dev/null || true
+        terraform state rm google_storage_bucket_iam_member.gcs_admin 2>/dev/null || true
         log_success "Bucket protected from destruction"
     fi
-    
-    # Also protect service account and Artifact Registry (persistent resources)
-    log_info "Protecting persistent resources (service account, Artifact Registry)..."
-    terraform state rm google_service_account.pqc_bench 2>/dev/null || true
-    terraform state rm google_project_iam_member.ar_reader 2>/dev/null || true
-    terraform state rm google_storage_bucket_iam_member.gcs_admin 2>/dev/null || true
-    terraform state rm google_service_account_iam_member.workload_identity 2>/dev/null || true
-    terraform state rm google_artifact_registry_repository.pqc 2>/dev/null || true
+    # Remove kubernetes_manifest resources from state to prevent REST client errors when cluster is gone
+    terraform state rm 'kubernetes_manifest.orchestrator_service_monitor[0]' 2>/dev/null || true
+    terraform state rm 'kubernetes_manifest.worker_service_monitor[0]' 2>/dev/null || true
+    terraform state rm 'kubernetes_manifest.worker_pod_monitor[0]' 2>/dev/null || true
+    # Note: Service account, Artifact Registry, and IAM bindings are NOT protected
+    # They will be destroyed along with the cluster to ensure complete cleanup
     
     # Run Terraform destroy (will only destroy cluster and node pool now)
     log_info "Running Terraform destroy (cluster and node pool only)..."
@@ -1276,13 +1344,12 @@ if [[ "$DESTROY_AFTER" == "true" || "$EPHEMERAL" == "true" ]]; then
         -var="project_id=$PROJECT" \
         -var="region=$REGION" \
         -var="bucket_name=$BUCKET" \
-        -var="machine_type=$MACHINE_TYPE" \
-        -var="node_count=$NODE_COUNT" \
-        -var="cluster_name=$CLUSTER_NAME" \
-        -var="smoke_test=$SMOKE_TEST" \
-        -var="disk_size_gb=${DISK_SIZE_GB:-50}" \
-        -var="ephemeral=$EPHEMERAL"; then
-        log_success "Terraform destroy completed (persistent resources preserved)"
+        -var="gke_node_machine_type=$MACHINE_TYPE" \
+        -var="gke_initial_node_count=$NODE_COUNT" \
+        -var="gke_node_min_count=$NODE_COUNT" \
+        -var="gke_name=$CLUSTER_NAME" \
+        -var="gke_disk_size_gb=${DISK_SIZE_GB:-50}"; then
+        log_success "Terraform destroy completed (GCS bucket preserved, all other resources destroyed)"
     else
         log_warn "Terraform destroy had errors (some resources may already be deleted or not in state)"
     fi

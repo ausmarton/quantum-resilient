@@ -51,6 +51,21 @@ wait_for_job() {
         sleep 5  # Give time for pods to be created
         local pod_names=($(kubectl get pods -l job-name="$job_name" -n "$namespace" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo ""))
         
+        # If no pods after 5 seconds, wait a bit more and check again
+        if [[ ${#pod_names[@]} -eq 0 ]]; then
+            sleep 10  # Wait additional time for pods to be created
+            pod_names=($(kubectl get pods -l job-name="$job_name" -n "$namespace" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo ""))
+            
+            # If still no pods, check job status and provide diagnostics
+            if [[ ${#pod_names[@]} -eq 0 ]]; then
+                log_warn "No pods found for job '$job_name' after 15 seconds"
+                log_info "Job status:"
+                kubectl get job "$job_name" -n "$namespace" -o yaml 2>&1 | grep -A 10 "status:" || true
+                log_info "Checking for scheduling issues..."
+                kubectl describe job "$job_name" -n "$namespace" 2>&1 | grep -A 20 "Events:" || true
+            fi
+        fi
+        
         if [[ ${#pod_names[@]} -gt 0 ]]; then
             if [[ ${#pod_names[@]} -eq 1 ]]; then
                 log_info "Pod: ${pod_names[0]}"
@@ -551,6 +566,30 @@ submit_k8s_job() {
         fi
     fi
     
+    # CRITICAL: Switch kubectl context based on environment
+    # This ensures jobs are created in the correct cluster
+    if [[ "$environment" == "minikube" ]]; then
+        log_info "Switching kubectl context to Minikube..." >&2
+        if ! kubectl config use-context minikube &>/dev/null; then
+            log_error "Failed to switch to Minikube context. Is Minikube running?" >&2
+            return 1
+        fi
+    elif [[ "$environment" == "gcp" ]]; then
+        # For GCP, context should already be set by gcloud get-credentials
+        # But verify it's a GCP context (starts with gke_)
+        local current_context=$(kubectl config current-context 2>/dev/null || echo "")
+        if [[ ! "$current_context" =~ ^gke_ ]]; then
+            log_warn "Current kubectl context '$current_context' doesn't appear to be GCP. Attempting to configure..." >&2
+            # Try to get credentials (this should have been done earlier, but try anyway)
+            if ! gcloud container clusters get-credentials "$(echo "$current_context" | cut -d'_' -f3)" \
+                --region "$region" \
+                --project "$project" &>/dev/null; then
+                log_error "Failed to configure GCP kubectl context" >&2
+                return 1
+            fi
+        fi
+    fi
+    
     # Source k8s-configmap.sh for ConfigMap creation
     local script_dir="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
     source "$script_dir/scripts/lib/k8s-configmap.sh" 2>/dev/null || {
@@ -624,10 +663,69 @@ submit_k8s_job() {
     # Create GCP config ConfigMap (only for GCP)
     local gcp_cm=""
     if [[ "$environment" == "gcp" ]]; then
-        local gcp_cm_sanitized=$(sanitize_k8s_name "$exp_id" | cut -c1-228)
-        gcp_cm="pqc-gcp-config-${gcp_cm_sanitized}"
+        # CRITICAL: Ensure qr-worker service account exists in the namespace
+        # Terraform creates it in 'quantum-resilient' namespace (or var.kubernetes_namespace),
+        # but we use 'default' namespace for all test types
+        log_info "Ensuring qr-worker service account exists in namespace '$namespace'..." >&2
+        GCP_SA_EMAIL="qr-worker@${project}.iam.gserviceaccount.com"
         
-        log_info "Creating GCP config ConfigMap..." >&2
+        # First, verify the GCP service account exists (created by Terraform)
+        if ! gcloud iam service-accounts describe "$GCP_SA_EMAIL" \
+            --project="$project" &>/dev/null; then
+            log_warn "GCP service account $GCP_SA_EMAIL does not exist" >&2
+            log_warn "Terraform should have created it. Continuing anyway..." >&2
+            # We'll still try to create the KSA, but Workload Identity won't work without the GSA
+        fi
+        
+        if ! kubectl get serviceaccount qr-worker -n "$namespace" &>/dev/null; then
+            log_info "Creating qr-worker Kubernetes service account in namespace '$namespace'..." >&2
+            # Create ServiceAccount with Workload Identity annotation
+            if ! cat <<EOF | kubectl apply -f - 2>&1; then
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: qr-worker
+  namespace: $namespace
+  annotations:
+    iam.gke.io/gcp-service-account: ${GCP_SA_EMAIL}
+  labels:
+    app: quantum-resilient
+    component: worker
+EOF
+                log_error "Failed to create qr-worker service account" >&2
+                return 1
+            fi
+            log_success "qr-worker service account created in namespace '$namespace'" >&2
+            
+            # Ensure Workload Identity binding exists for this namespace
+            # Terraform creates binding for the Terraform namespace, so we ensure it exists for the target namespace
+            log_info "Ensuring Workload Identity binding for qr-worker in namespace '$namespace'..." >&2
+            K8S_SA="${project}.svc.id.goog[${namespace}/qr-worker]"
+            if ! gcloud iam service-accounts get-iam-policy "$GCP_SA_EMAIL" \
+                --project="$project" \
+                --format="json" 2>/dev/null | grep -q "$K8S_SA"; then
+                log_info "Creating Workload Identity binding for $K8S_SA..." >&2
+                if ! gcloud iam service-accounts add-iam-policy-binding "$GCP_SA_EMAIL" \
+                    --project="$project" \
+                    --role="roles/iam.workloadIdentityUser" \
+                    --member="serviceAccount:${K8S_SA}" 2>&1; then
+                    log_warn "Failed to create Workload Identity binding (may need permissions or GSA doesn't exist)" >&2
+                    log_warn "Jobs may fail to authenticate. Ensure Terraform created the GCP service account." >&2
+                else
+                    log_success "Workload Identity binding created" >&2
+                fi
+            else
+                log_info "Workload Identity binding already exists" >&2
+            fi
+        else
+            log_info "qr-worker service account already exists in namespace '$namespace'" >&2
+        fi
+        
+        local gcp_cm_sanitized=$(sanitize_k8s_name "$exp_id" | cut -c1-228)
+        gcp_cm="pqc-bench-config-${gcp_cm_sanitized}"
+        
+        log_info "Creating benchmark config ConfigMap..." >&2
+        # Pass container image to ConfigMap so upload sidecar can use it
         gcp_cm=$(create_gcp_config_configmap \
             "$exp_id" \
             "$bucket" \
@@ -635,14 +733,16 @@ submit_k8s_job() {
             "$project" \
             "$namespace" \
             "$smoke_test" \
-            "$gcp_cm") || {
-            log_error "Failed to create GCP config ConfigMap" >&2
+            "$gcp_cm" \
+            "$image") || {
+            log_error "Failed to create benchmark config ConfigMap" >&2
             return 1
         }
     fi
     
     # Generate Job YAML using unified generator
-    local temp_job=$(mktemp)
+    # Create temp file in project directory so container can access it
+    local temp_job=$(mktemp -p "$script_dir" -t job-yaml-XXXXXX.yaml)
     local generator_args=(
         --environment "$environment"
         --job-name "$job_name"
@@ -721,7 +821,7 @@ ensure_gcp_service_account() {
         fi
         if [[ -z "$sa_email" ]]; then
             # Default service account email format
-            sa_email="pqc-bench-worker@${project}.iam.gserviceaccount.com"
+            sa_email="qr-worker@${project}.iam.gserviceaccount.com"
         fi
     fi
     

@@ -49,7 +49,7 @@ done
 [[ -z "$IMAGE_NAME" ]] && { echo "ERROR: Missing --image" >&2; exit 1; }
 
 # Determine cluster name from environment or use default
-CLUSTER_NAME="${GCP_CLUSTER_NAME:-pqc-smoke-test}"
+CLUSTER_NAME="${GCP_CLUSTER_NAME:-pqc-bench}"
 
 # Refresh kubectl credentials before each job submission
 # This ensures credentials don't expire during long-running tests

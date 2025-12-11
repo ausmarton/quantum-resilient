@@ -248,7 +248,7 @@ def validate_scenario(scenario: dict) -> tuple[bool, Optional[str]]:
     return True, None
 
 
-def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = False) -> tuple[list[dict], list[str]]:
+def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = False, mini_smoke_test: bool = False) -> tuple[list[dict], list[str]]:
     """
     Generate all scenarios from experiment matrix.
     
@@ -264,6 +264,11 @@ def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = Fa
     
     # Smoke-test mode: restrict to subset of algorithms and experiment types
     smoke_test_algorithms = ['rsa2048', 'kyber512', 'dilithium2', 'hybrid_kyber_dilithium']
+    
+    # Mini smoke-test mode: only 2 algorithms (1 classical, 1 PQC)
+    if mini_smoke_test:
+        smoke_test_algorithms = ['rsa2048', 'kyber512']
+        smoke_test = True  # Enable smoke test mode
     
     for experiment in experiments:
         algorithm = experiment['algorithm']
@@ -287,6 +292,11 @@ def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = Fa
             if experiment.get('duration_sec') == 300:
                 continue
             
+            # Mini smoke test: only constant pattern experiments (no burst, no scaling)
+            if mini_smoke_test:
+                if workload_pattern != 'constant' or is_scaling_exp:
+                    continue
+            
             # Include all remaining experiments:
             # - Baseline constant experiments (will use smoke test parameters)
             # - Burst experiments (will use smoke test parameters but keep burst pattern)
@@ -295,7 +305,12 @@ def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = Fa
         
         # In smoke-test mode, use reduced parameters
         # CRITICAL: Hardware (machine_type, CPU, memory, disk) MUST stay identical
-        if smoke_test:
+        if mini_smoke_test:
+            # Mini smoke test: absolute minimum - 1 payload, 1 rate, 1 run
+            payload_sizes = [256]  # Minimal size only
+            rates = [100]  # Low rate only
+            runs = 1
+        elif smoke_test:
             # Enhanced smoke test: use 2 payload sizes and 2 rates for better coverage
             payload_sizes = [256, 1024]  # Minimal + common size
             rates = [100, 500]  # Low + medium rate
@@ -482,6 +497,11 @@ Output structure:
         action='store_true',
         help='Generate smoke-test scenarios (reduced scale, minimal cost)'
     )
+    parser.add_argument(
+        '--mini-smoke-test',
+        action='store_true',
+        help='Generate minimal smoke-test scenarios (2 experiments: 1 classical, 1 PQC)'
+    )
     
     args = parser.parse_args()
     
@@ -552,7 +572,7 @@ Output structure:
         if args.smoke_test:
             print("Smoke-test mode: reduced scale, minimal cost")
     
-    generated, errors = generate_all_scenarios(matrix, args.output, args.smoke_test)
+    generated, errors = generate_all_scenarios(matrix, args.output, args.smoke_test, args.mini_smoke_test)
     
     # Report errors
     if errors:

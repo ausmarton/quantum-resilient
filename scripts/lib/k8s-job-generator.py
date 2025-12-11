@@ -21,7 +21,7 @@
 #     --namespace default \
 #     --image gcr.io/project/pqc-bench:latest \
 #     --scenario-configmap pqc-scenario-abc123 \
-#     --gcp-config-configmap pqc-gcp-config-abc123 \
+#     --gcp-config-configmap pqc-bench-config-abc123 \
 #     --experiment-id abc123 \
 #     [--output job.yaml]
 # =============================================================================
@@ -618,7 +618,7 @@ cat > /results/provenance.json << EOF
 {
   "git_commit": "$GIT_COMMIT",
   "rustc_version": "1.78.0",
-  "container_image": "${CONTAINER_IMAGE}",
+  "container_image": "${CONTAINER_IMAGE:-unknown}",
   "gke_cluster_name": "$(cat /results/cloud_metadata.json | grep cluster_name | cut -d'"' -f4)",
   "gke_nodepool_size": 1,
   "instance_machine_type": "$(cat /results/cloud_metadata.json | grep machine_type | cut -d'"' -f4)",
@@ -713,6 +713,16 @@ exit 0"""
                     "configMapKeyRef": {
                         "name": gcp_config_configmap,
                         "key": "experiment_id",
+                    },
+                },
+            },
+            {
+                "name": "CONTAINER_IMAGE",
+                "valueFrom": {
+                    "configMapKeyRef": {
+                        "name": gcp_config_configmap,
+                        "key": "container_image",
+                        "optional": True,
                     },
                 },
             },
@@ -839,8 +849,9 @@ def generate_job_yaml(
     pod_spec = job["spec"]["template"]["spec"]
     
     # Set service account for GCP
+    # Use qr-worker KSA (created by Terraform) which is bound to qr-worker GSA via Workload Identity
     if environment == "gcp":
-        pod_spec["serviceAccountName"] = "pqc-bench-sa"
+        pod_spec["serviceAccountName"] = "qr-worker"
     
     # Create init container
     if environment == "minikube":
@@ -926,9 +937,10 @@ def generate_job_yaml(
             }
     else:
         # Add node selector and affinity for GCP
-        pod_spec["nodeSelector"] = {
-            "cloud.google.com/gke-nodepool": "pqc-bench-pool",
-        }
+        # Note: Node pool name is dynamic based on cluster name (${gke_name}-primary-pool)
+        # We don't specify nodeSelector to allow pods to run on any node pool
+        # All test types use the same cluster and node pool names
+        # This provides flexibility when cluster/node pool names vary
         pod_spec["affinity"] = {
             "podAntiAffinity": {
                 "preferredDuringSchedulingIgnoredDuringExecution": [

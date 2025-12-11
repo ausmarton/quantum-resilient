@@ -64,7 +64,7 @@ resource "helm_release" "orchestrator" {
   ]
 
   depends_on = [
-    google_container_node_pool.primary,
+    google_container_cluster.primary,
     kubernetes_service_account.orchestrator,
     google_storage_bucket.results,
   ]

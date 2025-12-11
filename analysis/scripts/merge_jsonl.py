@@ -68,14 +68,28 @@ def compute_derived_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Compute derived columns for analysis."""
     console.print("[cyan]Computing derived columns...[/cyan]")
 
+    # Check if DataFrame is empty
+    if df.empty:
+        console.print("[red]Error: DataFrame is empty. No data to process.[/red]")
+        raise ValueError("Empty DataFrame - no events found in JSONL files")
+
+    # Show available columns for debugging
+    console.print(f"[dim]Available columns: {', '.join(df.columns.tolist())}[/dim]")
+
     # Ensure timestamp columns exist
     if "timestamp_utc_iso" in df.columns:
         df["timestamp"] = pd.to_datetime(df["timestamp_utc_iso"])
 
     # Expect nanosecond precision format (latency_ns, queue_delay_ns)
+    # If latency_ns is missing, check if we have latency_us and convert
     if "latency_ns" not in df.columns:
-        console.print("[red]Error: latency_ns column not found. Data must be in nanosecond precision format.[/red]")
-        raise ValueError("Missing required column: latency_ns")
+        if "latency_us" in df.columns:
+            console.print("[yellow]Warning: latency_ns not found, converting from latency_us[/yellow]")
+            df["latency_ns"] = df["latency_us"] * 1000.0
+        else:
+            console.print("[red]Error: Neither latency_ns nor latency_us column found.[/red]")
+            console.print(f"[red]Available columns: {', '.join(df.columns.tolist())}[/red]")
+            raise ValueError("Missing required column: latency_ns (and latency_us not found)")
     
     # Ensure queue_delay_ns exists
     if "queue_delay_ns" not in df.columns:

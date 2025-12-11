@@ -60,7 +60,7 @@ resource "helm_release" "workers" {
   ]
 
   depends_on = [
-    google_container_node_pool.primary,
+    google_container_cluster.primary,
     kubernetes_service_account.worker,
     google_storage_bucket.results,
   ]

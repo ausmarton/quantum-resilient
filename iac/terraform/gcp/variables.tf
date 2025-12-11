@@ -23,9 +23,9 @@ variable "bucket_name" {
 # -----------------------------------------------------------------------------
 
 variable "gke_name" {
-  description = "Name of the GKE cluster"
+  description = "Name of the GKE cluster (consistent across all environments)"
   type        = string
-  default     = "quantum-resilient-cluster"
+  default     = "pqc-bench"
 }
 
 variable "gke_node_machine_type" {

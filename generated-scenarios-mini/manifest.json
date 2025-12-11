@@ -1,12 +1,12 @@
 {
-  "generated_at": "2025-12-11T23:26:09.748245+00:00",
+  "generated_at": "2025-12-11T12:31:48.860236+00:00",
   "generator_version": "2.0.0",
   "matrix_file": "orchestration/experiment_matrix.yaml",
   "total_scenarios": 2,
   "validation_errors": 0,
   "algorithms": [
-    "kyber512",
-    "rsa2048"
+    "rsa2048",
+    "kyber512"
   ],
   "payload_sizes": [
     256
@@ -22,7 +22,7 @@
       "rate": 100,
       "run_index": 1,
       "seed": 2277928481083346787,
-      "path": "generated-scenarios/rsa2048/p256/r100/run-1/scenario.yaml",
+      "path": "generated-scenarios-mini/rsa2048/p256/r100/run-1/scenario.yaml",
       "relative_path": "rsa2048/p256/r100/run-1/scenario.yaml",
       "category": "classical",
       "scaling_experiment": false
@@ -34,7 +34,7 @@
       "rate": 100,
       "run_index": 1,
       "seed": 3396977605294975925,
-      "path": "generated-scenarios/kyber512/p256/r100/run-1/scenario.yaml",
+      "path": "generated-scenarios-mini/kyber512/p256/r100/run-1/scenario.yaml",
       "relative_path": "kyber512/p256/r100/run-1/scenario.yaml",
       "category": "pqc",
       "scaling_experiment": false

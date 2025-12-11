@@ -12,7 +12,19 @@ resource "kubernetes_namespace" "monitoring" {
     }
   }
 
-  depends_on = [google_container_node_pool.primary]
+  depends_on = [google_container_cluster.primary]
+}
+
+# -----------------------------------------------------------------------------
+# Wait for Prometheus CRDs to be installed
+# -----------------------------------------------------------------------------
+
+resource "time_sleep" "wait_for_prometheus_crds" {
+  count = var.enable_prometheus ? 1 : 0
+  
+  depends_on = [helm_release.prometheus_operator]
+  
+  create_duration = "30s"  # Wait 30 seconds for CRDs to be registered
 }
 
 # -----------------------------------------------------------------------------
@@ -149,7 +161,7 @@ resource "helm_release" "prometheus_operator" {
   ]
 
   depends_on = [
-    google_container_node_pool.primary,
+    google_container_cluster.primary,
     kubernetes_namespace.monitoring,
   ]
 }
@@ -192,7 +204,17 @@ resource "kubernetes_manifest" "orchestrator_service_monitor" {
     }
   }
 
-  depends_on = [helm_release.prometheus_operator]
+  # Wait for CRDs to be installed by Prometheus Operator
+  # Use time_sleep to ensure CRDs are available before creating ServiceMonitor
+  depends_on = [
+    helm_release.prometheus_operator,
+    time_sleep.wait_for_prometheus_crds
+  ]
+  
+  # Add lifecycle to ignore CRD errors during initial apply
+  lifecycle {
+    ignore_changes = [manifest]
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -233,7 +255,16 @@ resource "kubernetes_manifest" "worker_service_monitor" {
     }
   }
 
-  depends_on = [helm_release.prometheus_operator]
+  # Wait for CRDs to be installed by Prometheus Operator
+  depends_on = [
+    helm_release.prometheus_operator,
+    time_sleep.wait_for_prometheus_crds
+  ]
+  
+  # Add lifecycle to ignore CRD errors during initial apply
+  lifecycle {
+    ignore_changes = [manifest]
+  }
 }
 
 # -----------------------------------------------------------------------------
@@ -274,6 +305,15 @@ resource "kubernetes_manifest" "worker_pod_monitor" {
     }
   }
 
-  depends_on = [helm_release.prometheus_operator]
+  # Wait for CRDs to be installed by Prometheus Operator
+  depends_on = [
+    helm_release.prometheus_operator,
+    time_sleep.wait_for_prometheus_crds
+  ]
+  
+  # Add lifecycle to ignore CRD errors during initial apply
+  lifecycle {
+    ignore_changes = [manifest]
+  }
 }
 

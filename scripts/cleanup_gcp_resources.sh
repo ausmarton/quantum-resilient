@@ -2,15 +2,20 @@
 # =============================================================================
 # cleanup_gcp_resources.sh - Safely remove all GCP resources created by PQC benchmarks
 #
-# Removes:
+# Removes (ephemeral resources):
 # - GKE clusters
 # - Node pools
 # - Persistent disks
+# - Service accounts
+# - Artifact Registry repositories
 # - Load balancers
 # - Forwarding rules
 # - Static IPs
 # - Firewall rules (non-default)
 # - Orphaned PVs/PVCs
+#
+# Preserves (persistent resources):
+# - GCS bucket (stores experiment results)
 #
 # Usage:
 #   ./scripts/cleanup_gcp_resources.sh --project <project> --region <region> [--cluster-name <name>]
@@ -123,6 +128,43 @@ cleanup_clusters() {
             continue
         fi
         
+        # Wait for cluster to finish provisioning before attempting deletion
+        log_info "Checking cluster status before deletion..."
+        CLUSTER_STATUS=$(gcloud container clusters describe "$cluster" \
+            --project "$PROJECT" \
+            --region "$REGION" \
+            --format="value(status)" 2>/dev/null || echo "UNKNOWN")
+        
+        if [[ "$CLUSTER_STATUS" == "PROVISIONING" ]]; then
+            log_warn "Cluster '$cluster' is still PROVISIONING. Waiting for it to finish before deletion..."
+            MAX_WAIT=600  # 10 minutes
+            ELAPSED=0
+            while [[ $ELAPSED -lt $MAX_WAIT ]]; do
+                CLUSTER_STATUS=$(gcloud container clusters describe "$cluster" \
+                    --project "$PROJECT" \
+                    --region "$REGION" \
+                    --format="value(status)" 2>/dev/null || echo "UNKNOWN")
+                
+                if [[ "$CLUSTER_STATUS" == "RUNNING" ]]; then
+                    log_info "Cluster '$cluster' is now RUNNING, proceeding with deletion"
+                    break
+                elif [[ "$CLUSTER_STATUS" == "STOPPING" || "$CLUSTER_STATUS" == "ERROR" ]]; then
+                    log_info "Cluster '$cluster' is in $CLUSTER_STATUS state, proceeding with cleanup"
+                    break
+                fi
+                
+                if [[ $((ELAPSED % 30)) -eq 0 ]]; then
+                    log_info "Still waiting for cluster to finish provisioning... ($ELAPSED seconds elapsed, status: $CLUSTER_STATUS)"
+                fi
+                sleep 10
+                ELAPSED=$((ELAPSED + 10))
+            done
+            
+            if [[ "$CLUSTER_STATUS" == "PROVISIONING" ]]; then
+                log_warn "Cluster '$cluster' is still PROVISIONING after $MAX_WAIT seconds. Attempting deletion anyway..."
+            fi
+        fi
+        
         # Delete cluster synchronously (not async) to ensure it actually happens
         log_info "Initiating deletion of cluster '$cluster' (this will take 5-10 minutes)..."
         
@@ -148,14 +190,14 @@ cleanup_clusters() {
         
         # Delete the cluster
         log_info "Deleting cluster '$cluster' (this will take 5-15 minutes)..."
-        log_info "Executing: gcloud container clusters delete $cluster --project $PROJECT --region $REGION"
+        log_info "Executing: gcloud container clusters delete $cluster --project $PROJECT --region $REGION --quiet"
         
-        # Try deletion without --quiet first to see what's happening
-        # If that fails, try with --async and then wait
+        # Use --quiet to avoid interactive prompts
         set +e  # Don't exit on error
         DELETE_OUTPUT=$(gcloud container clusters delete "$cluster" \
             --project "$PROJECT" \
             --region "$REGION" \
+            --quiet \
             2>&1)
         DELETE_EXIT_CODE=$?
         set -e  # Re-enable exit on error
@@ -194,7 +236,8 @@ cleanup_clusters() {
                 if gcloud container clusters delete "$cluster" \
                     --project "$PROJECT" \
                     --region "$REGION" \
-                    --async 2>&1; then
+                    --async \
+                    --quiet 2>&1; then
                     log_info "Async deletion initiated"
                     STATUS="DELETING"
                 else
@@ -483,6 +526,71 @@ cleanup_firewall_rules() {
     done
 }
 
+# Function to delete service accounts
+cleanup_service_accounts() {
+    log_info "Checking for PQC benchmark service accounts..."
+    
+    # Find service accounts that might be from our benchmarks
+    # Terraform creates: qr-orchestrator, qr-worker
+    # Legacy names: pqc.*bench, pqc.*smoke
+    SERVICE_ACCOUNTS=($(gcloud iam service-accounts list \
+        --project "$PROJECT" \
+        --filter="email~'qr-orchestrator@' OR email~'qr-worker@' OR email~'pqc.*bench' OR email~'pqc.*smoke'" \
+        --format="value(email)" 2>/dev/null || true))
+    
+    for sa_email in "${SERVICE_ACCOUNTS[@]}"; do
+        if [[ -z "$sa_email" ]]; then
+            continue
+        fi
+        log_info "Deleting service account: $sa_email"
+        
+        # Delete IAM bindings first (if any)
+        # Note: We don't delete bindings to the bucket as it's persistent
+        
+        # Delete the service account
+        if gcloud iam service-accounts delete "$sa_email" \
+            --project "$PROJECT" \
+            --quiet 2>/dev/null; then
+            log_success "Deleted service account: $sa_email"
+        else
+            log_warn "Service account may not exist or may be in use: $sa_email"
+        fi
+    done
+}
+
+# Function to delete Artifact Registry repositories
+cleanup_artifact_registry() {
+    log_info "Checking for PQC benchmark Artifact Registry repositories..."
+    
+    # Find Artifact Registry repositories that might be from our benchmarks
+    # Look in common locations (us-central1, europe-west2, etc.)
+    AR_LOCATIONS=("us-central1" "europe-west2" "europe-west1" "us-east1")
+    
+    for location in "${AR_LOCATIONS[@]}"; do
+        REPOS=($(gcloud artifacts repositories list \
+            --project "$PROJECT" \
+            --location "$location" \
+            --filter="name~'pqc'" \
+            --format="value(name)" 2>/dev/null || true))
+        
+        for repo in "${REPOS[@]}"; do
+            if [[ -z "$repo" ]]; then
+                continue
+            fi
+            log_info "Deleting Artifact Registry repository: $repo (location: $location)"
+            
+            if gcloud artifacts repositories delete "$repo" \
+                --location "$location" \
+                --project "$PROJECT" \
+                --quiet 2>/dev/null; then
+                log_success "Deleted Artifact Registry repository: $repo"
+            else
+                log_warn "Artifact Registry repository may not exist: $repo"
+            fi
+        done
+    done
+}
+
 # Function to verify cleanup
 verify_cleanup() {
     log_info "Verifying cleanup..."
@@ -627,7 +735,11 @@ main() {
     cleanup_compute_instances
     
     # Then clean up other resources
-    log_info "Step 3: Cleaning up load balancers, IPs, and firewall rules..."
+    log_info "Step 3: Cleaning up service accounts and Artifact Registry..."
+    cleanup_service_accounts
+    cleanup_artifact_registry
+    
+    log_info "Step 4: Cleaning up load balancers, IPs, and firewall rules..."
     cleanup_load_balancers
     cleanup_static_ips
     cleanup_firewall_rules
@@ -636,16 +748,16 @@ main() {
     # because GKE-managed disks are deleted automatically with clusters
     
     # Wait for cluster deletion to complete before checking disks
-    log_info "Step 4: Waiting for cluster deletion to complete..."
+    log_info "Step 5: Waiting for cluster deletion to complete..."
     
     # Verify cleanup (this will wait for clusters and check for orphaned resources)
     if verify_cleanup; then
         # Now check for any orphaned disks (not managed by GKE)
-        log_info "Step 5: Checking for orphaned disks..."
+        log_info "Step 6: Checking for orphaned disks..."
         cleanup_disks
         
         # Final check for compute instances (in case they weren't deleted with cluster)
-        log_info "Step 6: Final check for orphaned compute instances..."
+        log_info "Step 7: Final check for orphaned compute instances..."
         cleanup_compute_instances
         
         log_success "All resources cleaned up successfully"

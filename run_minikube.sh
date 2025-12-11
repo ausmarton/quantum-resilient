@@ -267,20 +267,11 @@ fi
 if [[ "$SMOKE_TEST" == "true" ]]; then
     RUNS=1
     REPLICAS=1
-    NAMESPACE="pqc-smoke-test"
     log_info "Smoke-test mode: forcing runs=1, replicas=1"
-    log_info "Using namespace: $NAMESPACE"
-    
-    # Ensure namespace exists
-    if ! kubectl get namespace "$NAMESPACE" &>/dev/null; then
-        log_info "Creating namespace '$NAMESPACE' for smoke tests..."
-        kubectl create namespace "$NAMESPACE" || {
-            log_error "Failed to create namespace '$NAMESPACE'"
-            exit 1
-        }
-        log_success "Namespace '$NAMESPACE' created"
-    fi
 fi
+
+# Use consistent namespace for all test types
+NAMESPACE="${NAMESPACE:-default}"
 
 # =============================================================================
 # Step 1: Verify prerequisites
@@ -441,7 +432,10 @@ cleanup
 
 # Apply PVC (simpler than hostPath - no permission issues)
 log_info "Creating PersistentVolumeClaim..."
-kubectl apply --validate=false -f "$SCRIPT_DIR/k8s/results-pvc.yaml" -n "$NAMESPACE" >/dev/null 2>&1 || true
+# PVC YAML has namespace: default hardcoded, so we need to replace it for smoke-test namespace
+# Use sed to replace namespace before applying
+cat "$SCRIPT_DIR/k8s/results-pvc.yaml" | sed "s/namespace: default/namespace: $NAMESPACE/" | \
+    kubectl apply --validate=false -f - >/dev/null 2>&1 || true
 
 # Wait for PVC to be bound
 log_info "Waiting for PVC to be bound..."

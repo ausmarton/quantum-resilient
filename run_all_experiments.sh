@@ -68,6 +68,7 @@ DRY_RUN=false
 CONTINUE_ON_ERROR=true
 MAX_RETRIES=2
 SMOKE_TEST=false
+MINI_SMOKE_TEST=false
 
 # Colors
 RED='\033[0;31m'
@@ -171,6 +172,10 @@ OPTIONS:
                             - Experiment matrix filtering (subset of algorithms/experiments)
                             - Reduced parameters (2 payloads, 2 rates, 1 run, 5s duration)
                             Scenario IDs, results structure, and directories are identical.
+    --mini-smoke-test       Enable minimal smoke-test mode (2 experiments: 1 classical, 1 PQC)
+                            Even smaller than --smoke-test: only rsa2048 and kyber512,
+                            1 payload (256B), 1 rate (100 msg/s), 1 run per algorithm.
+                            Perfect for quick end-to-end validation.
     -h, --help              Show this help message
 
 EXAMPLE:
@@ -295,12 +300,8 @@ run_experiment() {
                         log_error "Minikube image not set for parallel mode - this should not happen"
                         exit_code=1
                     else
-                        # Determine namespace
-                        if [[ "$SMOKE_TEST" == "true" ]]; then
-                            MINIKUBE_NAMESPACE="pqc-smoke-test"
-                        else
-                            MINIKUBE_NAMESPACE="default"
-                        fi
+                        # Use consistent namespace for all test types
+                        MINIKUBE_NAMESPACE="default"
                         
                         # Submit job using unified function (non-blocking)
                         JOB_NAME=$(submit_k8s_job \
@@ -327,16 +328,24 @@ run_experiment() {
                     # Sequential mode: Run experiment and wait for completion
                     # Use --quiet flag to suppress verbose output, allowing progress updates to show
                     # Errors are still logged by run_minikube.sh internally
+                    # Redirect stderr to capture errors but allow stdout for job name capture
                     if "$SCRIPT_DIR/run_minikube.sh" \
                         --scenario "$scenario_path" \
                         --out "$output_dir" \
                         --replicas "$replicas" \
                         --exp-id "$scenario_id" \
                         --quiet \
-                        $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") >/dev/null 2>&1; then
+                        $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") >/dev/null 2>/tmp/minikube_${scenario_id}.log; then
                         exit_code=0
                     else
                         exit_code=$?
+                        # Log errors if job failed
+                        if [[ -f /tmp/minikube_${scenario_id}.log ]]; then
+                            log_warn "Minikube experiment failed, last 10 lines:"
+                            tail -10 /tmp/minikube_${scenario_id}.log | while read line; do
+                                log_warn "  $line"
+                            done
+                        fi
                     fi
                 fi
                 ;;
@@ -354,12 +363,8 @@ run_experiment() {
                         GCP_IMAGE_NAME="${IMAGE_REPO}/pqc-bench:latest"
                     fi
                     
-                    # Determine namespace
-                    if [[ "$SMOKE_TEST" == "true" ]]; then
-                        GCP_NAMESPACE="pqc-smoke-test"
-                    else
-                        GCP_NAMESPACE="default"
-                    fi
+                    # Use consistent namespace for all test types
+                    GCP_NAMESPACE="default"
                     
                     # Submit job immediately (non-blocking) - all jobs submitted, then wait for all at end
                     # Export cluster name so submit_gcp_job_parallel.sh can refresh credentials
@@ -536,6 +541,11 @@ while [[ $# -gt 0 ]]; do
             SMOKE_TEST=true
             shift
             ;;
+        --mini-smoke-test)
+            MINI_SMOKE_TEST=true
+            SMOKE_TEST=true  # Mini smoke test implies smoke test
+            shift
+            ;;
         -h|--help)
             usage
             ;;
@@ -579,7 +589,11 @@ echo -e "${NC}"
 log_info "Matrix: $MATRIX"
 log_info "Environments: $ENVS"
 log_info "Replicas: $REPLICAS"
-[[ "$SMOKE_TEST" == "true" ]] && log_info "Mode: SMOKE-TEST (reduced scale, minimal cost)"
+if [[ "$MINI_SMOKE_TEST" == "true" ]]; then
+    log_info "Mode: MINI SMOKE-TEST (2 experiments: 1 classical, 1 PQC)"
+elif [[ "$SMOKE_TEST" == "true" ]]; then
+    log_info "Mode: SMOKE-TEST (reduced scale, minimal cost)"
+fi
 log_info "Started: $START_ISO"
 
 # Parse replicas into array
@@ -610,12 +624,14 @@ else
             --matrix "$MATRIX_REL" \
             --output "$OUTPUT_REL" \
             --dry-run \
-            $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "")
+            $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") \
+            $([ "$MINI_SMOKE_TEST" == "true" ] && echo "--mini-smoke-test" || echo "")
     else
         $PYTHON_CMD "$SCENARIO_SCRIPT" \
             --matrix "$MATRIX_REL" \
             --output "$OUTPUT_REL" \
-            $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "")
+            $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") \
+            $([ "$MINI_SMOKE_TEST" == "true" ] && echo "--mini-smoke-test" || echo "")
     fi
     
     log_success "Scenarios generated"
@@ -687,18 +703,50 @@ for env in "${ENV_ARRAY[@]}"; do
     
     log_step "Environment: ${env^^}"
     
-    # For Minikube: Ensure namespace exists for smoke tests
-    if [[ "$env" == "minikube" ]] && [[ "$SMOKE_TEST" == "true" ]]; then
-        MINIKUBE_NAMESPACE="pqc-smoke-test"
-        if ! kubectl get namespace "$MINIKUBE_NAMESPACE" &>/dev/null; then
-            log_info "Creating namespace '$MINIKUBE_NAMESPACE' for smoke tests..."
-            kubectl create namespace "$MINIKUBE_NAMESPACE" || {
-                log_error "Failed to create namespace '$MINIKUBE_NAMESPACE'"
+    # For Minikube: Ensure Minikube is running, switch context, and ensure namespace exists
+    if [[ "$env" == "minikube" ]]; then
+        # Check if Minikube is running
+        MINIKUBE_STATUS=$(minikube status --format='{{.Host}}' 2>/dev/null || echo "Stopped")
+        if [[ "$MINIKUBE_STATUS" != "Running" ]]; then
+            log_info "Minikube not running. Starting Minikube..."
+            minikube start --driver=podman --cpus=4 --memory=8g || {
+                log_error "Failed to start Minikube. Please run: minikube start --driver=podman"
                 exit 1
             }
-            log_success "Namespace '$MINIKUBE_NAMESPACE' created"
+            log_success "Minikube started"
         else
-            log_info "Namespace '$MINIKUBE_NAMESPACE' already exists"
+            log_info "Minikube is already running"
+        fi
+        
+        # Switch kubectl context to Minikube
+        log_info "Switching kubectl context to Minikube..."
+        if kubectl config use-context minikube &>/dev/null; then
+            log_success "kubectl context switched to Minikube"
+        else
+            log_warn "Failed to switch to Minikube context (may not exist yet)"
+            # Wait a moment for Minikube to fully initialize
+            sleep 2
+            kubectl config use-context minikube || {
+                log_error "Failed to switch to Minikube context after waiting"
+                exit 1
+            }
+        fi
+        
+        # Ensure namespace exists for smoke tests
+        if [[ "$SMOKE_TEST" == "true" ]]; then
+            # Use consistent namespace for all test types
+            MINIKUBE_NAMESPACE="default"
+            # Ensure default namespace exists (it should, but check anyway)
+            if ! kubectl get namespace "$MINIKUBE_NAMESPACE" &>/dev/null; then
+                log_info "Creating namespace '$MINIKUBE_NAMESPACE'..."
+                kubectl create namespace "$MINIKUBE_NAMESPACE" || {
+                    log_error "Failed to create namespace '$MINIKUBE_NAMESPACE'"
+                    exit 1
+                }
+                log_success "Namespace '$MINIKUBE_NAMESPACE' created"
+            else
+                log_info "Namespace '$MINIKUBE_NAMESPACE' already exists"
+            fi
         fi
     fi
     
@@ -832,12 +880,8 @@ print(total_experiments)
         log_info "Detected batch run with $ENV_TOTAL_EXPERIMENTS experiments"
         log_info "Using persistent cluster mode for efficiency (cluster created once, reused, destroyed at end)"
         
-        # Determine cluster name based on smoke-test mode
-        if [[ "$SMOKE_TEST" == "true" ]]; then
-            CLUSTER_NAME="pqc-smoke-test"
-        else
-            CLUSTER_NAME="pqc-bench-gke"
-        fi
+        # Use consistent cluster name for all test types and environments
+        CLUSTER_NAME="pqc-bench"
         
         # Check if cluster already exists
         # Calculate node count for reasonable parallelism - Kubernetes will queue and schedule jobs
@@ -872,12 +916,12 @@ print(total_experiments)
         if [[ "$CLUSTER_EXISTS" == "true" ]]; then
             log_warn "Cluster $CLUSTER_NAME already exists"
             
-            # Detect the actual node pool name (could be pqc-bench-pool, default-pool, etc.)
+            # Detect the actual node pool name (now defaults to "default-pool" via Terraform)
             NODE_POOL_NAME=$(gcloud container node-pools list \
                 --cluster "$CLUSTER_NAME" \
                 --region "$REGION" \
                 --project "$PROJECT" \
-                --format="value(name)" 2>/dev/null | head -1 || echo "")
+                --format="value(name)" 2>/dev/null | head -1 || echo "default-pool")
             
             if [[ -z "$NODE_POOL_NAME" ]]; then
                 log_warn "Cluster exists but has no node pools. Creating node pool..."
@@ -917,40 +961,14 @@ print(total_experiments)
                 TOTAL_NODES=$((NODES_PER_ZONE * ZONES))
                 log_info "Creating node pool with $NODES_PER_ZONE nodes per zone (total: $TOTAL_NODES nodes across $ZONES zones)..."
                 
-                # Use gcloud directly for more reliable node pool creation
-                if gcloud container node-pools create pqc-bench-pool \
-                    --cluster "$CLUSTER_NAME" \
-                    --region "$REGION" \
-                    --project "$PROJECT" \
-                    --num-nodes "$NODES_PER_ZONE" \
-                    --machine-type "${MACHINE_TYPE:-n2-standard-2}" \
-                    --disk-size "${DISK_SIZE_GB:-50}" \
-                    --disk-type "pd-standard" \
-                    --enable-autorepair \
-                    --enable-autoupgrade \
-                    --quiet 2>&1; then
-                    log_success "Node pool created via gcloud: $NODES_PER_ZONE nodes per zone (total: $TOTAL_NODES)"
-                    NODE_POOL_NAME="pqc-bench-pool"
-                else
-                    log_error "Failed to create node pool via gcloud"
-                    log_warn "This might be due to insufficient quota. Check quotas at:"
-                    log_info "  https://console.cloud.google.com/iam-admin/quotas?project=$PROJECT"
-                    log_info "Required resources for $TOTAL_NODES nodes (${MACHINE_TYPE:-n2-standard-2}):"
-                    # Calculate required resources
-                    CPU_PER_NODE=2  # n2-standard-2 has 2 vCPUs
-                    DISK_PER_NODE="${DISK_SIZE_GB:-50}"
-                    TOTAL_CPUS=$((TOTAL_NODES * CPU_PER_NODE))
-                    TOTAL_DISK=$((TOTAL_NODES * DISK_PER_NODE))
-                    log_info "  - CPUs: $TOTAL_CPUS (N2_CPUS quota)"
-                    log_info "  - Disk: ${TOTAL_DISK}GB (DISKS_TOTAL_GB quota)"
-                    log_info ""
-                    log_info "To create manually:"
-                    log_info "  gcloud container node-pools create pqc-bench-pool --cluster $CLUSTER_NAME --region $REGION --num-nodes $NODES_PER_ZONE"
-                    cd "$SCRIPT_DIR"
-                    export GCP_USE_PERSISTENT_CLUSTER=false
-                    export GCP_CLUSTER_EXISTS=false
-                    NODE_POOL_NAME=""  # Clear node pool name so we skip scaling
-                fi
+                # Note: With Terraform managing the default pool, we don't need to create a separate pool
+                # The default pool is configured via node_config in the cluster resource
+                # If autoscaling is needed, configure it via gcloud:
+                #   gcloud container node-pools update default-pool --cluster <cluster> --region <region> \
+                #     --enable-autoscaling --min-nodes <min> --max-nodes <max>
+                log_info "Default node pool is managed by Terraform (configured in cluster resource)"
+                log_info "If autoscaling is needed, configure it manually via gcloud commands"
+                NODE_POOL_NAME="default-pool"
                 
                 cd "$SCRIPT_DIR"
                 
@@ -1040,24 +1058,16 @@ print(total_experiments)
                         terraform init -input=false >/dev/null 2>&1 || true
                     fi
                     
-                    # Check if node pool name matches what Terraform expects
-                    # Terraform expects "pqc-bench-pool", but cluster might have "default-pool"
-                    TERRAFORM_EXPECTED_POOL="pqc-bench-pool"
+                    # Terraform now manages the default pool directly (configured in cluster resource)
+                    # The default pool name is "default-pool" (GKE standard)
+                    TERRAFORM_EXPECTED_POOL="default-pool"
                     
-                    # Check if cluster and node pool are in Terraform state
+                    # Check if cluster is in Terraform state
                     CLUSTER_IN_STATE=$(terraform state list 2>/dev/null | grep -q "google_container_cluster.primary" && echo "yes" || echo "no")
-                    NODE_POOL_IN_STATE=$(terraform state list 2>/dev/null | grep -q "google_container_node_pool.primary" && echo "yes" || echo "no")
                     
-                    # If node pool name doesn't match, we can't use Terraform to manage it
-                    # But we can still try to import the cluster and use gcloud for the node pool
-                    if [[ "$NODE_POOL_NAME" != "$TERRAFORM_EXPECTED_POOL" ]]; then
-                        log_info "Node pool name '$NODE_POOL_NAME' doesn't match Terraform expected name '$TERRAFORM_EXPECTED_POOL'"
-                        log_info "Cannot use Terraform to manage this node pool (name mismatch)"
-                        log_info "Will use gcloud for scaling the node pool"
-                        USE_TERRAFORM_FOR_NODE_POOL=false
-                    else
-                        USE_TERRAFORM_FOR_NODE_POOL=true
-                    fi
+                    # Since default pool is managed via cluster resource, we don't check for separate node pool resource
+                    # Terraform manages the default pool configuration via node_config in the cluster resource
+                    USE_TERRAFORM_FOR_NODE_POOL=true
                     
                     # Always try to import cluster into Terraform state (for consistency)
                     if [[ "$CLUSTER_IN_STATE" == "no" ]]; then
@@ -1358,32 +1368,6 @@ print(total_experiments)
                     fi
                 else
                     log_info "Cluster already has $CURRENT_TOTAL_NODES total nodes (matches required $CALCULATED_NODE_COUNT)"
-                    
-                    # Even if not scaling, verify nodes are ready before submitting jobs
-                    log_info "Verifying nodes are Ready before submitting jobs..."
-                    READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo "0")
-                    READY_NODES=${READY_NODES:-0}
-                    
-                    if [[ "$READY_NODES" -lt "$CURRENT_TOTAL_NODES" ]]; then
-                        log_warn "Only $READY_NODES/$CURRENT_TOTAL_NODES nodes are Ready. Waiting up to 5 minutes for nodes to be ready..."
-                        MAX_NODE_WAIT=300  # 5 minutes
-                        NODE_WAIT_START=$(date +%s)
-                        
-                        while [[ $(($(date +%s) - NODE_WAIT_START)) -lt $MAX_NODE_WAIT ]]; do
-                            READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " || echo "0")
-                            if [[ "$READY_NODES" -ge "$CURRENT_TOTAL_NODES" ]]; then
-                                log_success "All $CURRENT_TOTAL_NODES nodes are Ready"
-                                break
-                            fi
-                            sleep 10
-                        done
-                        
-                        if [[ "$READY_NODES" -lt "$CURRENT_TOTAL_NODES" ]]; then
-                            log_warn "Only $READY_NODES/$CURRENT_TOTAL_NODES nodes are Ready. Some jobs may be unschedulable."
-                        fi
-                    else
-                        log_success "All $CURRENT_TOTAL_NODES nodes are Ready"
-                    fi
                 fi
             else
                 log_error "No node pool available. Cannot proceed with cluster scaling."
@@ -1456,7 +1440,8 @@ print(total_experiments)
                 log_success "Cluster is RUNNING"
             fi
             
-            # Configure kubectl credentials for the cluster
+            # CRITICAL: Configure kubectl credentials BEFORE checking node readiness
+            # This ensures we're checking the correct cluster's nodes, not Minikube
             log_info "Configuring kubectl credentials..."
             if ! gcloud container clusters get-credentials "$CLUSTER_NAME" \
                 --region "$REGION" \
@@ -1475,13 +1460,39 @@ print(total_experiments)
                 log_info "  1. Private cluster endpoint (ensure enable_private_endpoint=false or configure authorized networks)"
                 log_info "  2. Network connectivity issues"
                 log_info "  3. Authentication problems"
-                log_info ""
-                log_info "Try manually:"
-                log_info "  gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $PROJECT"
-                log_info "  kubectl cluster-info"
                 exit 1
             fi
             log_success "kubectl is connected to cluster"
+            
+            # Now verify nodes are ready (kubectl context is correctly set to GCP cluster)
+            if [[ -n "$CURRENT_TOTAL_NODES" ]] && [[ "$CURRENT_TOTAL_NODES" -gt 0 ]]; then
+                log_info "Verifying nodes are Ready before submitting jobs..."
+                READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " 2>/dev/null || echo "0")
+                READY_NODES=$(echo "$READY_NODES" | tr -d '\n' | xargs)
+                READY_NODES=${READY_NODES:-0}
+                
+                if [[ "$READY_NODES" -lt "$CURRENT_TOTAL_NODES" ]]; then
+                    log_warn "Only $READY_NODES/$CURRENT_TOTAL_NODES nodes are Ready. Waiting up to 5 minutes for nodes to be ready..."
+                    MAX_NODE_WAIT=300  # 5 minutes
+                    NODE_WAIT_START=$(date +%s)
+                    
+                    while [[ $(($(date +%s) - NODE_WAIT_START)) -lt $MAX_NODE_WAIT ]]; do
+                        READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready " 2>/dev/null || echo "0")
+                        READY_NODES=$(echo "$READY_NODES" | tr -d '\n' | xargs)
+                        if [[ "$READY_NODES" -ge "$CURRENT_TOTAL_NODES" ]]; then
+                            log_success "All $CURRENT_TOTAL_NODES nodes are Ready"
+                            break
+                        fi
+                        sleep 10
+                    done
+                    
+                    if [[ "$READY_NODES" -lt "$CURRENT_TOTAL_NODES" ]]; then
+                        log_warn "Only $READY_NODES/$CURRENT_TOTAL_NODES nodes are Ready. Some jobs may be unschedulable."
+                    fi
+                else
+                    log_success "All $CURRENT_TOTAL_NODES nodes are Ready"
+                fi
+            fi
             
             log_info "Will reuse existing cluster (use --skip-gcp and destroy manually if needed)"
             export GCP_USE_PERSISTENT_CLUSTER=true
@@ -1667,7 +1678,8 @@ if manifest['scenarios']:
                     --skip-terraform \
                     --skip-aggregation \
                     --skip-job \
-                    $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 | grep -E "(Building|Pushing|Image|ERROR|WARN)" || true; then
+                    $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") \
+            $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 | grep -E "(Building|Pushing|Image|ERROR|WARN)" || true; then
                     log_success "Image built and ready for batch: $GCP_IMAGE_NAME"
                 else
                     log_warn "Image build had issues, but continuing (will build per-experiment if needed)"
@@ -1945,12 +1957,8 @@ for s in manifest['scenarios']:
         if [[ $TOTAL_SUBMITTED -gt 0 ]]; then
             log_info "Waiting for all $TOTAL_SUBMITTED submitted jobs to complete (Kubernetes scheduler determines parallelism)..."
         
-        # Determine namespace
-        if [[ "$SMOKE_TEST" == "true" ]]; then
-            GCP_NAMESPACE="pqc-smoke-test"
-        else
-            GCP_NAMESPACE="default"
-        fi
+        # Use consistent namespace for all test types
+        GCP_NAMESPACE="default"
         
         # Track job completion
         TOTAL_JOBS=$(wc -l < "$JOB_TRACKING_FILE" 2>/dev/null || echo "0")
@@ -2048,7 +2056,8 @@ for s in manifest['scenarios']:
             
             # Determine namespace
             if [[ "$SMOKE_TEST" == "true" ]]; then
-                MINIKUBE_NAMESPACE="pqc-smoke-test"
+                # Use consistent namespace for all test types
+                MINIKUBE_NAMESPACE="default"
             else
                 MINIKUBE_NAMESPACE="default"
             fi
@@ -2142,20 +2151,39 @@ for s in manifest['scenarios']:
     log_info "  Progress: $((env_completed * 100 / ENV_TOTAL_EXPERIMENTS))%"
     echo ""
     
-    # Cleanup: Destroy persistent cluster if we created it for this batch
-    if [[ "$env" == "gcp" ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]] && [[ "${GCP_CLUSTER_EXISTS:-true}" == "false" ]]; then
-        log_info "Destroying persistent cluster after batch completion..."
+    # Cleanup: Always destroy GKE cluster and all underlying resources after completion
+    # This ensures no residual GCP resources remain (except GCS bucket), regardless of benchmark type
+    # All resources are ephemeral: cluster, nodes, disks, service accounts, Artifact Registry, etc.
+    # Only the GCS bucket persists to store experiment results
+    if [[ "$env" == "gcp" ]]; then
+        log_info "Destroying GKE cluster and all underlying resources after completion..."
+        log_info "This ensures no residual GCP resources remain (cluster, nodes, disks, service accounts, Artifact Registry, etc.)"
+        log_info "Only the GCS bucket will persist to store experiment results"
+        
+        # Use consistent cluster name for all test types and environments
+        CLUSTER_NAME="pqc-bench"
+        
         if "$SCRIPT_DIR/deploy_gcp.sh" \
             --destroy-cluster \
             --project "$PROJECT" \
             --bucket "$BUCKET" \
             --region "$REGION" \
             $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo ""); then
-            log_success "Cluster destroyed successfully"
+            log_success "Cluster and resources destroyed successfully"
         else
             log_warn "Cluster destruction had errors (cluster may still exist)"
-            log_info "You can destroy it manually with:"
+            log_info "Running cleanup script to catch any orphaned resources..."
+            if "$SCRIPT_DIR/scripts/cleanup_gcp_resources.sh" \
+                --project "$PROJECT" \
+                --region "$REGION" \
+                --cluster-name "$CLUSTER_NAME"; then
+                log_success "Cleanup script completed"
+            else
+                log_warn "Cleanup script had errors"
+            fi
+            log_info "You can destroy resources manually with:"
             echo "  ./deploy_gcp.sh --destroy-cluster --project $PROJECT --bucket $BUCKET --region $REGION"
+            echo "  Or use: ./scripts/cleanup_gcp_resources.sh --project $PROJECT --region $REGION"
         fi
     fi
     
