@@ -44,15 +44,15 @@ impl Metrics {
     pub fn new() -> Result<Self, prometheus::Error> {
         let registry = Registry::new();
 
-        // Histogram for operation latency in microseconds
+        // Histogram for operation latency in nanoseconds
         let latency_histogram = Histogram::with_opts(
             HistogramOpts::new(
-                "pqc_operation_latency_us",
-                "Latency of cryptographic operations in microseconds",
+                "pqc_operation_latency_ns",
+                "Latency of cryptographic operations in nanoseconds",
             )
             .buckets(vec![
-                0.5, 1.0, 2.0, 5.0, 10.0, 50.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 50000.0,
-                100000.0,
+                500.0, 1000.0, 2000.0, 5000.0, 10000.0, 50000.0, 100000.0, 500000.0, 1000000.0, 5000000.0, 10000000.0, 50000000.0,
+                100000000.0,
             ]),
         )?;
         registry.register(Box::new(latency_histogram.clone()))?;
@@ -85,15 +85,15 @@ impl Metrics {
         let queue_capacity = Gauge::new("pqc_queue_capacity", "Maximum queue capacity")?;
         registry.register(Box::new(queue_capacity.clone()))?;
 
-        // NEW: Queue delay histogram (queueing delay in microseconds)
+        // Queue delay histogram (queueing delay in nanoseconds)
         let queue_delay_histogram = Histogram::with_opts(
             HistogramOpts::new(
-                "pqc_queue_delay_us",
-                "Time spent waiting in queue in microseconds",
+                "pqc_queue_delay_ns",
+                "Time spent waiting in queue in nanoseconds",
             )
             .buckets(vec![
-                1.0, 5.0, 10.0, 50.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 50000.0, 100000.0,
-                500000.0, 1000000.0,
+                1000.0, 5000.0, 10000.0, 50000.0, 100000.0, 500000.0, 1000000.0, 5000000.0, 10000000.0, 50000000.0, 100000000.0,
+                500000000.0, 1000000000.0,
             ]),
         )?;
         registry.register(Box::new(queue_delay_histogram.clone()))?;
@@ -126,9 +126,9 @@ impl Metrics {
         })
     }
 
-    /// Observes a latency measurement
-    pub fn observe_latency(&self, _algo: &str, _op: &str, us: f64) {
-        self.inner.latency_histogram.observe(us);
+    /// Observes a latency measurement in nanoseconds
+    pub fn observe_latency(&self, _algo: &str, _op: &str, ns: f64) {
+        self.inner.latency_histogram.observe(ns);
     }
 
     /// Increments the operation counter
@@ -178,9 +178,9 @@ impl Metrics {
         self.inner.queue_capacity.get() as usize
     }
 
-    /// Observes a queue delay measurement in microseconds
-    pub fn observe_queue_delay(&self, us: f64) {
-        self.inner.queue_delay_histogram.observe(us);
+    /// Observes a queue delay measurement in nanoseconds
+    pub fn observe_queue_delay(&self, ns: f64) {
+        self.inner.queue_delay_histogram.observe(ns);
     }
 
     // NEW: Worker metrics methods
@@ -327,7 +327,7 @@ mod tests {
         let output = metrics.gather();
         assert!(output.contains("pqc_queue_length"));
         assert!(output.contains("pqc_queue_capacity"));
-        assert!(output.contains("pqc_queue_delay_us"));
+        assert!(output.contains("pqc_queue_delay_ns"));
 
         assert_eq!(metrics.get_queue_length(), 100);
         assert_eq!(metrics.get_queue_capacity(), 2000);

@@ -77,7 +77,7 @@ pub struct PipelineStats {
     pub total_events: u64,
     pub events_processed: u64,
     pub duration: Duration,
-    pub avg_latency_us: f64,
+    pub avg_latency_ns: f64,
     /// Maximum number of active workers during the run
     pub max_active_workers: usize,
 }
@@ -211,9 +211,9 @@ impl Pipeline {
         // Wait for producer to finish
         let _ = producer_handle.await;
 
-        // Compute average latency from nanoseconds, convert to microseconds for display
-        let avg_latency = if events_processed > 0 {
-            (total_latency_ns as f64 / events_processed as f64) / 1000.0  // Convert ns to μs
+        // Compute average latency from nanoseconds
+        let avg_latency_ns = if events_processed > 0 {
+            total_latency_ns as f64 / events_processed as f64
         } else {
             0.0
         };
@@ -222,7 +222,7 @@ impl Pipeline {
             total_events,
             events_processed,
             duration: elapsed,
-            avg_latency_us: avg_latency,
+            avg_latency_ns,
             max_active_workers: scenario.execution.workers.max(1),
         })
     }

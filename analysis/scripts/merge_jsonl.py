@@ -77,27 +77,22 @@ def compute_derived_columns(df: pd.DataFrame) -> pd.DataFrame:
         console.print("[red]Error: latency_ns column not found. Data must be in nanosecond precision format.[/red]")
         raise ValueError("Missing required column: latency_ns")
     
-    # Convert nanoseconds to microseconds for analysis
-    df["latency_us"] = df["latency_ns"] / 1000.0
-    
-    # Compute end-to-end latency (same as latency_us for now)
-    df["end_to_end_latency_us"] = df["latency_us"]
-
-    # Handle queue delay (expect queue_delay_ns, convert to microseconds)
-    if "queue_delay_ns" in df.columns:
-        df["queue_delay_us"] = df["queue_delay_ns"] / 1000.0
-    elif "queue_delay_us" in df.columns:
-        # Legacy: if only queue_delay_us exists, keep it (shouldn't happen with new data)
-        console.print("[yellow]Warning: queue_delay_ns not found, using queue_delay_us[/yellow]")
-    else:
-        df["queue_delay_us"] = 0.0
+    # Ensure queue_delay_ns exists
+    if "queue_delay_ns" not in df.columns:
+        console.print("[yellow]Warning: queue_delay_ns not found, setting to 0[/yellow]")
         df["queue_delay_ns"] = 0
 
-    # Crypto latency = latency - queue_delay (in microseconds)
-    df["crypto_latency_us"] = df["latency_us"] - df["queue_delay_us"].fillna(0)
+    # Compute end-to-end latency (same as latency_ns)
+    df["end_to_end_latency_ns"] = df["latency_ns"]
 
-    # Add latency in milliseconds for convenience
-    df["latency_ms"] = df["latency_us"] / 1000.0
+    # Crypto latency = latency - queue_delay (in nanoseconds)
+    df["crypto_latency_ns"] = df["latency_ns"] - df["queue_delay_ns"].fillna(0)
+
+    # Add convenience columns for display (convert to microseconds and milliseconds)
+    df["latency_us"] = df["latency_ns"] / 1000.0
+    df["queue_delay_us"] = df["queue_delay_ns"] / 1000.0
+    df["crypto_latency_us"] = df["crypto_latency_ns"] / 1000.0
+    df["latency_ms"] = df["latency_ns"] / 1_000_000.0
 
     return df
 

@@ -82,10 +82,9 @@ impl Telemetry {
         Ok(())
     }
 
-    /// Records a latency measurement
+    /// Records a latency measurement in nanoseconds
     pub fn record_latency(&mut self, name: &str, duration: Duration) -> Result<(), TelemetryError> {
-        // Record in nanoseconds for precision, convert to microseconds for display
-        self.record(name, duration.as_nanos() as f64 / 1000.0, "μs")
+        self.record(name, duration.as_nanos() as f64, "ns")
     }
 
     /// Returns all recorded metrics

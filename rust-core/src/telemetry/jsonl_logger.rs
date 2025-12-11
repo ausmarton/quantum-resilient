@@ -86,7 +86,7 @@ pub struct EventRow {
     pub timestamp_monotonic_ns: u128,
     pub operation: String,
     pub algorithm: String,
-    pub latency_us: u128,
+    pub latency_ns: u128,
     pub payload_size_bytes: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ciphertext_size_bytes: Option<usize>,
@@ -109,8 +109,8 @@ pub struct EventRowFull {
     pub timestamp_monotonic_ns: u128,
     pub operation: String,
     pub algorithm: String,
-    pub latency_us: u128,
-    pub queue_delay_us: u128,
+    pub latency_ns: u128,
+    pub queue_delay_ns: u128,
     pub worker_id: usize,
     pub payload_size_bytes: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
