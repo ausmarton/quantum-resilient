@@ -687,6 +687,21 @@ for env in "${ENV_ARRAY[@]}"; do
     
     log_step "Environment: ${env^^}"
     
+    # For Minikube: Ensure namespace exists for smoke tests
+    if [[ "$env" == "minikube" ]] && [[ "$SMOKE_TEST" == "true" ]]; then
+        MINIKUBE_NAMESPACE="pqc-smoke-test"
+        if ! kubectl get namespace "$MINIKUBE_NAMESPACE" &>/dev/null; then
+            log_info "Creating namespace '$MINIKUBE_NAMESPACE' for smoke tests..."
+            kubectl create namespace "$MINIKUBE_NAMESPACE" || {
+                log_error "Failed to create namespace '$MINIKUBE_NAMESPACE'"
+                exit 1
+            }
+            log_success "Namespace '$MINIKUBE_NAMESPACE' created"
+        else
+            log_info "Namespace '$MINIKUBE_NAMESPACE' already exists"
+        fi
+    fi
+    
     # For Minikube: Check if parallelism should be enabled
     if [[ "$env" == "minikube" ]]; then
         MINIKUBE_USE_PARALLELISM=false

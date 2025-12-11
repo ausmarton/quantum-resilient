@@ -267,7 +267,19 @@ fi
 if [[ "$SMOKE_TEST" == "true" ]]; then
     RUNS=1
     REPLICAS=1
+    NAMESPACE="pqc-smoke-test"
     log_info "Smoke-test mode: forcing runs=1, replicas=1"
+    log_info "Using namespace: $NAMESPACE"
+    
+    # Ensure namespace exists
+    if ! kubectl get namespace "$NAMESPACE" &>/dev/null; then
+        log_info "Creating namespace '$NAMESPACE' for smoke tests..."
+        kubectl create namespace "$NAMESPACE" || {
+            log_error "Failed to create namespace '$NAMESPACE'"
+            exit 1
+        }
+        log_success "Namespace '$NAMESPACE' created"
+    fi
 fi
 
 # =============================================================================
