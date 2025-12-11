@@ -77,24 +77,120 @@ def create_base_job() -> Dict[str, Any]:
     }
 
 
-def create_minikube_init_container() -> Dict[str, Any]:
-    """Create init container for Minikube (busybox)."""
-    return {
-        "name": "gather-metadata",
-        "image": "busybox:1.36",
-        "securityContext": {
-            "runAsNonRoot": True,
-            "runAsUser": 65532,
-            "allowPrivilegeEscalation": False,
-            "capabilities": {
-                "drop": ["ALL"],
+def create_minikube_init_container(replicas: int = 1, experiment_id: Optional[str] = None) -> Dict[str, Any]:
+    """Create init container for Minikube (busybox).
+    
+    Args:
+        replicas: Number of replicas (if > 1, enables scaling mode)
+        experiment_id: Experiment ID (for scaling mode ConfigMap)
+    """
+    # Base environment variables
+    env = [
+        {
+            "name": "NODE_NAME",
+            "valueFrom": {
+                "fieldRef": {
+                    "fieldPath": "spec.nodeName",
+                },
             },
-            "readOnlyRootFilesystem": True,
         },
-        "command": [
-            "/bin/sh",
-            "-c",
-            """set -e
+        {
+            "name": "POD_NAME",
+            "valueFrom": {
+                "fieldRef": {
+                    "fieldPath": "metadata.name",
+                },
+            },
+        },
+        {
+            "name": "POD_NAMESPACE",
+            "valueFrom": {
+                "fieldRef": {
+                    "fieldPath": "metadata.namespace",
+                },
+            },
+        },
+        {
+            "name": "POD_IP",
+            "valueFrom": {
+                "fieldRef": {
+                    "fieldPath": "status.podIP",
+                },
+            },
+        },
+    ]
+    
+    # Scaling mode: use replica-specific output paths
+    if replicas > 1:
+        # Add JOB_COMPLETION_INDEX for replica ID
+        env.append({
+            "name": "JOB_COMPLETION_INDEX",
+            "valueFrom": {
+                "fieldRef": {
+                    "fieldPath": "metadata.annotations['batch.kubernetes.io/job-completion-index']",
+                },
+            },
+        })
+        # Add ConfigMap references for scaling config
+        if experiment_id:
+            env.extend([
+                {
+                    "name": "REPLICA_COUNT",
+                    "valueFrom": {
+                        "configMapKeyRef": {
+                            "name": "pqc-scaling-config",
+                            "key": "replica_count",
+                            "optional": True,
+                        },
+                    },
+                },
+                {
+                    "name": "EXPERIMENT_ID",
+                    "valueFrom": {
+                        "configMapKeyRef": {
+                            "name": "pqc-scaling-config",
+                            "key": "experiment_id",
+                            "optional": True,
+                        },
+                    },
+                },
+            ])
+        
+        command = """set -e
+
+# Use JOB_COMPLETION_INDEX as replica ID
+REPLICA_ID="${JOB_COMPLETION_INDEX:-0}"
+REPLICA_DIR="/results/replica-${REPLICA_ID}"
+mkdir -p "${REPLICA_DIR}/raw"
+
+cat > "${REPLICA_DIR}/replica_metadata.json" << EOF
+{
+  "type": "kubernetes_parallel_job",
+  "replica_id": "${REPLICA_ID}",
+  "replica_count": "${REPLICA_COUNT:-1}",
+  "job_completion_index": "${JOB_COMPLETION_INDEX:-0}",
+  "node_name": "${NODE_NAME:-unknown}",
+  "pod_name": "${POD_NAME:-unknown}",
+  "pod_namespace": "${POD_NAMESPACE:-default}",
+  "pod_ip": "${POD_IP:-unknown}",
+  "experiment_id": "${EXPERIMENT_ID:-unknown}",
+  "container_image": "localhost/pqc-bench:latest",
+  "kernel_version": "$(uname -r)",
+  "arch": "$(uname -m)",
+  "hostname": "$(hostname)",
+  "timestamp_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+EOF
+
+# Create symlink for output path
+ln -sf "${REPLICA_DIR}" /results/current
+
+echo "Replica ${REPLICA_ID} metadata written to ${REPLICA_DIR}"
+cat "${REPLICA_DIR}/replica_metadata.json"
+"""
+    else:
+        # Single replica mode: standard metadata
+        command = """set -e
 
 # Create metadata JSON
 cat > /results/container_metadata.json << EOF
@@ -113,42 +209,27 @@ cat > /results/container_metadata.json << EOF
 EOF
 
 echo "Metadata written to /results/container_metadata.json"
-cat /results/container_metadata.json""",
+cat /results/container_metadata.json
+"""
+    
+    return {
+        "name": "gather-metadata",
+        "image": "busybox:1.36",
+        "securityContext": {
+            "runAsNonRoot": True,
+            "runAsUser": 65532,
+            "allowPrivilegeEscalation": False,
+            "capabilities": {
+                "drop": ["ALL"],
+            },
+            "readOnlyRootFilesystem": True,
+        },
+        "command": [
+            "/bin/sh",
+            "-c",
+            command,
         ],
-        "env": [
-            {
-                "name": "NODE_NAME",
-                "valueFrom": {
-                    "fieldRef": {
-                        "fieldPath": "spec.nodeName",
-                    },
-                },
-            },
-            {
-                "name": "POD_NAME",
-                "valueFrom": {
-                    "fieldRef": {
-                        "fieldPath": "metadata.name",
-                    },
-                },
-            },
-            {
-                "name": "POD_NAMESPACE",
-                "valueFrom": {
-                    "fieldRef": {
-                        "fieldPath": "metadata.namespace",
-                    },
-                },
-            },
-            {
-                "name": "POD_IP",
-                "valueFrom": {
-                    "fieldRef": {
-                        "fieldPath": "status.podIP",
-                    },
-                },
-            },
-        ],
+        "env": env,
         "volumeMounts": [
             {
                 "name": "results",
@@ -286,8 +367,17 @@ def create_main_container(
     image: str,
     scenario_configmap: str,
     gcp_config_configmap: Optional[str] = None,
+    replicas: int = 1,
 ) -> Dict[str, Any]:
-    """Create main pqc-bench container."""
+    """Create main pqc-bench container.
+    
+    Args:
+        environment: "minikube" or "gcp"
+        image: Container image name
+        scenario_configmap: Name of scenario ConfigMap
+        gcp_config_configmap: Name of GCP config ConfigMap (for GCP)
+        replicas: Number of replicas (if > 1, enables scaling mode)
+    """
     container = {
         "name": "pqc-bench",
         "image": image,
@@ -404,6 +494,23 @@ def create_main_container(
                 },
             },
         })
+    
+    # Add replica mode environment variables for scaling mode
+    if replicas > 1:
+        container["env"].extend([
+            {
+                "name": "QR_REPLICA_MODE",
+                "value": "true",
+            },
+            {
+                "name": "JOB_COMPLETION_INDEX",
+                "valueFrom": {
+                    "fieldRef": {
+                        "fieldPath": "metadata.annotations['batch.kubernetes.io/job-completion-index']",
+                    },
+                },
+            },
+        ])
     
     return container
 
@@ -679,6 +786,7 @@ def generate_job_yaml(
     experiment_id: Optional[str] = None,
     gcp_config_configmap: Optional[str] = None,
     ttl_seconds: Optional[int] = None,
+    replicas: int = 1,
 ) -> Dict[str, Any]:
     """
     Generate Kubernetes Job YAML for the specified environment.
@@ -718,6 +826,15 @@ def generate_job_yaml(
         ttl_seconds = 300 if environment == "gcp" else 3600
     job["spec"]["ttlSecondsAfterFinished"] = ttl_seconds
     
+    # Handle scaling mode (replicas > 1)
+    if replicas > 1:
+        job["spec"]["parallelism"] = replicas
+        job["spec"]["completions"] = replicas
+        job["spec"]["completionMode"] = "Indexed"
+        # Add scaling label
+        job["metadata"]["labels"]["experiment-type"] = "scaling"
+        job["spec"]["template"]["metadata"]["labels"]["experiment-type"] = "scaling"
+    
     # Get pod spec
     pod_spec = job["spec"]["template"]["spec"]
     
@@ -727,7 +844,7 @@ def generate_job_yaml(
     
     # Create init container
     if environment == "minikube":
-        pod_spec["initContainers"] = [create_minikube_init_container()]
+        pod_spec["initContainers"] = [create_minikube_init_container(replicas=replicas, experiment_id=experiment_id)]
     else:
         pod_spec["initContainers"] = [create_gcp_init_container()]
     
@@ -737,6 +854,7 @@ def generate_job_yaml(
         image=image,
         scenario_configmap=scenario_configmap,
         gcp_config_configmap=gcp_config_configmap,
+        replicas=replicas,
     )
     
     # Create containers list
@@ -786,6 +904,26 @@ def generate_job_yaml(
                 "effect": "NoSchedule",
             },
         ]
+        # Add pod anti-affinity for scaling mode (spread replicas across nodes when possible)
+        if replicas > 1:
+            pod_spec["affinity"] = {
+                "podAntiAffinity": {
+                    "preferredDuringSchedulingIgnoredDuringExecution": [
+                        {
+                            "weight": 100,
+                            "podAffinityTerm": {
+                                "labelSelector": {
+                                    "matchLabels": {
+                                        "app": "pqc-bench",
+                                        "experiment-type": "scaling",
+                                    },
+                                },
+                                "topologyKey": "kubernetes.io/hostname",
+                            },
+                        },
+                    ],
+                },
+            }
     else:
         # Add node selector and affinity for GCP
         pod_spec["nodeSelector"] = {
@@ -868,6 +1006,12 @@ def main():
     parser.add_argument(
         "--output",
         help="Output file (default: stdout)",
+    )
+    parser.add_argument(
+        "--replicas",
+        type=int,
+        default=1,
+        help="Number of replicas for scaling mode (default: 1)",
     )
     
     args = parser.parse_args()

@@ -465,43 +465,23 @@ CONFIGMAP_NAME=$(create_scenario_configmap \
     exit 1
 }
 
-# Apply Job (use parallel job for scaling tests)
-if [[ "$SCALING_MODE" == "true" ]]; then
-    log_info "Creating parallel Job with $REPLICAS replicas..."
-    
-    # Update scaling config
-    kubectl create configmap pqc-scaling-config \
-        --from-literal=experiment_id="$RUN_EXP_ID" \
-        --from-literal=replica_count="$REPLICAS" \
-        --from-literal=duration_sec="30" \
-        --dry-run=client -o yaml | kubectl apply --validate=false -f - -n "$NAMESPACE"
-    
-    # JOB_NAME was already set in Step 5 before cleanup, so we can use it here
-    
-    # Create the parallel job with dynamic parallelism and unique name
-    cat "$SCRIPT_DIR/k8s/worker-parallel-job.yaml" | \
-        sed "s/name: pqc-bench-scaling/name: $JOB_NAME/" | \
-        sed "s/parallelism: 1/parallelism: $REPLICAS/" | \
-        sed "s/completions: 1/completions: $REPLICAS/" | \
-        kubectl apply --validate=false -f - -n "$NAMESPACE"
-else
-    log_info "Creating Job..."
-    
-    # Use unified job submission function
-    JOB_NAME=$(submit_k8s_job \
-        "minikube" \
-        "$SCENARIO" \
-        "$RUN_EXP_ID" \
-        "$LOCAL_IMAGE" \
-        "$NAMESPACE" \
-        "$REPLICAS" \
-        "$SMOKE_TEST" \
-        "${RUN_SEED:-}" \
-        "${DURATION:-}") || {
-        log_error "Failed to submit job"
-        exit 1
-    }
-fi
+# Apply Job (use unified job submission for both single and scaling mode)
+log_info "Creating Job${SCALING_MODE:+ with $REPLICAS replicas}..."
+
+# Use unified job submission function (handles both single and scaling mode)
+JOB_NAME=$(submit_k8s_job \
+    "minikube" \
+    "$SCENARIO" \
+    "$RUN_EXP_ID" \
+    "$LOCAL_IMAGE" \
+    "$NAMESPACE" \
+    "$REPLICAS" \
+    "$SMOKE_TEST" \
+    "${RUN_SEED:-}" \
+    "${DURATION:-}") || {
+    log_error "Failed to submit job"
+    exit 1
+}
 
 log_success "Kubernetes resources deployed"
 

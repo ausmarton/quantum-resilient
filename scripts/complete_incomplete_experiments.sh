@@ -154,13 +154,21 @@ if dry_run:
         print(f"  ... and {len(incomplete) - 10} more")
     sys.exit(0)
 
-# Determine Python command (use venv if available)
+# Determine Python command (use container wrapper if available, else venv, else system)
+container_wrapper = script_dir / "scripts" / "lib" / "run-python-container.sh"
 venv_python = script_dir / "analysis" / "venv" / "bin" / "python3"
-if venv_python.exists():
+
+if container_wrapper.exists():
+    # Use container wrapper for consistent environment
+    python_cmd = str(container_wrapper.absolute())
+    use_container = True
+elif venv_python.exists():
     # Use absolute path to venv python
     python_cmd = str(venv_python.absolute())
+    use_container = False
 else:
     python_cmd = sys.executable
+    use_container = False
 
 print(f"Using Python: {python_cmd}")
 print("")
@@ -181,13 +189,24 @@ for i, exp in enumerate(incomplete, 1):
     merged_dir.mkdir(exist_ok=True)
     
     try:
-        result = subprocess.run(
-            [
+        # Build command: container wrapper or direct python
+        if use_container:
+            cmd = [
                 python_cmd,
                 str(script_dir / "analysis" / "scripts" / "merge_jsonl.py"),
                 "--input", str(raw_dir),
                 "--output", str(merged_dir),
-            ],
+            ]
+        else:
+            cmd = [
+                python_cmd,
+                str(script_dir / "analysis" / "scripts" / "merge_jsonl.py"),
+                "--input", str(raw_dir),
+                "--output", str(merged_dir),
+            ]
+        
+        result = subprocess.run(
+            cmd,
             capture_output=True,
             text=True,
             timeout=60
@@ -216,14 +235,26 @@ for i, exp in enumerate(incomplete, 1):
     stats_dir.mkdir(exist_ok=True)
     
     try:
-        result = subprocess.run(
-            [
+        # Build command: container wrapper or direct python
+        if use_container:
+            cmd = [
                 python_cmd,
                 str(script_dir / "analysis" / "scripts" / "compute_statistics.py"),
                 "--input", str(merged_file),
                 "--output", str(stats_dir),
                 "--experiment-id", scenario_id,
-            ],
+            ]
+        else:
+            cmd = [
+                python_cmd,
+                str(script_dir / "analysis" / "scripts" / "compute_statistics.py"),
+                "--input", str(merged_file),
+                "--output", str(stats_dir),
+                "--experiment-id", scenario_id,
+            ]
+        
+        result = subprocess.run(
+            cmd,
             capture_output=True,
             text=True,
             timeout=60
@@ -231,14 +262,25 @@ for i, exp in enumerate(incomplete, 1):
         
         if result.returncode != 0:
             # Try alternative script
-            result = subprocess.run(
-                [
+            if use_container:
+                alt_cmd = [
                     python_cmd,
                     str(script_dir / "analysis" / "scripts" / "compute_stats.py"),
                     "--input", str(merged_file),
                     "--output", str(stats_dir),
                     "--experiment-id", scenario_id,
-                ],
+                ]
+            else:
+                alt_cmd = [
+                    python_cmd,
+                    str(script_dir / "analysis" / "scripts" / "compute_stats.py"),
+                    "--input", str(merged_file),
+                    "--output", str(stats_dir),
+                    "--experiment-id", scenario_id,
+                ]
+            
+            result = subprocess.run(
+                alt_cmd,
                 capture_output=True,
                 text=True,
                 timeout=60

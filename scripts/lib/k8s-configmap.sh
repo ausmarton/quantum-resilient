@@ -61,7 +61,10 @@ create_scenario_configmap() {
         patch_args+=(--duration "$duration")
     fi
     
-    if ! python3 "$script_dir/scripts/lib/scenario-patch.py" "${patch_args[@]}" 2>&1; then
+    # Use container wrapper for consistent Python environment
+    if ! "$script_dir/scripts/lib/run-python-container.sh" \
+        "$script_dir/scripts/lib/scenario-patch.py" \
+        "${patch_args[@]}" 2>&1; then
         log_error "Failed to patch scenario YAML"
         rm -f "$temp_scenario"
         return 1

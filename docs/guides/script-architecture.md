@@ -152,23 +152,15 @@ These are used internally by `run_all_experiments.sh` and `scripts/run_experimen
 
 ---
 
-### `scripts/submit_parallel_gcp_jobs.sh` - **OBSOLETE** ❌
+### `scripts/submit_parallel_gcp_jobs.sh` - **REMOVED** ✅
 
-**Purpose**: Submit multiple GCP jobs in parallel (legacy)
+**Status**: ✅ **REMOVED** (2025-12-11)
 
-**What it does**:
-- Reads scenarios from manifest
-- Creates jobs in batches
-- Waits for completion
-
-**Used by**: **NOT USED ANYWHERE** - `run_all_experiments.sh` handles parallel execution internally
-
-**Status**: ❌ **OBSOLETE - Should be removed**
-
-**Reason**: 
+**Reason for removal**: 
 - `run_all_experiments.sh` already handles parallel job submission internally
 - Uses unified `submit_k8s_job()` function
 - Better integrated with experiment tracking and result retrieval
+- No longer needed - functionality fully replaced
 
 ---
 
@@ -183,8 +175,8 @@ These are used internally by `run_all_experiments.sh` and `scripts/run_experimen
 6. ✅ `deploy_gcp.sh` - Internal
 7. ✅ `scripts/submit_gcp_job_parallel.sh` - Internal
 
-### Remove (Obsolete)
-1. ❌ `scripts/submit_parallel_gcp_jobs.sh` - Not used, functionality replaced by `run_all_experiments.sh`
+### Removed (Obsolete)
+1. ✅ `scripts/submit_parallel_gcp_jobs.sh` - **REMOVED** (2025-12-11) - Functionality replaced by `run_all_experiments.sh`
 
 ---
 
@@ -221,10 +213,11 @@ Use `scripts/run_experiment.sh` for:
 
 If you're using obsolete scripts:
 
-### Old: `scripts/submit_parallel_gcp_jobs.sh`
+### ~~Old: `scripts/submit_parallel_gcp_jobs.sh`~~ (REMOVED)
 ```bash
 # OLD (obsolete)
-./scripts/submit_parallel_gcp_jobs.sh --scenarios manifest.json --project <p> --bucket <b> --parallel 20
+# OLD (REMOVED): ./scripts/submit_parallel_gcp_jobs.sh --scenarios manifest.json --project <p> --bucket <b> --parallel 20
+# NEW: Use run_all_experiments.sh instead (handles parallel execution internally)
 ```
 
 **New**: Use `run_all_experiments.sh`:

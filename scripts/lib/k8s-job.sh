@@ -609,6 +609,18 @@ submit_k8s_job() {
         return 1
     }
     
+    # Create scaling ConfigMap if replicas > 1
+    if [[ "$replicas" -gt 1 ]]; then
+        log_info "Creating scaling ConfigMap..." >&2
+        if ! kubectl create configmap pqc-scaling-config \
+            --from-literal=experiment_id="$exp_id" \
+            --from-literal=replica_count="$replicas" \
+            --from-literal=duration_sec="${duration:-30}" \
+            --dry-run=client -o yaml | kubectl apply --validate=false -f - -n "$namespace" >&2; then
+            log_warn "Failed to create scaling ConfigMap (may already exist)" >&2
+        fi
+    fi
+    
     # Create GCP config ConfigMap (only for GCP)
     local gcp_cm=""
     if [[ "$environment" == "gcp" ]]; then
@@ -638,6 +650,7 @@ submit_k8s_job() {
         --image "$image"
         --scenario-configmap "$scenario_cm"
         --experiment-id "$exp_id"
+        --replicas "$replicas"
         --output "$temp_job"
     )
     
@@ -646,7 +659,10 @@ submit_k8s_job() {
     fi
     
     log_info "Generating Job YAML..." >&2
-    if ! "$script_dir/scripts/lib/k8s-job-generator.py" "${generator_args[@]}" >&2; then
+    # Use container wrapper for consistent Python environment
+    if ! "$script_dir/scripts/lib/run-python-container.sh" \
+        "$script_dir/scripts/lib/k8s-job-generator.py" \
+        "${generator_args[@]}" >&2; then
         log_error "Failed to generate Job YAML" >&2
         rm -f "$temp_job"
         return 1
