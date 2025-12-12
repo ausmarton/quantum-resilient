@@ -2036,7 +2036,7 @@ for s in manifest['scenarios']:
             # For other environments: jobs run sequentially
             update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id"
             
-            # Pass total_runs to run_experiment function (defaults to 5 if not set)
+            # Pass total_runs to run_experiment function (defaults to 5 if not set or empty)
             if run_experiment "$env" "$scenario_path" "$run_scenario_id" "$output_dir" "$replica_count" "${total_runs:-5}"; then
                 # Validate data integrity immediately after collection
                 # NOTE: For GCP persistent cluster mode and Minikube parallel mode, skip this check - validation happens later

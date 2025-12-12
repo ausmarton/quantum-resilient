@@ -386,6 +386,7 @@ def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = Fa
                         'payload_size': payload_size,
                         'rate': rate,
                         'run_index': run_index,
+                        'total_runs': scenario['metadata']['total_runs'],  # Include total_runs for run grouping
                         'seed': scenario['rng_seed'],
                         'path': str(scenario_path),
                         'relative_path': str(scenario_path.relative_to(output_dir)),
