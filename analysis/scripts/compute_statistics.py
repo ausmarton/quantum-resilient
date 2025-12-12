@@ -495,9 +495,17 @@ def compute_statistics(
 
     # Print summary
     console.print("\n[bold]Summary:[/bold]")
-    if "latency" in summary:
+    if "latency_ns" in summary:
+        lat_ns = summary["latency_ns"]
+        # Display latency in nanoseconds for precision
+        console.print(f"  Latency (ns): mean={lat_ns.get('mean', 0):.0f}, p50={lat_ns.get('p50', 0):.0f}, p99={lat_ns.get('p99', 0):.0f}")
+    elif "latency" in summary:
+        # Fallback for old format (microseconds) - convert to nanoseconds
         lat = summary["latency"]
-        console.print(f"  Latency (μs): mean={lat['mean']:.1f}, p50={lat['p50']:.1f}, p99={lat['p99']:.1f}")
+        mean_ns = lat.get('mean', 0) * 1000
+        p50_ns = lat.get('p50', 0) * 1000
+        p99_ns = lat.get('p99', 0) * 1000
+        console.print(f"  Latency (ns): mean={mean_ns:.0f}, p50={p50_ns:.0f}, p99={p99_ns:.0f}")
     if "throughput" in summary and "mean_msgs_per_sec" in summary["throughput"]:
         tput = summary["throughput"]
         console.print(f"  Throughput: {tput['mean_msgs_per_sec']:.0f} msg/s (mean)")

@@ -563,9 +563,8 @@ async fn main() {
     println!("Run complete: {} events processed", stats.events_processed);
     println!("Total events planned: {}", stats.total_events);
     println!("Duration: {:.2}s", stats.duration.as_secs_f64());
-    // Convert nanoseconds to microseconds for display (readability)
-    let avg_latency_us = stats.avg_latency_ns / 1000.0;
-    println!("Average latency: {:.2} μs ({:.0} ns)", avg_latency_us, stats.avg_latency_ns);
+    // Display latency in nanoseconds for precision
+    println!("Average latency: {:.0} ns", stats.avg_latency_ns);
     println!(
         "Throughput: {:.2} ops/sec",
         stats.events_processed as f64 / stats.duration.as_secs_f64()

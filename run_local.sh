@@ -396,11 +396,23 @@ if [[ -f "$OUT_DIR/aggregated_stats.json" ]]; then
 import json
 with open('$OUT_DIR/aggregated_stats.json') as f:
     data = json.load(f)
-lat = data.get('latency', {})
-if 'p95' in lat:
-    p95 = lat['p95']
-    print(f\"  p95 latency: {p95['mean']:.0f} ± {p95['std']:.0f} μs (CV: {p95['cv']:.1%})\")
-    print(f\"  95% CI: [{p95['ci_95_low']:.0f}, {p95['ci_95_high']:.0f}] μs\")
+# Use latency_ns for nanosecond precision, fallback to latency (microseconds) for old data
+lat_ns = data.get('latency_ns', {})
+if 'p95' in lat_ns:
+    p95 = lat_ns['p95']
+    print(f\"  p95 latency: {p95['mean']:.0f} ± {p95['std']:.0f} ns (CV: {p95['cv']:.1%})\")
+    print(f\"  95% CI: [{p95['ci_95_low']:.0f}, {p95['ci_95_high']:.0f}] ns\")
+elif 'latency' in data:
+    lat = data.get('latency', {})
+    if 'p95' in lat:
+        p95 = lat['p95']
+        # Convert microseconds to nanoseconds
+        mean_ns = p95['mean'] * 1000
+        std_ns = p95['std'] * 1000
+        ci_low_ns = p95['ci_95_low'] * 1000
+        ci_high_ns = p95['ci_95_high'] * 1000
+        print(f\"  p95 latency: {mean_ns:.0f} ± {std_ns:.0f} ns (CV: {p95['cv']:.1%})\")
+        print(f\"  95% CI: [{ci_low_ns:.0f}, {ci_high_ns:.0f}] ns\")
 tput = data.get('throughput', {})
 if 'mean' in tput:
     print(f\"  throughput:  {tput['mean']:.0f} ± {tput['std']:.0f} ops/s (CV: {tput['cv']:.1%})\")

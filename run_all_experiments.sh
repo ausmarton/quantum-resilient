@@ -789,15 +789,20 @@ for env in "${ENV_ARRAY[@]}"; do
                 log_info "Building and loading Minikube image for parallel execution..."
                 IMAGE_NAME="pqc-bench"
                 IMAGE_TAG="latest"
+                # Save original stderr to fd 3 before command substitution
+                exec 3>&2
                 MINIKUBE_IMAGE_NAME=$(build_and_load_image_minikube \
                     "$IMAGE_NAME" \
                     "$IMAGE_TAG" \
                     "Containerfile" \
                     "false" \
-                    "false" 2>&3) 3>&2 || {
+                    "false" 2>&3)
+                BUILD_EXIT=$?
+                exec 3>&-  # Close fd 3
+                if [[ $BUILD_EXIT -ne 0 ]]; then
                     log_error "Failed to build and load Minikube image"
                     MINIKUBE_USE_PARALLELISM=false
-                }
+                fi
                 export MINIKUBE_IMAGE_NAME
                 if [[ -n "$MINIKUBE_IMAGE_NAME" ]]; then
                     log_success "Minikube image ready: $MINIKUBE_IMAGE_NAME"

@@ -242,9 +242,17 @@ import json
 try:
     with open('$STATS_DIR/summary.json') as f:
         s = json.load(f)
-    if 'latency' in s:
+    # Use latency_ns for nanosecond precision, fallback to latency (microseconds) for old data
+    if 'latency_ns' in s:
+        lat_ns = s['latency_ns']
+        print(f\"  Latency (ns): mean={lat_ns.get('mean', 0):.0f}, p50={lat_ns.get('p50', 0):.0f}, p99={lat_ns.get('p99', 0):.0f}\")
+    elif 'latency' in s:
         lat = s['latency']
-        print(f\"  Latency (μs): mean={lat.get('mean', 0):.1f}, p50={lat.get('p50', 0):.0f}, p99={lat.get('p99', 0):.0f}\")
+        # Convert microseconds to nanoseconds
+        mean_ns = lat.get('mean', 0) * 1000
+        p50_ns = lat.get('p50', 0) * 1000
+        p99_ns = lat.get('p99', 0) * 1000
+        print(f\"  Latency (ns): mean={mean_ns:.0f}, p50={p50_ns:.0f}, p99={p99_ns:.0f}\")
     if 'throughput' in s:
         tput = s['throughput']
         if 'mean_msgs_per_sec' in tput:
