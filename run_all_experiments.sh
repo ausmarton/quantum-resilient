@@ -284,11 +284,33 @@ run_experiment() {
         case $env in
             native)
                 # Native doesn't support replicas
-                "$SCRIPT_DIR/run_local.sh" \
-                    --scenario "$scenario_path" \
-                    --out "$output_dir" \
-                    --duration 30 \
-                    $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1 || exit_code=$?
+                # For native benchmarks, we now process only run-1 scenarios and run them with --runs parameter
+                # This groups multiple runs into single experiments, reducing 468 scenarios to ~94 experiments
+                # Scenario extraction already filters to run-1 scenarios for native environment
+                
+                # Determine number of runs (5 for full-scale, 1 for smoke-test)
+                RUNS_COUNT=5
+                if [[ "$SMOKE_TEST" == "true" ]]; then
+                    RUNS_COUNT=1
+                fi
+                
+                # Extract seed from scenario file if available
+                SCENARIO_SEED=""
+                if [[ -f "$scenario_path" ]]; then
+                    SCENARIO_SEED=$(grep -E "^rng_seed:" "$scenario_path" | head -1 | awk '{print $2}' | tr -d '"' || echo "")
+                fi
+                
+                # Run with --runs parameter to execute multiple runs in a single experiment
+                RUN_ARGS=(
+                    --scenario "$scenario_path"
+                    --out "$output_dir"
+                    --duration 30
+                    --runs "$RUNS_COUNT"
+                )
+                [[ -n "$SCENARIO_SEED" ]] && RUN_ARGS+=(--seed "$SCENARIO_SEED")
+                [[ "$SMOKE_TEST" == "true" ]] && RUN_ARGS+=(--smoke-test)
+                
+                "$SCRIPT_DIR/run_local.sh" "${RUN_ARGS[@]}" 2>&1 || exit_code=$?
                 ;;
             minikube)
                 # Minikube supports conditional parallelism (limited to prevent overutilization)
@@ -853,6 +875,7 @@ print(count)
     # - Scaling experiments run with multiple replicas (1, 2, 4, 8)
     # - Non-scaling experiments run with replica 1 only
     # - Native environment only runs with replica 1
+    # - For native: Only run-1 scenarios are processed (others handled by --runs parameter)
     PYTHON_CMD=$(get_python_cmd)
     MANIFEST_REL=$(to_relative_path "$GENERATED_SCENARIOS_DIR/manifest.json")
     ENV_TOTAL_EXPERIMENTS=$($PYTHON_CMD -c "
@@ -867,12 +890,20 @@ replicas = [int(r) for r in '$REPLICAS'.split(',')]
 scaling_replicas = [r for r in replicas if r > 1]  # [2, 4, 8] if REPLICAS='1,2,4,8'
 
 total_experiments = 0
+seen_configs = set()  # Track unique configurations for native
+
 for s in manifest['scenarios']:
     is_scaling = s.get('scaling_experiment', False)
+    run_index = s.get('run_index', 1)
     
     if env == 'native':
-        # Native only runs with replica 1
-        total_experiments += 1
+        # Native: Only count run-1 scenarios (others handled by --runs parameter)
+        # Group by configuration to avoid counting duplicates
+        if run_index == 1:
+            config_key = (s['algorithm'], s['payload_size'], s['rate'], is_scaling)
+            if config_key not in seen_configs:
+                seen_configs.add(config_key)
+                total_experiments += 1
     elif is_scaling:
         # Scaling experiments run with all replicas (1, 2, 4, 8)
         total_experiments += len(replicas)
@@ -1732,9 +1763,31 @@ if manifest['scenarios']:
     
     # Extract scenarios using Python for reliable JSON parsing
     # Include scaling_experiment flag (defaults to False if not present)
+    # For native environment: Only process run-1 scenarios and run with --runs parameter
+    # This groups multiple runs into single experiments, reducing 468 scenarios to ~94 experiments
     PYTHON_CMD=$(get_python_cmd)
     MANIFEST_REL=$(to_relative_path "$GENERATED_SCENARIOS_DIR/manifest.json")
-    scenarios=$($PYTHON_CMD -c "
+    if [[ "$env" == "native" ]]; then
+        # For native: Only process run-1 scenarios (will run with --runs 5)
+        scenarios=$($PYTHON_CMD -c "
+import json
+with open('$MANIFEST_REL') as f:
+    manifest = json.load(f)
+seen_configs = set()
+for s in manifest['scenarios']:
+    # Only process run-1 scenarios for native (others will be handled by --runs parameter)
+    run_index = s.get('run_index', 1)
+    if run_index == 1:
+        # Create unique config key to avoid duplicates
+        config_key = (s['algorithm'], s['payload_size'], s['rate'], s.get('scaling_experiment', False))
+        if config_key not in seen_configs:
+            seen_configs.add(config_key)
+            scaling = s.get('scaling_experiment', False)
+            print(f\"{s['id']}|{s['path']}|{s['algorithm']}|{s['payload_size']}|{s['rate']}|{scaling}\")
+")
+    else
+        # For other environments: Process all scenarios as before
+        scenarios=$($PYTHON_CMD -c "
 import json
 with open('$MANIFEST_REL') as f:
     manifest = json.load(f)
@@ -1742,6 +1795,7 @@ for s in manifest['scenarios']:
     scaling = s.get('scaling_experiment', False)
     print(f\"{s['id']}|{s['path']}|{s['algorithm']}|{s['payload_size']}|{s['rate']}|{scaling}\")
 ")
+    fi
     
     while IFS='|' read -r scenario_id scenario_path algorithm payload rate is_scaling; do
         scenario_count=$((scenario_count + 1))
