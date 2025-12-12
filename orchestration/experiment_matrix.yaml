@@ -27,8 +27,11 @@ scaling:
   replicas: [1, 2, 4, 8]
   
   # Which algorithms to include in scaling tests
-  # (subset to reduce experiment time)
+  # Note: All algorithms included for complete scaling comparison
+  # (Classical algorithms included for completeness, though scaling is primarily for PQC)
   scaling_algorithms:
+    - rsa2048
+    - ecdsa_p256
     - kyber512
     - dilithium2
     - hybrid_kyber_dilithium
@@ -264,6 +267,27 @@ experiments:
       paramset: dilithium2
 
   # 5-minute Duration Experiments (sustained load behavior)
+  # Note: All algorithms included for fair comparison across classical and PQC
+  - algorithm: rsa2048
+    description: "RSA-2048 sustained load (5-minute duration)"
+    adapter: rsa2048
+    operation: sign
+    payload_sizes: [1024]
+    rates: [2000]
+    runs: 3  # Fewer runs for longer duration
+    duration_sec: 300  # 5 minutes
+    category: classical
+    
+  - algorithm: ecdsa_p256
+    description: "ECDSA P-256 sustained load (5-minute duration)"
+    adapter: ecdsa_p256
+    operation: sign
+    payload_sizes: [1024]
+    rates: [2000]
+    runs: 3
+    duration_sec: 300
+    category: classical
+      
   - algorithm: kyber512
     description: "Kyber-512 sustained load (5-minute duration)"
     adapter: kyber
@@ -308,6 +332,28 @@ experiments:
   # These experiments are designed to test horizontal scaling behavior
   # Run with --replicas 1,2,4,8 on Minikube and GCP (native skips replicas > 1)
   # Fixed parameters: 1024B payload, 500 msg/s, 3 runs per replica count
+  # Note: All algorithms included for complete scaling comparison
+  # (Classical algorithms included for completeness, though scaling is primarily for PQC)
+  
+  - algorithm: rsa2048
+    description: "RSA-2048 horizontal scaling (replicas 1,2,4,8)"
+    adapter: rsa2048
+    operation: sign
+    payload_sizes: [1024]
+    rates: [500]
+    runs: 3
+    category: classical
+    scaling_experiment: true  # Marker for scaling-specific experiments
+    
+  - algorithm: ecdsa_p256
+    description: "ECDSA P-256 horizontal scaling (replicas 1,2,4,8)"
+    adapter: ecdsa_p256
+    operation: sign
+    payload_sizes: [1024]
+    rates: [500]
+    runs: 3
+    category: classical
+    scaling_experiment: true
   
   - algorithm: kyber512
     description: "Kyber-512 horizontal scaling (replicas 1,2,4,8)"

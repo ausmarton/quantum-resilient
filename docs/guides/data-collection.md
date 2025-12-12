@@ -131,18 +131,18 @@ Based on `orchestration/experiment_matrix.yaml`:
 - **Duration**: 30s (baseline) + 300s (5-min sustained load)
 - **Horizontal scaling**: Replicas 1,2,4,8 (Minikube + GCP only)
 - **Runs per configuration**: 5 (3 for 5-min duration and scaling)
-- **Total scenarios per environment**: **468 scenarios**
+- **Total scenarios per environment**: **480 scenarios**
   - Baseline: 300 (5 × 4 × 3 × 5)
   - Burst pattern: 50 (5 × 2 × 1 × 5)
   - 10K msg/s: 100 (5 × 4 × 1 × 5)
-  - 5-minute duration: 9 (3 × 1 × 1 × 3)
-  - Horizontal scaling: 9 (3 × 1 × 1 × 3) - replica=1 only in baseline
-- **Additional scaling scenarios** (replicas 2,4,8 on Minikube+GCP): **27 per environment**
+  - 5-minute duration: 15 (5 × 1 × 1 × 3) - All algorithms included
+  - Horizontal scaling: 15 (5 × 1 × 1 × 3) - All algorithms included, replica=1 only in baseline
+- **Additional scaling scenarios** (replicas 2,4,8 on Minikube+GCP): **45 per environment** (15 × 3 replicas)
 
 **Estimated time per environment:**
-- Native: ~6.5-8 hours (468 scenarios, no scaling)
-- Minikube: ~7.5-9 hours (468 baseline) + ~1-2 hours (27 scaling scenarios) = **~8.5-11 hours total**
-- GCP: ~9-10.5 hours (468 baseline) + ~1.5-2 hours (27 scaling scenarios) = **~10.5-12.5 hours total**
+- Native: ~6.5-8 hours (480 scenarios, no scaling)
+- Minikube: ~7.5-9 hours (480 baseline) + ~1.5-2 hours (45 scaling scenarios) = **~9-11 hours total**
+- GCP: ~9-10.5 hours (480 baseline) + ~2-2.5 hours (45 scaling scenarios) = **~11-13 hours total**
 
 ## Running Data Collection
 
