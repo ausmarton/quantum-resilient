@@ -1157,6 +1157,102 @@ podman run --rm -v "$PWD/results:/workspace/results:rw" \
 
 ## Low Priority (Optional Improvements)
 
+### 39. Add Additional Test Type Combinations (Enhancement)
+
+**Status**: 🟢 **LOW PRIORITY - OPTIONAL ENHANCEMENT**  
+**Priority**: Optional - Current coverage supports all dissertation claims  
+**Independent**: Can be done anytime  
+**Requirement**: Enhancement to FR11 (Workload Pattern Impact)
+
+**Issue**: 
+- Current experiment matrix has complete coverage for all dissertation claims
+- Two test type combinations are missing but don't affect core requirements:
+  1. Burst pattern + 5-minute duration (sustained burst load)
+  2. 10K msg/s rate + Burst pattern (high-rate burst behavior)
+- These would enable additional claims but are not required for dissertation
+
+**Current State**:
+- ✅ Burst pattern tested at 2000 msg/s for 30s (all algorithms)
+- ✅ Sustained load tested at 2000 msg/s for 5-min (constant pattern, all algorithms)
+- ✅ 10K msg/s tested with constant pattern (all algorithms)
+- ❌ Burst + 5-minute duration not tested
+- ❌ 10K msg/s + Burst pattern not tested
+
+**Value Assessment**:
+- **Current Coverage Supports All Required Claims**:
+  - ✅ "Burst patterns increase latency by X% compared to constant" - Supported with 30s burst
+  - ✅ "Algorithm X handles burst patterns better than baseline Z" - Supported with 30s burst
+  - ✅ "Workload pattern impact varies by environment" - Supported with 30s burst
+- **Missing Combinations Would Enable** (NOT required):
+  - "Burst patterns maintain performance over sustained periods" - Enhancement claim
+  - "High-rate burst behavior analysis" - Enhancement claim
+- **Impact on REQUIREMENTS_SPECIFICATION.md**: None - FR11 already fully supported
+
+**Expected Outcome** (if implemented):
+- Burst + 5-minute: 5 algorithms × 2 payloads × 1 rate × 3 runs = 30 scenarios
+- 10K + Burst: 5 algorithms × 2 payloads × 1 rate × 5 runs = 50 scenarios
+- Total: +80 scenarios per environment (480 → 560)
+- Enables additional claims about sustained burst behavior and high-rate bursts
+
+**Implementation Plan** (if desired):
+1. Add burst + 5-minute experiments to `orchestration/experiment_matrix.yaml`:
+   ```yaml
+   - algorithm: rsa2048
+     description: "RSA-2048 burst pattern sustained load (5-minute duration)"
+     adapter: rsa2048
+     operation: sign
+     payload_sizes: [1024, 4096]
+     rates: [2000]
+     runs: 3
+     duration_sec: 300
+     workload_pattern: burst
+     burst_config:
+       factor: 5
+       duration_ms: 5000
+       interval_ms: 30000
+   ```
+   (Repeat for all 5 algorithms)
+
+2. Add 10K + Burst experiments:
+   ```yaml
+   - algorithm: rsa2048
+     description: "RSA-2048 at 10K msg/s with burst pattern"
+     adapter: rsa2048
+     operation: sign
+     payload_sizes: [1024, 4096]
+     rates: [10000]
+     runs: 5
+     workload_pattern: burst
+     burst_config:
+       factor: 5
+       duration_ms: 5000
+       interval_ms: 30000
+   ```
+   (Repeat for all 5 algorithms)
+
+**Effort**: 2-3 hours (matrix updates + scenario regeneration + testing)
+
+**Dependencies**: None
+
+**Impact**: 
+- **LOW**: Enhancement only - doesn't affect core dissertation claims
+- **LOW**: Adds ~80 scenarios per environment (increases experiment time)
+- **MEDIUM**: Would enable additional claims about sustained burst and high-rate burst behavior
+
+**Related Files**:
+- `orchestration/experiment_matrix.yaml` - Would add new experiment definitions
+- `docs/REQUIREMENTS_SPECIFICATION.md` - FR11 already fully supported
+- `docs/analysis/matrix-coverage-summary.md` - Would document new coverage
+
+**Rationale for Low Priority**:
+- All dissertation claims in REQUIREMENTS_SPECIFICATION.md are already supported
+- Current burst coverage (2000 msg/s, 30s) enables all required pattern impact claims
+- Missing combinations would enable enhancement claims, not core requirements
+- Adding these would increase experiment time without adding core value
+- Can be considered for future work or if time permits
+
+---
+
 ### 9. Add Queue Delay Nanosecond Precision (Consistency)
 
 **Status**: 🟢 **LOW PRIORITY - OPTIONAL CONSISTENCY IMPROVEMENT**  
