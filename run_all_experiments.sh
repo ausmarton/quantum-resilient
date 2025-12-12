@@ -212,10 +212,19 @@ update_progress() {
     # Calculate ETA
     local ETA_STR="calculating..."
     if [[ $current -gt 0 ]] && [[ $elapsed -gt 0 ]]; then
-        local rate=$((current * 100 / elapsed))  # scenarios per 100 seconds
-        if [[ $rate -gt 0 ]]; then
+        # Calculate seconds per scenario (use floating point via bc if available, else integer math)
+        if command -v bc &>/dev/null; then
+            local rate=$(echo "scale=2; $elapsed / $current" | bc)
             local remaining=$((total - current))
-            local eta_seconds=$((remaining * 100 / rate))
+            local eta_seconds=$(echo "scale=0; $rate * $remaining" | bc | cut -d. -f1)
+        else
+            # Integer math fallback: calculate seconds per scenario (rounded)
+            local rate=$((elapsed / current))
+            local remaining=$((total - current))
+            local eta_seconds=$((rate * remaining))
+        fi
+        
+        if [[ $eta_seconds -gt 0 ]]; then
             local eta_minutes=$((eta_seconds / 60))
             local eta_hours=$((eta_minutes / 60))
             
@@ -440,14 +449,17 @@ run_experiment() {
                     GCP_NAMESPACE="default"
                     
                     # Determine number of runs (5 for full-scale, 1 for smoke-test)
-                    local num_runs=1
+                    num_runs=1
                     if [[ "$SMOKE_TEST" != "true" ]]; then
                         num_runs="${total_runs:-5}"
                     fi
                     
                     # Submit multiple jobs (one per run) to support multiple runs in parallel mode
                     # Each run gets a unique experiment ID with _run<N> suffix
+                    # Check GCS for existing runs and only submit missing ones
                     export GCP_CLUSTER_NAME="$CLUSTER_NAME"
+                    runs_submitted=0
+                    runs_skipped=0
                     for ((run_idx = 1; run_idx <= num_runs; run_idx++)); do
                         if [[ $num_runs -gt 1 ]]; then
                             RUN_EXP_ID="${run_scenario_id}_run${run_idx}"
@@ -455,7 +467,16 @@ run_experiment() {
                             RUN_EXP_ID="$run_scenario_id"
                         fi
                         
+                        # Check if this specific run already exists in GCS (resume capability)
+                        RUN_GCS_PATH="gs://${BUCKET}/experiments/${RUN_EXP_ID}"
+                        if gsutil -q ls "$RUN_GCS_PATH/raw/run.jsonl" &>/dev/null 2>&1; then
+                            log_info "  Skipping run $run_idx/$num_runs for $run_scenario_id (already exists in GCS)"
+                            runs_skipped=$((runs_skipped + 1))
+                            continue
+                        fi
+                        
                         # Submit job immediately (non-blocking) - all jobs submitted, then wait for all at end
+                        log_info "  Submitting run $run_idx/$num_runs for $run_scenario_id (EXP_ID: $RUN_EXP_ID)"
                         JOB_SUBMIT_OUTPUT=$("$SCRIPT_DIR/scripts/submit_gcp_job_parallel.sh" \
                             --scenario "$scenario_path" \
                             --exp-id "$RUN_EXP_ID" \
@@ -486,9 +507,14 @@ run_experiment() {
                             else
                                 # Track job for batch waiting (all jobs submitted, wait for all at end)
                                 echo "$JOB_NAME|$RUN_EXP_ID|$output_dir" >> "${JOB_TRACKING_FILE:-/tmp/gcp_jobs_${env}.txt}"
+                                runs_submitted=$((runs_submitted + 1))
                             fi
                         fi
                     done
+                    
+                    if [[ $runs_skipped -gt 0 ]]; then
+                        log_info "  Skipped $runs_skipped existing run(s), submitted $runs_submitted new run(s) for $run_scenario_id"
+                    fi
                     
                     # Note: exit_code is set by the loop above
                 else
@@ -965,8 +991,11 @@ for s in manifest['scenarios']:
         # For native, minikube, and GCP: Only count run-1 scenarios (others handled by --runs parameter)
         # Group by configuration to avoid counting duplicates
         # Each experiment invocation handles multiple runs internally, maintaining isolation
+        # Include workload_pattern and duration_sec in config_key to distinguish burst/sustained experiments
         if run_index == 1:
-            config_key = (s['algorithm'], s['payload_size'], s['rate'], is_scaling)
+            workload_pattern = s.get('workload_pattern', 'constant')
+            duration_sec = s.get('duration_sec', 30)
+            config_key = (s['algorithm'], s['payload_size'], s['rate'], is_scaling, workload_pattern, duration_sec)
             if config_key not in seen_configs:
                 seen_configs.add(config_key)
                 # Count experiments accounting for replicas
@@ -1855,7 +1884,10 @@ for s in manifest['scenarios']:
     run_index = s.get('run_index', 1)
     if run_index == 1:
         # Create unique config key to avoid duplicates
-        config_key = (s['algorithm'], s['payload_size'], s['rate'], s.get('scaling_experiment', False))
+        # Include workload_pattern and duration_sec to distinguish burst/sustained experiments
+        workload_pattern = s.get('workload_pattern', 'constant')
+        duration_sec = s.get('duration_sec', 30)
+        config_key = (s['algorithm'], s['payload_size'], s['rate'], s.get('scaling_experiment', False), workload_pattern, duration_sec)
         if config_key not in seen_configs:
             seen_configs.add(config_key)
             scaling = s.get('scaling_experiment', False)
@@ -1931,10 +1963,18 @@ for s in manifest['scenarios']:
             merged_file="$output_dir/merged/merged.jsonl"
             aggregated_file="$output_dir/aggregated_stats.json"
             
-            # For multi-run experiments, also check for run-1/raw/run.jsonl (indicates runs were executed)
-            if [[ "$total_runs" -gt 1 ]] && [[ -f "$output_dir/run-1/raw/run.jsonl" ]]; then
-                # Multi-run experiment: check if all runs completed or aggregated stats exist
-                if [[ -f "$aggregated_file" ]] || [[ -f "$stats_file" ]]; then
+            # For multi-run experiments, check if ALL runs have raw data
+            if [[ "$total_runs" -gt 1 ]]; then
+                all_runs_complete=true
+                for ((run_idx = 1; run_idx <= total_runs; run_idx++)); do
+                    run_raw_file="$output_dir/run-${run_idx}/raw/run.jsonl"
+                    if [[ ! -f "$run_raw_file" ]] || [[ ! -s "$run_raw_file" ]]; then
+                        all_runs_complete=false
+                        break
+                    fi
+                done
+                if [[ "$all_runs_complete" == "true" ]]; then
+                    # All runs have raw data - experiment is complete (even if analysis hasn't run)
                     is_complete=true
                 fi
             fi
@@ -1942,17 +1982,37 @@ for s in manifest['scenarios']:
             # For GCP: check GCS bucket first (results are stored there, not locally)
             # BUCKET is set as a parameter and should be available in this scope
             if [[ "$env" == "gcp" ]] && [[ -n "${BUCKET:-}" ]]; then
-                GCS_EXP_PATH="gs://${BUCKET}/experiments/${run_scenario_id}"
-                
-                # Check if experiment exists in GCS (quiet check to avoid noise)
-                if gsutil -q ls "$GCS_EXP_PATH/merged.jsonl" &>/dev/null 2>&1; then
-                    # Merged file exists in GCS
-                    is_complete=true
-                    log_info "  Found existing results in GCS for $run_scenario_id (merged.jsonl)"
-                elif gsutil -q ls "$GCS_EXP_PATH/raw/run.jsonl" &>/dev/null 2>&1; then
-                    # Raw file exists in GCS
-                    is_complete=true
-                    log_info "  Found existing results in GCS for $run_scenario_id (raw/run.jsonl)"
+                # For multi-run experiments in persistent cluster mode, each run has its own GCS directory
+                # Format: gs://bucket/experiments/<base_id>_run<N>/
+                # For single-run or ephemeral mode: gs://bucket/experiments/<base_id>/
+                if [[ "$total_runs" -gt 1 ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
+                    # Check each individual run in GCS
+                    all_runs_in_gcs=true
+                    for ((run_idx = 1; run_idx <= total_runs; run_idx++)); do
+                        RUN_GCS_PATH="gs://${BUCKET}/experiments/${run_scenario_id}_run${run_idx}"
+                        if ! gsutil -q ls "$RUN_GCS_PATH/raw/run.jsonl" &>/dev/null 2>&1; then
+                            all_runs_in_gcs=false
+                            break
+                        fi
+                    done
+                    if [[ "$all_runs_in_gcs" == "true" ]]; then
+                        is_complete=true
+                        log_info "  Found all ${total_runs} runs in GCS for $run_scenario_id"
+                    fi
+                else
+                    # Single-run or ephemeral mode: check base experiment path
+                    GCS_EXP_PATH="gs://${BUCKET}/experiments/${run_scenario_id}"
+                    
+                    # Check if experiment exists in GCS (quiet check to avoid noise)
+                    if gsutil -q ls "$GCS_EXP_PATH/merged.jsonl" &>/dev/null 2>&1; then
+                        # Merged file exists in GCS
+                        is_complete=true
+                        log_info "  Found existing results in GCS for $run_scenario_id (merged.jsonl)"
+                    elif gsutil -q ls "$GCS_EXP_PATH/raw/run.jsonl" &>/dev/null 2>&1; then
+                        # Raw file exists in GCS
+                        is_complete=true
+                        log_info "  Found existing results in GCS for $run_scenario_id (raw/run.jsonl)"
+                    fi
                 fi
             fi
             
@@ -1960,9 +2020,17 @@ for s in manifest['scenarios']:
             if [[ "$is_complete" != "true" ]]; then
                 if [[ "$SKIP_ANALYSIS" == "true" ]]; then
                     # In data collection mode: check for raw data
-                    # For multi-run experiments, check for aggregated stats or any run data
+                    # For multi-run experiments, check if ALL runs have raw data
                     if [[ "$total_runs" -gt 1 ]]; then
-                        if [[ -f "$aggregated_file" ]] || [[ -f "$output_dir/run-1/raw/run.jsonl" ]]; then
+                        all_runs_have_data=true
+                        for ((run_idx = 1; run_idx <= total_runs; run_idx++)); do
+                            run_raw_file="$output_dir/run-${run_idx}/raw/run.jsonl"
+                            if [[ ! -f "$run_raw_file" ]] || [[ ! -s "$run_raw_file" ]]; then
+                                all_runs_have_data=false
+                                break
+                            fi
+                        done
+                        if [[ "$all_runs_have_data" == "true" ]]; then
                             is_complete=true
                         fi
                     elif [[ -f "$raw_file" ]] && [[ -s "$raw_file" ]]; then

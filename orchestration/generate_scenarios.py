@@ -392,6 +392,8 @@ def generate_all_scenarios(matrix: dict, output_dir: Path, smoke_test: bool = Fa
                         'relative_path': str(scenario_path.relative_to(output_dir)),
                         'category': experiment.get('category', 'unknown'),
                         'scaling_experiment': experiment.get('scaling_experiment', False),  # Include scaling flag
+                        'workload_pattern': scenario['metadata'].get('workload_pattern', 'constant'),  # Include workload pattern for counting
+                        'duration_sec': scenario['metadata'].get('duration_sec', defaults.get('duration_sec', 30)),  # Include duration for counting
                     })
     
     return generated, errors

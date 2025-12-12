@@ -281,6 +281,18 @@ for env in "${ENV_ARRAY[@]}"; do
     
     if "${CMD[@]}" 2>&1 | tee "$LOG_FILE"; then
         log_success "$env data collection completed"
+        
+        # Validate data collection for this environment
+        log_step "Validating $env data collection"
+        VALIDATION_LOG="$COLLECTION_DIR/${env}_validation.log"
+        
+        # Use check_progress.sh for validation (it supports --env and --matrix)
+        log_info "Running progress check for $env..."
+        if "$SCRIPT_DIR/scripts/check_progress.sh" --env "$env" --matrix "$MATRIX" 2>&1 | tee "$VALIDATION_LOG"; then
+            log_success "$env data validation completed"
+        else
+            log_warn "$env data validation had warnings (check $VALIDATION_LOG)"
+        fi
     else
         log_error "$env data collection failed (check $LOG_FILE)"
         if [[ "$CONTINUE_ON_ERROR" != "true" ]]; then
