@@ -123,8 +123,9 @@ print(total)
 EOF
 )
 
-# Calculate scaling experiments (replicas 2,4,8)
+# Calculate scaling experiments (replicas 1,2,4,8)
 # Note: We count experiments (unique configs), not scenarios (all runs)
+# Scaling experiments run with ALL replicas (1, 2, 4, 8), not just 2,4,8
 SCALING_EXPECTED=$(python3 <<EOF
 import yaml
 from pathlib import Path
@@ -136,7 +137,7 @@ experiments = matrix.get('experiments', [])
 defaults = matrix.get('defaults', {})
 scaling_config = matrix.get('scaling', {})
 replicas = scaling_config.get('replicas', [1, 2, 4, 8])
-scaling_replicas = [r for r in replicas if r > 1]  # [2, 4, 8]
+# All replicas are used for scaling experiments: [1, 2, 4, 8]
 
 # Count scaling experiments (those with scaling_experiment: true)
 # Each experiment handles multiple runs internally, so we don't multiply by runs
@@ -147,17 +148,19 @@ for exp in experiments:
         rates = exp.get('rates', [500])
         scaling_count += len(payload_sizes) * len(rates)
 
-# Scaling experiments run with replicas 2, 4, 8 (3 replica counts)
-total_scaling = scaling_count * len(scaling_replicas)
+# Scaling experiments run with all replicas (1, 2, 4, 8) = 4 replica counts
+total_scaling = scaling_count * len(replicas)
 print(total_scaling)
 EOF
 )
 
 # Expected counts per environment
 # Note: These are experiment counts (unique configs), not scenario counts (all runs)
-NATIVE_EXPECTED=$BASELINE_EXPECTED  # 94 experiments (no scaling)
-MINIKUBE_EXPECTED=$((BASELINE_EXPECTED + SCALING_EXPECTED))  # 99 experiments (94 + 5 scaling)
-GCP_EXPECTED=$((BASELINE_EXPECTED + SCALING_EXPECTED))  # 99 experiments (94 + 5 scaling)
+# Native: baseline only (no scaling)
+# Minikube/GCP: baseline + scaling experiments (with all replicas 1,2,4,8)
+NATIVE_EXPECTED=$BASELINE_EXPECTED  # 95 experiments (no scaling)
+MINIKUBE_EXPECTED=$((BASELINE_EXPECTED + SCALING_EXPECTED))  # 115 experiments (95 baseline + 20 scaling)
+GCP_EXPECTED=$((BASELINE_EXPECTED + SCALING_EXPECTED))  # 115 experiments (95 baseline + 20 scaling)
 
 # Calculate total expected across all environments
 TOTAL_EXPECTED=0
@@ -273,9 +276,11 @@ for exp in experiments:
             base_experiment_id = generate_base_experiment_id(algorithm, payload, rate, pattern, duration, is_scaling)
             expected_experiment_ids.add(base_experiment_id)
             
-            # For Minikube/GCP, also expect scaling experiments (replicas 2,4,8)
+            # For Minikube/GCP, also expect scaling experiments with all replicas (1,2,4,8)
+            # Note: replica=1 is already included in base_experiment_id above
+            # So we only add replicas > 1 here
             if env_name != "native" and is_scaling:
-                for replica_count in scaling_replicas:
+                for replica_count in scaling_replicas:  # [2, 4, 8]
                     scaling_id = f"{base_experiment_id}_r{replica_count}"
                     expected_experiment_ids.add(scaling_id)
 
