@@ -429,8 +429,7 @@ run_experiment() {
                 if [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
                     # Persistent cluster mode: Submit all jobs immediately (non-blocking)
                     # Kubernetes scheduler will determine parallelism based on available nodes
-                    # Note: Parallel mode doesn't support --runs yet (would need multiple job submissions)
-                    # For now, parallel mode runs single runs only
+                    # Support multiple runs by submitting separate jobs for each run
                     if [[ -z "${GCP_IMAGE_NAME:-}" ]]; then
                         # Get image name if not set
                         IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/pqc"
@@ -440,44 +439,58 @@ run_experiment() {
                     # Use consistent namespace for all test types
                     GCP_NAMESPACE="default"
                     
-                    # Submit job immediately (non-blocking) - all jobs submitted, then wait for all at end
-                    # Export cluster name so submit_gcp_job_parallel.sh can refresh credentials
+                    # Determine number of runs (5 for full-scale, 1 for smoke-test)
+                    local num_runs=1
+                    if [[ "$SMOKE_TEST" != "true" ]]; then
+                        num_runs="${total_runs:-5}"
+                    fi
+                    
+                    # Submit multiple jobs (one per run) to support multiple runs in parallel mode
+                    # Each run gets a unique experiment ID with _run<N> suffix
                     export GCP_CLUSTER_NAME="$CLUSTER_NAME"
-                    JOB_SUBMIT_OUTPUT=$("$SCRIPT_DIR/scripts/submit_gcp_job_parallel.sh" \
-                        --scenario "$scenario_path" \
-                        --exp-id "$run_scenario_id" \
-                        --project "$PROJECT" \
-                        --bucket "$BUCKET" \
-                        --region "$REGION" \
-                        --image "$GCP_IMAGE_NAME" \
-                        --namespace "$GCP_NAMESPACE" \
-                        --replicas "$replicas" \
-                        $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1) || exit_code=$?
-                    
-                    if [[ $exit_code -ne 0 ]]; then
-                        log_error "Job submission failed for $scenario_id (replicas: $replicas)"
-                        # Print all output lines (errors go to stderr, which is captured)
-                        if [[ -n "$JOB_SUBMIT_OUTPUT" ]]; then
-                            echo "$JOB_SUBMIT_OUTPUT" | while IFS= read -r line || [[ -n "$line" ]]; do
-                                log_error "  $line"
-                            done
+                    for ((run_idx = 1; run_idx <= num_runs; run_idx++)); do
+                        if [[ $num_runs -gt 1 ]]; then
+                            RUN_EXP_ID="${run_scenario_id}_run${run_idx}"
                         else
-                            log_error "  No error output captured (check kubectl connectivity and cluster status)"
+                            RUN_EXP_ID="$run_scenario_id"
                         fi
-                    else
-                        JOB_NAME=$(echo "$JOB_SUBMIT_OUTPUT" | tail -1)
-                        if [[ -z "$JOB_NAME" ]]; then
-                            log_error "Job submission returned success but no job name for $scenario_id"
-                            exit_code=1
+                        
+                        # Submit job immediately (non-blocking) - all jobs submitted, then wait for all at end
+                        JOB_SUBMIT_OUTPUT=$("$SCRIPT_DIR/scripts/submit_gcp_job_parallel.sh" \
+                            --scenario "$scenario_path" \
+                            --exp-id "$RUN_EXP_ID" \
+                            --project "$PROJECT" \
+                            --bucket "$BUCKET" \
+                            --region "$REGION" \
+                            --image "$GCP_IMAGE_NAME" \
+                            --namespace "$GCP_NAMESPACE" \
+                            --replicas "$replicas" \
+                            $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") 2>&1) || run_exit_code=$?
+                        
+                        if [[ ${run_exit_code:-0} -ne 0 ]]; then
+                            log_error "Job submission failed for $RUN_EXP_ID (replicas: $replicas, run $run_idx/$num_runs)"
+                            # Print all output lines (errors go to stderr, which is captured)
+                            if [[ -n "$JOB_SUBMIT_OUTPUT" ]]; then
+                                echo "$JOB_SUBMIT_OUTPUT" | while IFS= read -r line || [[ -n "$line" ]]; do
+                                    log_error "  $line"
+                                done
+                            else
+                                log_error "  No error output captured (check kubectl connectivity and cluster status)"
+                            fi
+                            exit_code=${run_exit_code:-1}
+                        else
+                            JOB_NAME=$(echo "$JOB_SUBMIT_OUTPUT" | tail -1)
+                            if [[ -z "$JOB_NAME" ]]; then
+                                log_error "Job submission returned success but no job name for $RUN_EXP_ID"
+                                exit_code=1
+                            else
+                                # Track job for batch waiting (all jobs submitted, wait for all at end)
+                                echo "$JOB_NAME|$RUN_EXP_ID|$output_dir" >> "${JOB_TRACKING_FILE:-/tmp/gcp_jobs_${env}.txt}"
+                            fi
                         fi
-                    fi
+                    done
                     
-                    if [[ $exit_code -eq 0 ]]; then
-                        # Always track job for batch waiting (all jobs submitted, wait for all at end)
-                        echo "$JOB_NAME|$run_scenario_id|$output_dir" >> "${JOB_TRACKING_FILE:-/tmp/gcp_jobs_${env}.txt}"
-                        # Job submission succeeded - will wait for all jobs at the end
-                        exit_code=0
-                    fi
+                    # Note: exit_code is set by the loop above
                 else
                     # Ephemeral mode: use deploy_gcp.sh with --runs parameter
                     GCP_ARGS=(
