@@ -58,6 +58,7 @@ BUCKET=""
 REGION="us-central1"
 PARALLEL_JOBS=1
 REPLICAS="1"  # Comma-separated list: 1,2,4,8
+REPLICAS_EXPLICITLY_SET=false  # Track if user explicitly set --replicas
 SKIP_GENERATION=false
 SKIP_NATIVE=false
 SKIP_MINIKUBE=false
@@ -499,6 +500,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --replicas)
             REPLICAS="$2"
+            REPLICAS_EXPLICITLY_SET=true
             shift 2
             ;;
         --skip-generation)
@@ -683,6 +685,17 @@ log_success "Output directories created"
 # Phase 3: Execute Experiments
 # =============================================================================
 log_phase "3. Execute Experiments"
+
+# Auto-set replicas for full-scale runs on minikube/GCP (if not explicitly set)
+# This ensures consistency with run_full_scale_data_collection.sh
+if [[ "$REPLICAS_EXPLICITLY_SET" == "false" ]] && [[ "$SMOKE_TEST" != "true" ]]; then
+    # Check if minikube or gcp is in the environment list
+    if [[ "$ENVS" == *"minikube"* ]] || [[ "$ENVS" == *"gcp"* ]]; then
+        REPLICAS="1,2,4,8"
+        log_info "Auto-setting replicas to 1,2,4,8 for full-scale minikube/GCP runs"
+        log_info "  (Use --replicas to override, or --smoke-test uses 1 replica)"
+    fi
+fi
 
 # Parse environments
 IFS=',' read -ra ENV_ARRAY <<< "$ENVS"
