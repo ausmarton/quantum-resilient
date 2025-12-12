@@ -372,7 +372,7 @@ run_experiment() {
                     export GCP_CLUSTER_NAME="$CLUSTER_NAME"
                     JOB_SUBMIT_OUTPUT=$("$SCRIPT_DIR/scripts/submit_gcp_job_parallel.sh" \
                         --scenario "$scenario_path" \
-                        --exp-id "$scenario_id" \
+                        --exp-id "$run_scenario_id" \
                         --project "$PROJECT" \
                         --bucket "$BUCKET" \
                         --region "$REGION" \
@@ -401,7 +401,7 @@ run_experiment() {
                     
                     if [[ $exit_code -eq 0 ]]; then
                         # Always track job for batch waiting (all jobs submitted, wait for all at end)
-                        echo "$JOB_NAME|$scenario_id|$output_dir" >> "${JOB_TRACKING_FILE:-/tmp/gcp_jobs_${env}.txt}"
+                        echo "$JOB_NAME|$run_scenario_id|$output_dir" >> "${JOB_TRACKING_FILE:-/tmp/gcp_jobs_${env}.txt}"
                         # Job submission succeeded - will wait for all jobs at the end
                         exit_code=0
                     fi
@@ -409,7 +409,7 @@ run_experiment() {
                     # Ephemeral mode: use deploy_gcp.sh (for single experiments or when cluster doesn't exist)
                     GCP_ARGS=(
                         --scenario "$scenario_path"
-                        --exp-id "$scenario_id"
+                        --exp-id "$run_scenario_id"
                         --project "$PROJECT"
                         --bucket "$BUCKET"
                         --region "$REGION"
@@ -422,7 +422,7 @@ run_experiment() {
                     
                     if [[ $exit_code -eq 0 ]]; then
                         "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
-                            --exp-id "$scenario_id" \
+                            --exp-id "$run_scenario_id" \
                             --bucket "$BUCKET" \
                             --out "$output_dir" 2>&1 || exit_code=$?
                     fi
@@ -1991,15 +1991,23 @@ for s in manifest['scenarios']:
             rate=0
             replica_count=1
             
-            # Parse scenario_id: <algorithm>_p<payload>_r<rate>_run<N>_<hash>
-            if [[ "$scenario_id" =~ ^([^_]+)_p([0-9]+)_r([0-9]+)_ ]]; then
+            # Parse scenario_id: <algorithm>_p<payload>_r<rate>_run<N>_<hash> or with _r<replicas> suffix
+            # Remove replica suffix if present to get base scenario_id for parsing
+            base_scenario_id="$scenario_id"
+            if [[ "$scenario_id" =~ _r([0-9]+)$ ]]; then
+                replica_count="${BASH_REMATCH[1]}"
+                base_scenario_id="${scenario_id%_r*}"
+            fi
+            
+            # Parse base scenario_id: <algorithm>_p<payload>_r<rate>_run<N>_<hash>
+            if [[ "$base_scenario_id" =~ ^([^_]+)_p([0-9]+)_r([0-9]+)_ ]]; then
                 algorithm="${BASH_REMATCH[1]}"
                 payload="${BASH_REMATCH[2]}"
                 rate="${BASH_REMATCH[3]}"
             fi
             
-            # Check if output_dir has replica suffix: _r<replicas>
-            if [[ "$output_dir" =~ _r([0-9]+)$ ]]; then
+            # If replica_count wasn't set from scenario_id, check output_dir
+            if [[ "$replica_count" -eq 1 ]] && [[ "$output_dir" =~ _r([0-9]+)$ ]]; then
                 replica_count="${BASH_REMATCH[1]}"
             fi
             
@@ -2092,11 +2100,23 @@ for s in manifest['scenarios']:
                 rate=0
                 replica_count=1
                 
-                # Parse scenario_id: <algorithm>_p<payload>_r<rate>_run<N>_<hash>
-                if [[ "$scenario_id" =~ ^([^_]+)_p([0-9]+)_r([0-9]+)_ ]]; then
+                # Remove replica suffix if present to get base scenario_id for parsing
+                base_scenario_id="$scenario_id"
+                if [[ "$scenario_id" =~ _r([0-9]+)$ ]]; then
+                    replica_count="${BASH_REMATCH[1]}"
+                    base_scenario_id="${scenario_id%_r*}"
+                fi
+                
+                # Parse base scenario_id: <algorithm>_p<payload>_r<rate>_run<N>_<hash>
+                if [[ "$base_scenario_id" =~ ^([^_]+)_p([0-9]+)_r([0-9]+)_ ]]; then
                     algorithm="${BASH_REMATCH[1]}"
                     payload="${BASH_REMATCH[2]}"
                     rate="${BASH_REMATCH[3]}"
+                fi
+                
+                # If replica_count wasn't set from scenario_id, check output_dir
+                if [[ "$replica_count" -eq 1 ]] && [[ "$output_dir" =~ _r([0-9]+)$ ]]; then
+                    replica_count="${BASH_REMATCH[1]}"
                 fi
                 
                 # Check if scenario_id has replica suffix: _r<replicas>

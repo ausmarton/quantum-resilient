@@ -46,6 +46,8 @@ pub struct ExecutionContext {
     pub keypair: Option<Arc<KeypairWithSecret>>,
     /// Cached keypair for signature operations (e.g., Dilithium)
     pub sig_keypair: Option<Arc<KeypairWithSecret>>,
+    /// Signature adapter for hybrid operations (e.g., Dilithium for kem_aead_sign)
+    pub sig_adapter: Option<Arc<dyn CryptoAdapter + Send + Sync>>,
     /// Algorithm name
     pub algorithm: String,
     /// Operation name
@@ -557,10 +559,41 @@ async fn process_event(
 
         // Perform the crypto operation
         let op_result = match context.operation.as_str() {
-            "sign" => adapter.sign(&[], &event.payload).map(|s| (Some(s.len()), None)),
-            "verify" => adapter
-                .verify(&[], &event.payload, &event.payload)
-                .map(|_| (None, None)),
+            "sign" => {
+                // Use signature keypair if available (for Dilithium), otherwise use empty (for ECDSA/RSA which use internal keys)
+                let secret_key = context.sig_keypair.as_ref()
+                    .map(|kp| kp.secret_key.as_slice())
+                    .unwrap_or(&[]);
+                
+                // For RSA with large messages, we need to hash first
+                if context.algorithm == "rsa2048" && event.payload.len() > 190 {
+                    // RSA-OAEP can only encrypt messages up to ~190 bytes (256 - 66 for padding)
+                    // Hash the message first, then sign the hash
+                    use sha2::{Sha256, Digest};
+                    let mut hasher = Sha256::new();
+                    hasher.update(&event.payload);
+                    let hash = hasher.finalize();
+                    adapter.sign(secret_key, &hash).map(|s| (Some(s.len()), None))
+                } else {
+                    adapter.sign(secret_key, &event.payload).map(|s| (Some(s.len()), None))
+                }
+            },
+            "verify" => {
+                let public_key = context.sig_keypair.as_ref()
+                    .map(|kp| kp.public_key.as_slice())
+                    .unwrap_or(&[]);
+                
+                // For RSA with large messages, hash first
+                if context.algorithm == "rsa2048" && event.payload.len() > 190 {
+                    use sha2::{Sha256, Digest};
+                    let mut hasher = Sha256::new();
+                    hasher.update(&event.payload);
+                    let hash = hasher.finalize();
+                    adapter.verify(public_key, &hash, &event.payload).map(|_| (None, None))
+                } else {
+                    adapter.verify(public_key, &event.payload, &event.payload).map(|_| (None, None))
+                }
+            },
             "encrypt" => adapter
                 .encapsulate(&event.payload)
                 .map(|(ct, _)| (Some(ct.len()), None)),
@@ -630,12 +663,21 @@ async fn process_event(
                     
                     match hybrid_result {
                         Ok(combined) => {
-                            // Now sign the combined ciphertext with Dilithium
-                            // Note: This requires a signature adapter (Dilithium) to be available
-                            // For now, we return the combined size as the signature would be appended
-                            // The actual signature would need to be computed separately
-                            let sizes = HybridSizes::from_payload(&combined).ok();
-                            Ok((Some(combined.len()), sizes.map(|s| s.ct_kem_len)))
+                            // Now sign the combined ciphertext with signature adapter
+                            if let (Some(ref sig_keypair), Some(ref sig_adapter)) = (context.sig_keypair.as_ref(), context.sig_adapter.as_ref()) {
+                                let sig_result = sig_adapter.sign(&sig_keypair.secret_key, &combined);
+                                match sig_result {
+                                    Ok(signature) => {
+                                        let sizes = HybridSizes::from_payload(&combined).ok();
+                                        Ok((Some(combined.len() + signature.len()), sizes.map(|s| s.ct_kem_len)))
+                                    }
+                                    Err(e) => Err(e),
+                                }
+                            } else {
+                                Err(CryptoError::InternalError(
+                                    "No signature keypair or adapter available for hybrid sign operation".to_string(),
+                                ))
+                            }
                         }
                         Err(e) => Err(e),
                     }

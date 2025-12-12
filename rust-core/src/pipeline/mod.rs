@@ -148,10 +148,69 @@ impl Pipeline {
             PipelineContext::default()
         };
 
+        // Generate signature keypair if needed for signature operations or hybrid operations
+        // For Dilithium, we need to generate and store the keypair
+        // For ECDSA/RSA, they store keys internally, so we just need to track the keypair metadata
+        let sig_keypair = if scenario.algorithm.operation == "sign" || scenario.algorithm.operation == "verify" || scenario.algorithm.operation == "kem_aead_sign" {
+            info!("Generating signature keypair for {} operations...", scenario.algorithm.operation);
+            
+            // For hybrid operations, we need a Dilithium adapter for signing
+            // For pure signature operations, use the current adapter
+            let (sig_adapter_for_keygen, is_dilithium) = if scenario.algorithm.operation == "kem_aead_sign" {
+                // For hybrid operations, we need a signature adapter (Dilithium)
+                // Get a Dilithium adapter from the registry
+                use crate::crypto_adapter::registry::get_adapter;
+                let dilithium_adapter = get_adapter("dilithium").map_err(|e| PipelineError::InitializationError(format!("Failed to get Dilithium adapter for hybrid operations: {}", e)))?;
+                // Cast to the required type (all adapters implement Send + Sync)
+                let adapter_typed: Arc<dyn CryptoAdapter + Send + Sync> = dilithium_adapter;
+                (adapter_typed, true)
+            } else {
+                (adapter.clone(), adapter.name() == "dilithium")
+            };
+            
+            // For Dilithium, generate the full keypair with secret
+            let keypair = if is_dilithium {
+                let (pk, sk) = generate_dilithium_keypair_with_secret(&sig_adapter_for_keygen)?;
+                KeypairWithSecret {
+                    public_key: pk,
+                    secret_key: sk,
+                    params: "dilithium2".to_string(),
+                }
+            } else {
+                // For ECDSA/RSA, they store keys internally
+                // We just need metadata - the adapter will use its internal key
+                let meta = sig_adapter_for_keygen.keygen().map_err(|e| PipelineError::InitializationError(e.to_string()))?;
+                KeypairWithSecret {
+                    public_key: meta.public_key,
+                    secret_key: vec![0u8; meta.secret_key_length], // Placeholder - adapter uses internal key
+                    params: meta.params,
+                }
+            };
+
+            info!(
+                "Signature keypair generated: pk_len={}, sk_len={}",
+                keypair.public_key.len(),
+                keypair.secret_key.len()
+            );
+
+            Some(Arc::new(keypair))
+        } else {
+            None
+        };
+
+        // Get signature adapter for hybrid operations
+        let sig_adapter: Option<Arc<dyn CryptoAdapter + Send + Sync>> = if scenario.algorithm.operation == "kem_aead_sign" {
+            use crate::crypto_adapter::registry::get_adapter;
+            Some(get_adapter("dilithium").map_err(|e| PipelineError::InitializationError(format!("Failed to get Dilithium adapter for hybrid operations: {}", e)))?)
+        } else {
+            None
+        };
+
         // Create execution context
         let exec_context = ExecutionContext {
             keypair: context.keypair.clone(),
-            sig_keypair: None, // Will be set for hybrid operations
+            sig_keypair: sig_keypair.clone(),
+            sig_adapter: sig_adapter.clone(),
             algorithm: adapter.name().to_string(),
             operation: scenario.algorithm.operation.clone(),
             run_id: scenario.id.clone(),
@@ -295,6 +354,30 @@ fn generate_keypair_with_secret(
 
     // For non-KEM adapters, return dummy secret key
     Ok((meta.public_key, vec![0u8; meta.secret_key_length]))
+}
+
+/// Generates a Dilithium keypair with both public and secret key
+fn generate_dilithium_keypair_with_secret(
+    _adapter: &Arc<dyn CryptoAdapter + Send + Sync>,
+) -> Result<(Vec<u8>, Vec<u8>), PipelineError> {
+    // Note: adapter parameter is unused because we generate keys directly via pqcrypto
+    // For Dilithium, we need to generate the secret key
+    // Since we can't downcast, we'll generate the keypair directly using pqcrypto
+    #[cfg(feature = "pqcrypto_dilithium")]
+    {
+        use pqcrypto_dilithium::dilithium2;
+        use pqcrypto_traits::sign::{PublicKey, SecretKey};
+        
+        let (pk, sk) = dilithium2::keypair();
+        return Ok((pk.as_bytes().to_vec(), sk.as_bytes().to_vec()));
+    }
+
+    #[cfg(not(feature = "pqcrypto_dilithium"))]
+    {
+        return Err(PipelineError::InitializationError(
+            "No Dilithium implementation available".to_string(),
+        ));
+    }
 }
 
 /// Calculate total events based on workload model
