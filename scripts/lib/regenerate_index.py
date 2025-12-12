@@ -90,9 +90,12 @@ def main():
             if not has_data:
                 continue
             
-            # Try to extract algorithm, payload, rate from scenario ID
-            # Format: <algorithm>_p<payload>_r<rate>_run<N>_<hash>
-            # Or: <algorithm>-smoketest-p<payload>-r<rate>
+            # Try to extract algorithm, payload, rate from experiment ID
+            # Format: <algorithm>_p<payload>_r<rate>_<hash> (base experiment ID, without run_index)
+            # Or: <algorithm>_p<payload>_r<rate>_run<N>_<hash> (legacy scenario ID with run_index)
+            # Or: <algorithm>-smoketest-p<payload>-r<rate> (smoke test format)
+            # Note: Output directories now use base experiment IDs (without run_index)
+            # Each experiment handles multiple runs internally
             algorithm = "unknown"
             payload = 0
             rate = 0
@@ -121,7 +124,15 @@ def main():
                             replicas = int(part[4:])
             
             # Determine status
-            if stats_file.exists() or merged_file.exists():
+            # For multi-run experiments, also check for aggregated stats or run-1 data
+            aggregated_file = exp_dir / "aggregated_stats.json"
+            run1_raw = exp_dir / "run-1" / "raw" / "run.jsonl"
+            
+            has_stats = stats_file.exists() or merged_file.exists()
+            has_aggregated = aggregated_file.exists()
+            has_run1 = run1_raw.exists()
+            
+            if has_stats or has_aggregated or has_run1:
                 status = "success"
                 index["completed_scenarios"] += 1
             else:
@@ -129,7 +140,7 @@ def main():
                 index["failed_scenarios"] += 1
             
             experiment_entry = {
-                "scenario_id": scenario_id,
+                "scenario_id": scenario_id,  # Note: This is now a base experiment ID (without run_index)
                 "environment": env,
                 "algorithm": algorithm,
                 "payload_size": payload,

@@ -79,11 +79,13 @@ fi
 log_success "index.json found"
 
 # Parse index
-TOTAL_SCENARIOS=$(python3 -c "import json; print(json.load(open('$INDEX_FILE'))['total_scenarios'])" 2>/dev/null || echo "?")
+# Note: These are experiment counts (unique configs), not scenario counts (all runs)
+# Each experiment handles multiple runs internally
+TOTAL_EXPERIMENTS=$(python3 -c "import json; print(json.load(open('$INDEX_FILE'))['total_scenarios'])" 2>/dev/null || echo "?")
 COMPLETED=$(python3 -c "import json; print(json.load(open('$INDEX_FILE'))['completed_scenarios'])" 2>/dev/null || echo "?")
 FAILED=$(python3 -c "import json; print(json.load(open('$INDEX_FILE'))['failed_scenarios'])" 2>/dev/null || echo "?")
 
-echo "  Total scenarios: $TOTAL_SCENARIOS"
+echo "  Total experiments: $TOTAL_EXPERIMENTS"
 echo "  Completed: $COMPLETED"
 echo "  Failed: $FAILED"
 echo ""

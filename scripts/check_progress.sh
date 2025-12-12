@@ -97,8 +97,10 @@ echo -e "${CYAN}  Data Collection Progress Report${NC}"
 echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════${NC}"
 echo ""
 
-# Calculate expected scenarios from matrix
-# Note: Native has 468 scenarios (no scaling), Minikube/GCP have 495 (468 baseline + 27 scaling)
+# Calculate expected experiments from matrix
+# Note: We count experiments (unique configs), not scenarios (all runs)
+# Each experiment handles multiple runs internally via --runs parameter
+# Native has 94 experiments (no scaling), Minikube/GCP have 99 (94 baseline + 5 scaling)
 BASELINE_EXPECTED=$(python3 <<EOF
 import yaml
 from pathlib import Path
@@ -113,14 +115,16 @@ total = 0
 for exp in experiments:
     payload_sizes = exp.get('payload_sizes', [1024])
     rates = exp.get('rates', [500])
-    runs = exp.get('runs', defaults.get('runs', 5))
-    total += len(payload_sizes) * len(rates) * runs
+    # Count unique configurations (algorithm/payload/rate combinations)
+    # Each experiment handles multiple runs internally, so we don't multiply by runs
+    total += len(payload_sizes) * len(rates)
 
 print(total)
 EOF
 )
 
 # Calculate scaling experiments (replicas 2,4,8)
+# Note: We count experiments (unique configs), not scenarios (all runs)
 SCALING_EXPECTED=$(python3 <<EOF
 import yaml
 from pathlib import Path
@@ -135,13 +139,13 @@ replicas = scaling_config.get('replicas', [1, 2, 4, 8])
 scaling_replicas = [r for r in replicas if r > 1]  # [2, 4, 8]
 
 # Count scaling experiments (those with scaling_experiment: true)
+# Each experiment handles multiple runs internally, so we don't multiply by runs
 scaling_count = 0
 for exp in experiments:
     if exp.get('scaling_experiment', False):
         payload_sizes = exp.get('payload_sizes', [1024])
         rates = exp.get('rates', [500])
-        runs = exp.get('runs', defaults.get('runs', 5))
-        scaling_count += len(payload_sizes) * len(rates) * runs
+        scaling_count += len(payload_sizes) * len(rates)
 
 # Scaling experiments run with replicas 2, 4, 8 (3 replica counts)
 total_scaling = scaling_count * len(scaling_replicas)
@@ -150,9 +154,10 @@ EOF
 )
 
 # Expected counts per environment
-NATIVE_EXPECTED=$BASELINE_EXPECTED  # 468 (no scaling)
-MINIKUBE_EXPECTED=$((BASELINE_EXPECTED + SCALING_EXPECTED))  # 495 (468 + 27)
-GCP_EXPECTED=$((BASELINE_EXPECTED + SCALING_EXPECTED))  # 495 (468 + 27)
+# Note: These are experiment counts (unique configs), not scenario counts (all runs)
+NATIVE_EXPECTED=$BASELINE_EXPECTED  # 94 experiments (no scaling)
+MINIKUBE_EXPECTED=$((BASELINE_EXPECTED + SCALING_EXPECTED))  # 99 experiments (94 + 5 scaling)
+GCP_EXPECTED=$((BASELINE_EXPECTED + SCALING_EXPECTED))  # 99 experiments (94 + 5 scaling)
 
 # Calculate total expected across all environments
 TOTAL_EXPECTED=0
@@ -190,12 +195,15 @@ for env in "${ENVS[@]}"; do
         continue
     fi
     
-    # Generate expected scenario IDs from matrix (matching generate_scenarios.py logic exactly)
+    # Generate expected experiment IDs from matrix
+    # Note: We count experiments (unique configs), not scenarios (all runs)
+    # Each experiment handles multiple runs internally, so we only generate base IDs (without run_index)
     # Also include scaling experiments with _r2, _r4, _r8 suffixes for Minikube/GCP
     read -r COMPLETED INCOMPLETE MISSING TOTAL_FOUND PERCENTAGE_COMPLETED PERCENTAGE_PROGRESS EXTRA_COUNT <<< $(python3 <<EOF
 import yaml
 import hashlib
 from pathlib import Path
+import re
 
 matrix_file = Path("$MATRIX")
 env_results_dir = Path("$ENV_RESULTS_DIR")
@@ -211,8 +219,9 @@ scaling_config = matrix.get('scaling', {})
 replicas = scaling_config.get('replicas', [1, 2, 4, 8])
 scaling_replicas = [r for r in replicas if r > 1]  # [2, 4, 8]
 
-# Generate expected scenario IDs (matching generate_scenarios.py exactly)
-expected_scenario_ids = set()
+# Generate expected experiment IDs (base IDs without run_index)
+# Format: <algorithm>_p<payload>_r<rate>_<hash> (no run1, run2, etc.)
+expected_experiment_ids = set()
 
 def compute_scenario_hash(algorithm, payload, rate, run, pattern="constant", duration=None, is_scaling=False):
     """Match generate_scenarios.py logic exactly"""
@@ -225,9 +234,10 @@ def compute_scenario_hash(algorithm, payload, rate, run, pattern="constant", dur
     seed_str = ":".join(seed_parts)
     return hashlib.sha256(seed_str.encode()).hexdigest()[:8]
 
-def generate_scenario_id(algorithm, payload, rate, run, pattern="constant", duration=None, is_scaling=False):
-    """Match generate_scenarios.py logic exactly"""
-    hash_suffix = compute_scenario_hash(algorithm, payload, rate, run, pattern, duration, is_scaling)
+def generate_base_experiment_id(algorithm, payload, rate, pattern="constant", duration=None, is_scaling=False):
+    """Generate base experiment ID (without run_index)"""
+    # Use run=1 for hash computation (consistent with generate_scenarios.py)
+    hash_suffix = compute_scenario_hash(algorithm, payload, rate, 1, pattern, duration, is_scaling)
     
     parts = [algorithm, f"p{payload}", f"r{rate}"]
     
@@ -243,7 +253,7 @@ def generate_scenario_id(algorithm, payload, rate, run, pattern="constant", dura
     if is_scaling:
         parts.append("scaling")
     
-    parts.append(f"run{run}")
+    # NO run_index suffix - this is the base experiment ID
     parts.append(hash_suffix)
     
     return "_".join(parts)
@@ -252,57 +262,72 @@ for exp in experiments:
     algorithm = exp["algorithm"]
     payload_sizes = exp.get("payload_sizes", [1024])
     rates = exp.get("rates", [500])
-    runs = exp.get("runs", defaults.get("runs", 5))
     pattern = exp.get("workload_pattern", "constant")
     duration = exp.get("duration_sec", defaults.get("duration_sec", 30))
     is_scaling = exp.get("scaling_experiment", False)
     
     for payload in payload_sizes:
         for rate in rates:
-            for run_index in range(1, runs + 1):
-                # Generate baseline scenario ID (replica=1)
-                scenario_id = generate_scenario_id(algorithm, payload, rate, run_index, pattern, duration, is_scaling)
-                expected_scenario_ids.add(scenario_id)
-                
-                # For Minikube/GCP, also expect scaling experiments (replicas 2,4,8)
-                if env_name != "native" and is_scaling:
-                    for replica_count in scaling_replicas:
-                        scaling_id = f"{scenario_id}_r{replica_count}"
-                        expected_scenario_ids.add(scaling_id)
+            # Generate base experiment ID (without run_index)
+            # This represents one experiment that handles multiple runs internally
+            base_experiment_id = generate_base_experiment_id(algorithm, payload, rate, pattern, duration, is_scaling)
+            expected_experiment_ids.add(base_experiment_id)
+            
+            # For Minikube/GCP, also expect scaling experiments (replicas 2,4,8)
+            if env_name != "native" and is_scaling:
+                for replica_count in scaling_replicas:
+                    scaling_id = f"{base_experiment_id}_r{replica_count}"
+                    expected_experiment_ids.add(scaling_id)
 
-expected = len(expected_scenario_ids)
+expected = len(expected_experiment_ids)
 
-# Check actual results - only count expected scenarios
+# Check actual results - only count expected experiments
+# Note: Output directories use base experiment IDs (without run_index)
 completed = 0
 incomplete = 0
 extra_dirs = []
+
+def extract_base_id_from_directory(dir_name):
+    """Extract base experiment ID from directory name (remove _r<replicas> suffix if present)"""
+    # Remove replica suffix: _r2, _r4, _r8
+    base_id = re.sub(r'_r([0-9]+)$', '', dir_name)
+    return base_id
 
 if env_results_dir.exists():
     existing_dirs = [d for d in env_results_dir.iterdir() if d.is_dir()]
     
     for exp_dir in existing_dirs:
-        scenario_id = exp_dir.name
+        experiment_id = exp_dir.name
         
-        # Check if this is an expected scenario
-        if scenario_id in expected_scenario_ids:
+        # Extract base ID (remove replica suffix if present)
+        base_experiment_id = extract_base_id_from_directory(experiment_id)
+        
+        # Check if this is an expected experiment (with or without replica suffix)
+        if experiment_id in expected_experiment_ids or base_experiment_id in expected_experiment_ids:
+            # Check for completion - prioritize analysis outputs, but also accept raw data
+            # For multi-run experiments, check for aggregated stats or run-1 data
             raw_file = exp_dir / "raw" / "run.jsonl"
             merged_file = exp_dir / "merged" / "merged.jsonl"
             stats_file = exp_dir / "stats" / "summary.json"
+            aggregated_file = exp_dir / "aggregated_stats.json"
+            run1_raw = exp_dir / "run-1" / "raw" / "run.jsonl"
             
             # Check for completion - prioritize analysis outputs, but also accept raw data
             # (raw data alone indicates data collection is complete, even if analysis hasn't run)
             has_raw = raw_file.exists() and raw_file.stat().st_size > 0
             has_merged = merged_file.exists() and merged_file.stat().st_size > 0
             has_stats = stats_file.exists() and stats_file.stat().st_size > 0
+            has_aggregated = aggregated_file.exists() and aggregated_file.stat().st_size > 0
+            has_run1 = run1_raw.exists() and run1_raw.stat().st_size > 0
             
-            # Consider complete if has analysis outputs OR has raw data
-            if has_merged or has_stats or has_raw:
+            # Consider complete if has analysis outputs OR has raw data (single or multi-run)
+            if has_merged or has_stats or has_aggregated or has_raw or has_run1:
                 completed += 1
             else:
                 incomplete += 1
         else:
             # This is an extra/unexpected directory
-            extra_dirs.append(scenario_id)
+            extra_dirs.append(experiment_id)
 
 missing = max(0, expected - completed - incomplete)
 total_found = completed + incomplete
@@ -363,10 +388,12 @@ else
     OVERALL_PCT_PROGRESS=0
 fi
 
-echo "  Total Expected: $TOTAL_EXPECTED scenarios"
-echo "    - Native: $NATIVE_EXPECTED (baseline only, no scaling)"
-echo "    - Minikube: $MINIKUBE_EXPECTED ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
-echo "    - GCP: $GCP_EXPECTED ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
+echo "  Total Expected: $TOTAL_EXPECTED experiments"
+echo "    - Native: $NATIVE_EXPECTED experiments (baseline only, no scaling)"
+echo "    - Minikube: $MINIKUBE_EXPECTED experiments ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
+echo "    - GCP: $GCP_EXPECTED experiments ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
+echo ""
+echo "  Note: Each experiment handles multiple runs internally (5 runs per experiment)"
 echo ""
 
 # Check completion status if requested
@@ -446,8 +473,7 @@ PYEOF
     fi
     echo ""
 fi
-echo "    - GCP: $GCP_EXPECTED ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
-echo "  Total Completed: $TOTAL_COMPLETED ($OVERALL_PCT_COMPLETED%)"
+echo "  Total Completed: $TOTAL_COMPLETED experiments ($OVERALL_PCT_COMPLETED%)"
 if [[ $TOTAL_INCOMPLETE -gt 0 ]]; then
     echo "  Incomplete: $TOTAL_INCOMPLETE (started but not finished)"
 fi

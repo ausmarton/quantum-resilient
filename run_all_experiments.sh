@@ -269,6 +269,17 @@ cleanup_on_exit() {
 trap cleanup_on_exit INT TERM
 ORIGINAL_ARGS=("$@")
 
+# Extract base experiment ID (without run_index suffix)
+# Scenario IDs include "_run1", "_run2", etc., but we want base ID for output directories
+# Format: <algorithm>_p<payload>_r<rate>_run<N>_<hash> -> <algorithm>_p<payload>_r<rate>_<hash>
+# Handles patterns like burst, scaling, duration suffixes
+extract_base_experiment_id() {
+    local scenario_id=$1
+    # Remove _run<N> pattern (where N is 1-9 or 10+)
+    # Pattern: _run followed by digits, then _hash
+    echo "$scenario_id" | sed -E 's/_run[0-9]+(_[a-f0-9]{8})$/\1/' || echo "$scenario_id"
+}
+
 # Run single experiment with retries
 run_experiment() {
     local env=$1
@@ -276,6 +287,7 @@ run_experiment() {
     local scenario_id=$3
     local output_dir=$4
     local replicas=${5:-1}
+    local total_runs=${6:-5}  # Default to 5 runs if not provided
     local retries=0
     
     while [[ $retries -le $MAX_RETRIES ]]; do
@@ -313,6 +325,21 @@ run_experiment() {
                 "$SCRIPT_DIR/run_local.sh" "${RUN_ARGS[@]}" 2>&1 || exit_code=$?
                 ;;
             minikube)
+                # Minikube now handles multiple runs internally via --runs parameter
+                # The scenario_path passed here is always for run-1 due to filtering above
+                # Each run still creates a separate Kubernetes Job, maintaining isolation
+                # Runs execute sequentially (one job completes before next starts), matching native behavior
+                
+                # Determine number of runs (5 for full-scale, 1 for smoke-test)
+                local runs_param=""
+                if [[ "$SMOKE_TEST" == "true" ]]; then
+                    runs_param="--runs 1"
+                else
+                    # Get total_runs from function parameter (6th argument)
+                    local total_runs_from_param="${total_runs:-5}"
+                    runs_param="--runs $total_runs_from_param"
+                fi
+                
                 # Minikube supports conditional parallelism (limited to prevent overutilization)
                 # Check if parallelism is enabled and if we should use it
                 if [[ "${MINIKUBE_USE_PARALLELISM:-false}" == "true" ]]; then
@@ -327,6 +354,8 @@ run_experiment() {
                         MINIKUBE_NAMESPACE="default"
                         
                         # Submit job using unified function (non-blocking)
+                        # Note: Parallel mode doesn't support --runs yet (would need multiple job submissions)
+                        # For now, parallel mode runs single runs only
                         JOB_NAME=$(submit_k8s_job \
                             "minikube" \
                             "$scenario_path" \
@@ -348,7 +377,7 @@ run_experiment() {
                         fi
                     fi
                 else
-                    # Sequential mode: Run experiment and wait for completion
+                    # Sequential mode: Run experiment with --runs parameter and wait for completion
                     # Use --quiet flag to suppress verbose output, allowing progress updates to show
                     # Errors are still logged by run_minikube.sh internally
                     # Redirect stderr to capture errors but allow stdout for job name capture
@@ -357,6 +386,7 @@ run_experiment() {
                         --out "$output_dir" \
                         --replicas "$replicas" \
                         --exp-id "$scenario_id" \
+                        $runs_param \
                         --quiet \
                         $([ "$SMOKE_TEST" == "true" ] && echo "--smoke-test" || echo "") >/dev/null 2>/tmp/minikube_${scenario_id}.log; then
                         exit_code=0
@@ -373,6 +403,21 @@ run_experiment() {
                 fi
                 ;;
             gcp)
+                # GCP now handles multiple runs internally via --runs parameter
+                # The scenario_path passed here is always for run-1 due to filtering above
+                # Each run still creates a separate Kubernetes Job, maintaining isolation
+                # Runs execute sequentially (one job completes before next starts), matching native behavior
+                
+                # Determine number of runs (5 for full-scale, 1 for smoke-test)
+                local runs_param=""
+                if [[ "$SMOKE_TEST" == "true" ]]; then
+                    runs_param="--runs 1"
+                else
+                    # Get total_runs from function parameter (6th argument)
+                    local total_runs_from_param="${total_runs:-5}"
+                    runs_param="--runs $total_runs_from_param"
+                fi
+                
                 # Unified execution: Always use Kubernetes Job submission
                 # For persistent cluster mode: Submit ALL jobs at once, let Kubernetes scheduler handle parallelism
                 # For ephemeral mode: Use deploy_gcp.sh (creates/destroys cluster per experiment)
@@ -380,6 +425,8 @@ run_experiment() {
                 if [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
                     # Persistent cluster mode: Submit all jobs immediately (non-blocking)
                     # Kubernetes scheduler will determine parallelism based on available nodes
+                    # Note: Parallel mode doesn't support --runs yet (would need multiple job submissions)
+                    # For now, parallel mode runs single runs only
                     if [[ -z "${GCP_IMAGE_NAME:-}" ]]; then
                         # Get image name if not set
                         IMAGE_REPO="${REGION}-docker.pkg.dev/${PROJECT}/pqc"
@@ -428,7 +475,7 @@ run_experiment() {
                         exit_code=0
                     fi
                 else
-                    # Ephemeral mode: use deploy_gcp.sh (for single experiments or when cluster doesn't exist)
+                    # Ephemeral mode: use deploy_gcp.sh with --runs parameter
                     GCP_ARGS=(
                         --scenario "$scenario_path"
                         --exp-id "$run_scenario_id"
@@ -436,6 +483,7 @@ run_experiment() {
                         --bucket "$BUCKET"
                         --region "$REGION"
                         --replicas "$replicas"
+                        $runs_param
                         --ephemeral
                     )
                     [ "$SMOKE_TEST" == "true" ] && GCP_ARGS+=(--smoke-test)
@@ -896,13 +944,15 @@ for s in manifest['scenarios']:
     is_scaling = s.get('scaling_experiment', False)
     run_index = s.get('run_index', 1)
     
-    if env == 'native':
-        # Native: Only count run-1 scenarios (others handled by --runs parameter)
+    if env == 'native' or env == 'minikube' or env == 'gcp':
+        # For native, minikube, and GCP: Only count run-1 scenarios (others handled by --runs parameter)
         # Group by configuration to avoid counting duplicates
+        # Each experiment invocation handles multiple runs internally, maintaining isolation
         if run_index == 1:
             config_key = (s['algorithm'], s['payload_size'], s['rate'], is_scaling)
             if config_key not in seen_configs:
                 seen_configs.add(config_key)
+                # Count as one experiment (the --runs parameter handles multiple runs internally)
                 total_experiments += 1
     elif is_scaling:
         # Scaling experiments run with all replicas (1, 2, 4, 8)
@@ -1767,15 +1817,17 @@ if manifest['scenarios']:
     # This groups multiple runs into single experiments, reducing 468 scenarios to ~94 experiments
     PYTHON_CMD=$(get_python_cmd)
     MANIFEST_REL=$(to_relative_path "$GENERATED_SCENARIOS_DIR/manifest.json")
-    if [[ "$env" == "native" ]]; then
-        # For native: Only process run-1 scenarios (will run with --runs 5)
+    if [[ "$env" == "native" ]] || [[ "$env" == "minikube" ]] || [[ "$env" == "gcp" ]]; then
+        # For native, minikube, and GCP: Only process run-1 scenarios (will run with --runs parameter)
+        # This groups multiple runs into single experiments, reducing overhead while maintaining isolation
+        # Each run still creates a separate Kubernetes Job (for minikube/GCP) or process execution (for native)
         scenarios=$($PYTHON_CMD -c "
 import json
 with open('$MANIFEST_REL') as f:
     manifest = json.load(f)
 seen_configs = set()
 for s in manifest['scenarios']:
-    # Only process run-1 scenarios for native (others will be handled by --runs parameter)
+    # Only process run-1 scenarios (others will be handled by --runs parameter)
     run_index = s.get('run_index', 1)
     if run_index == 1:
         # Create unique config key to avoid duplicates
@@ -1783,7 +1835,8 @@ for s in manifest['scenarios']:
         if config_key not in seen_configs:
             seen_configs.add(config_key)
             scaling = s.get('scaling_experiment', False)
-            print(f\"{s['id']}|{s['path']}|{s['algorithm']}|{s['payload_size']}|{s['rate']}|{scaling}\")
+            total_runs = s.get('total_runs', 1)
+            print(f\"{s['id']}|{s['path']}|{s['algorithm']}|{s['payload_size']}|{s['rate']}|{scaling}|{total_runs}\")
 ")
     else
         # For other environments: Process all scenarios as before
@@ -1793,11 +1846,12 @@ with open('$MANIFEST_REL') as f:
     manifest = json.load(f)
 for s in manifest['scenarios']:
     scaling = s.get('scaling_experiment', False)
-    print(f\"{s['id']}|{s['path']}|{s['algorithm']}|{s['payload_size']}|{s['rate']}|{scaling}\")
+    total_runs = s.get('total_runs', 1)
+    print(f\"{s['id']}|{s['path']}|{s['algorithm']}|{s['payload_size']}|{s['rate']}|{scaling}|{total_runs}\")
 ")
     fi
     
-    while IFS='|' read -r scenario_id scenario_path algorithm payload rate is_scaling; do
+    while IFS='|' read -r scenario_id scenario_path algorithm payload rate is_scaling total_runs; do
         scenario_count=$((scenario_count + 1))
         
         # Iterate over replica counts
@@ -1819,12 +1873,16 @@ for s in manifest['scenarios']:
             fi
             
             # Generate unique output dir and ID for scaling experiments
+            # Use base experiment ID (without run_index) for output directory
+            # This ensures consistency: one experiment directory = multiple runs internally
+            base_experiment_id=$(extract_base_experiment_id "$scenario_id")
+            
             if [[ "$replica_count" -gt 1 ]]; then
-                output_dir="$RESULTS_BASE/$env/${scenario_id}_r${replica_count}"
-                run_scenario_id="${scenario_id}_r${replica_count}"
+                output_dir="$RESULTS_BASE/$env/${base_experiment_id}_r${replica_count}"
+                run_scenario_id="${base_experiment_id}_r${replica_count}"
             else
-                output_dir="$RESULTS_BASE/$env/$scenario_id"
-                run_scenario_id="$scenario_id"
+                output_dir="$RESULTS_BASE/$env/$base_experiment_id"
+                run_scenario_id="$base_experiment_id"
             fi
             
             # Increment experiment count (not scenario count) for progress tracking
@@ -1842,10 +1900,20 @@ for s in manifest['scenarios']:
             # When --skip-analysis is used, only raw data exists
             # When analysis is enabled, check for merged/stats files
             # For GCP: also check GCS bucket for existing results
+            # Note: For experiments with multiple runs, check for aggregated stats or any run data
             is_complete=false
             raw_file="$output_dir/raw/run.jsonl"
             stats_file="$output_dir/stats/summary.json"
             merged_file="$output_dir/merged/merged.jsonl"
+            aggregated_file="$output_dir/aggregated_stats.json"
+            
+            # For multi-run experiments, also check for run-1/raw/run.jsonl (indicates runs were executed)
+            if [[ "$total_runs" -gt 1 ]] && [[ -f "$output_dir/run-1/raw/run.jsonl" ]]; then
+                # Multi-run experiment: check if all runs completed or aggregated stats exist
+                if [[ -f "$aggregated_file" ]] || [[ -f "$stats_file" ]]; then
+                    is_complete=true
+                fi
+            fi
             
             # For GCP: check GCS bucket first (results are stored there, not locally)
             # BUCKET is set as a parameter and should be available in this scope
@@ -1868,7 +1936,12 @@ for s in manifest['scenarios']:
             if [[ "$is_complete" != "true" ]]; then
                 if [[ "$SKIP_ANALYSIS" == "true" ]]; then
                     # In data collection mode: check for raw data
-                    if [[ -f "$raw_file" ]] && [[ -s "$raw_file" ]]; then
+                    # For multi-run experiments, check for aggregated stats or any run data
+                    if [[ "$total_runs" -gt 1 ]]; then
+                        if [[ -f "$aggregated_file" ]] || [[ -f "$output_dir/run-1/raw/run.jsonl" ]]; then
+                            is_complete=true
+                        fi
+                    elif [[ -f "$raw_file" ]] && [[ -s "$raw_file" ]]; then
                         is_complete=true
                     fi
                 else
@@ -1877,8 +1950,16 @@ for s in manifest['scenarios']:
                         is_complete=true
                     elif [[ -f "$merged_file" ]] && [[ -s "$merged_file" ]]; then
                         is_complete=true
+                    elif [[ -f "$aggregated_file" ]]; then
+                        # Aggregated stats exist (multi-run experiment completed)
+                        is_complete=true
+                    elif [[ "$total_runs" -gt 1 ]] && [[ -f "$output_dir/run-1/raw/run.jsonl" ]]; then
+                        # Multi-run experiment: raw data exists but analysis hasn't run
+                        log_info "  Found raw data for $run_scenario_id (multi-run experiment), skipping benchmark run, will complete analysis only"
+                        # Mark that we need to run analysis only (don't mark as complete yet)
+                        # We'll handle this after the check block
                     elif [[ -f "$raw_file" ]] && [[ -s "$raw_file" ]]; then
-                        # Raw data exists but analysis hasn't run - skip benchmark, run analysis only
+                        # Single-run experiment: raw data exists but analysis hasn't run
                         log_info "  Found raw data for $run_scenario_id, skipping benchmark run, will complete analysis only"
                         # Mark that we need to run analysis only (don't mark as complete yet)
                         # We'll handle this after the check block
@@ -1955,7 +2036,8 @@ for s in manifest['scenarios']:
             # For other environments: jobs run sequentially
             update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id"
             
-            if run_experiment "$env" "$scenario_path" "$run_scenario_id" "$output_dir" "$replica_count"; then
+            # Pass total_runs to run_experiment function (defaults to 5 if not set)
+            if run_experiment "$env" "$scenario_path" "$run_scenario_id" "$output_dir" "$replica_count" "${total_runs:-5}"; then
                 # Validate data integrity immediately after collection
                 # NOTE: For GCP persistent cluster mode and Minikube parallel mode, skip this check - validation happens later
                 if [[ "$env" == "gcp" ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]]; then
@@ -1968,38 +2050,64 @@ for s in manifest['scenarios']:
                     log_info "  Submitted: $run_scenario_id (will be validated after job completion)"
                 else
                     # For sequential jobs or non-GCP, check immediately
-                    raw_file="$output_dir/raw/run.jsonl"
-                    if [[ -f "$raw_file" ]]; then
-                    file_size=$(stat -f%z "$raw_file" 2>/dev/null || stat -c%s "$raw_file" 2>/dev/null || echo 0)
-                    if [[ $file_size -eq 0 ]]; then
-                        log_error "  Data integrity check FAILED: $run_scenario_id has 0-byte file!"
-                        log_error "  This experiment will be marked as failed and can be retried"
-                        add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
-                        env_failed=$((env_failed + 1))
-                        FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
-                        # Remove empty file so it can be retried
-                        rm -f "$raw_file"
-                        continue
-                    else
-                        line_count=$(wc -l < "$raw_file" 2>/dev/null || echo 0)
-                        if [[ $line_count -eq 0 ]]; then
-                            log_error "  Data integrity check FAILED: $run_scenario_id has no JSONL lines!"
-                            log_error "  File size: $file_size bytes, but no lines found"
+                    # For multi-run experiments, check for aggregated stats or run-1 data
+                    if [[ "$total_runs" -gt 1 ]]; then
+                        # Multi-run experiment: check for aggregated stats or first run data
+                        if [[ -f "$output_dir/aggregated_stats.json" ]]; then
+                            log_success "  Completed: $run_scenario_id (replicas: $replica_count) - multi-run experiment with aggregated stats"
+                        elif [[ -f "$output_dir/run-1/raw/run.jsonl" ]]; then
+                            file_size=$(stat -f%z "$output_dir/run-1/raw/run.jsonl" 2>/dev/null || stat -c%s "$output_dir/run-1/raw/run.jsonl" 2>/dev/null || echo 0)
+                            if [[ $file_size -gt 0 ]]; then
+                                log_success "  Completed: $run_scenario_id (replicas: $replica_count) - multi-run experiment, $file_size bytes in run-1"
+                            else
+                                log_error "  Data integrity check FAILED: $run_scenario_id has 0-byte file in run-1!"
+                                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                                env_failed=$((env_failed + 1))
+                                FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
+                                continue
+                            fi
+                        else
+                            log_error "  Data integrity check FAILED: $run_scenario_id - no data found for multi-run experiment!"
                             add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
                             env_failed=$((env_failed + 1))
                             FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
-                            rm -f "$raw_file"
                             continue
                         fi
-                        log_success "  Completed: $run_scenario_id (replicas: $replica_count) - $file_size bytes, $line_count events"
+                    else
+                        # Single-run experiment: check for raw file
+                        raw_file="$output_dir/raw/run.jsonl"
+                        if [[ -f "$raw_file" ]]; then
+                            file_size=$(stat -f%z "$raw_file" 2>/dev/null || stat -c%s "$raw_file" 2>/dev/null || echo 0)
+                            if [[ $file_size -eq 0 ]]; then
+                                log_error "  Data integrity check FAILED: $run_scenario_id has 0-byte file!"
+                                log_error "  This experiment will be marked as failed and can be retried"
+                                add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                                env_failed=$((env_failed + 1))
+                                FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
+                                # Remove empty file so it can be retried
+                                rm -f "$raw_file"
+                                continue
+                            else
+                                line_count=$(wc -l < "$raw_file" 2>/dev/null || echo 0)
+                                if [[ $line_count -eq 0 ]]; then
+                                    log_error "  Data integrity check FAILED: $run_scenario_id has no JSONL lines!"
+                                    log_error "  File size: $file_size bytes, but no lines found"
+                                    add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                                    env_failed=$((env_failed + 1))
+                                    FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
+                                    rm -f "$raw_file"
+                                    continue
+                                fi
+                                log_success "  Completed: $run_scenario_id (replicas: $replica_count) - $file_size bytes, $line_count events"
+                            fi
+                        else
+                            log_error "  Data integrity check FAILED: $run_scenario_id - raw file not found!"
+                            add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
+                            env_failed=$((env_failed + 1))
+                            FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
+                            continue
+                        fi
                     fi
-                else
-                    log_error "  Data integrity check FAILED: $run_scenario_id - raw file not found!"
-                    add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "failed" "$replica_count"
-                    env_failed=$((env_failed + 1))
-                    FAILED_SCENARIOS=$((FAILED_SCENARIOS + 1))
-                    continue
-                fi
                 
                     add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "success" "$replica_count"
                     env_completed=$((env_completed + 1))
@@ -2053,7 +2161,8 @@ for s in manifest['scenarios']:
                 base_scenario_id="${scenario_id%_r*}"
             fi
             
-            # Parse base scenario_id: <algorithm>_p<payload>_r<rate>_run<N>_<hash>
+            # Parse base scenario_id: <algorithm>_p<payload>_r<rate>_<hash> (base experiment ID)
+            # Note: Output directories now use base IDs without run_index
             if [[ "$base_scenario_id" =~ ^([^_]+)_p([0-9]+)_r([0-9]+)_ ]]; then
                 algorithm="${BASH_REMATCH[1]}"
                 payload="${BASH_REMATCH[2]}"
@@ -2161,7 +2270,8 @@ for s in manifest['scenarios']:
                     base_scenario_id="${scenario_id%_r*}"
                 fi
                 
-                # Parse base scenario_id: <algorithm>_p<payload>_r<rate>_run<N>_<hash>
+                # Parse base scenario_id: <algorithm>_p<payload>_r<rate>_<hash> (base experiment ID)
+                # Note: Output directories now use base IDs without run_index
                 if [[ "$base_scenario_id" =~ ^([^_]+)_p([0-9]+)_r([0-9]+)_ ]]; then
                     algorithm="${BASH_REMATCH[1]}"
                     payload="${BASH_REMATCH[2]}"
