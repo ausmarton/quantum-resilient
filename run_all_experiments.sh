@@ -300,10 +300,14 @@ run_experiment() {
                 # This groups multiple runs into single experiments, reducing 468 scenarios to ~94 experiments
                 # Scenario extraction already filters to run-1 scenarios for native environment
                 
-                # Determine number of runs (5 for full-scale, 1 for smoke-test)
-                RUNS_COUNT=5
+                # Determine number of runs (use total_runs parameter, default to 5 for full-scale, 1 for smoke-test)
+                local runs_param=""
                 if [[ "$SMOKE_TEST" == "true" ]]; then
-                    RUNS_COUNT=1
+                    runs_param="--runs 1"
+                else
+                    # Get total_runs from function parameter (6th argument)
+                    local total_runs_from_param="${total_runs:-5}"
+                    runs_param="--runs $total_runs_from_param"
                 fi
                 
                 # Extract seed from scenario file if available
@@ -317,7 +321,7 @@ run_experiment() {
                     --scenario "$scenario_path"
                     --out "$output_dir"
                     --duration 30
-                    --runs "$RUNS_COUNT"
+                    $runs_param
                 )
                 [[ -n "$SCENARIO_SEED" ]] && RUN_ARGS+=(--seed "$SCENARIO_SEED")
                 [[ "$SMOKE_TEST" == "true" ]] && RUN_ARGS+=(--smoke-test)
@@ -952,8 +956,15 @@ for s in manifest['scenarios']:
             config_key = (s['algorithm'], s['payload_size'], s['rate'], is_scaling)
             if config_key not in seen_configs:
                 seen_configs.add(config_key)
-                # Count as one experiment (the --runs parameter handles multiple runs internally)
-                total_experiments += 1
+                # Count experiments accounting for replicas
+                # Baseline experiments: 1 replica each
+                # Scaling experiments: multiple replicas (1, 2, 4, 8) = 4 experiments each
+                if is_scaling:
+                    # Scaling experiments run with all replicas
+                    total_experiments += len(replicas)
+                else:
+                    # Baseline experiments run with replica 1 only
+                    total_experiments += 1
     elif is_scaling:
         # Scaling experiments run with all replicas (1, 2, 4, 8)
         total_experiments += len(replicas)

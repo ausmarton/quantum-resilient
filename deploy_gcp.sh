@@ -886,13 +886,40 @@ if [[ "$SKIP_JOB" == "true" ]]; then
     exit 0
 fi
 
-log_step "Step 5/8: Deploying Kubernetes resources"
+# =============================================================================
+# Multi-Run Execution Loop
+# =============================================================================
+COMPLETED_RUNS=0
+FAILED_RUNS=0
+TOTAL_RUN_START=$(date +%s)
 
-# Use consistent namespace for all test types
-NAMESPACE="default"
+for ((RUN_INDEX = 1; RUN_INDEX <= RUNS; RUN_INDEX++)); do
+    if [[ $RUNS -gt 1 ]]; then
+        log_info ""
+        log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        log_info "RUN $RUN_INDEX/$RUNS"
+        log_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        RUN_EXP_ID="${EXP_ID}_run${RUN_INDEX}"
+        RUN_OUT_DIR="$SCRIPT_DIR/results/gcp/${EXP_ID}/run-${RUN_INDEX}"
+    else
+        RUN_EXP_ID="$EXP_ID"
+        RUN_OUT_DIR="$SCRIPT_DIR/results/gcp/${EXP_ID}"
+    fi
 
-# Clean up any existing job
-cleanup_job "$NAMESPACE"
+    # Compute seed for this run
+    if [[ -n "$SEED" ]]; then
+        RUN_SEED=$((SEED + RUN_INDEX - 1))
+    else
+        RUN_SEED=""
+    fi
+
+    log_step "Step 5/8: Deploying Kubernetes resources (Run $RUN_INDEX/$RUNS)"
+
+    # Use consistent namespace for all test types
+    NAMESPACE="default"
+
+    # Clean up any existing job
+    cleanup_job "$NAMESPACE"
 
 # Create scenario ConfigMap (with smoke-test overrides if needed)
 log_info "Creating scenario ConfigMap..."
@@ -956,17 +983,24 @@ kubectl create configmap pqc-scenario \
     --dry-run=client -o yaml | kubectl apply -f -
 rm -f "$TEMP_SCENARIO"
 
-# Create benchmark config ConfigMap
-log_info "Creating benchmark config ConfigMap..."
+# Create benchmark config ConfigMap with unique name per run to prevent overwrites
+# Use unique ConfigMap name to ensure each run has isolated configuration
+if [[ $RUNS -gt 1 ]]; then
+    CONFIGMAP_NAME="pqc-bench-config-run${RUN_INDEX}"
+else
+    CONFIGMAP_NAME="pqc-bench-config"
+fi
+
+log_info "Creating benchmark config ConfigMap: $CONFIGMAP_NAME"
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: pqc-bench-config
+  name: $CONFIGMAP_NAME
   namespace: $NAMESPACE
 data:
   bucket_name: "$BUCKET"
-  experiment_id: "$EXP_ID"
+  experiment_id: "$RUN_EXP_ID"
   git_commit: "$GIT_COMMIT"
   container_image: "$IMAGE_NAME"
   region: "$REGION"
@@ -1039,12 +1073,14 @@ fi
 # Apply worker job (with image placeholder replaced)
 # CRITICAL: Resource requests/limits MUST stay identical between smoke-test and full runs
 # Only ttlSecondsAfterFinished and namespace may differ
+# CRITICAL: Replace ConfigMap name to use unique name per run
 log_info "Deploying worker Job..."
 TEMP_JOB=$(mktemp)
 sed "s|PLACEHOLDER_IMAGE|$IMAGE_NAME|g" "$K8S_GCP_DIR/worker-job.yaml" | \
     sed "s|namespace: default|namespace: $NAMESPACE|g" | \
     sed "s|cloud.google.com/gke-nodepool: pqc-bench-pool|cloud.google.com/gke-nodepool: pqc-bench-pool|g" | \
-    sed "s|ttlSecondsAfterFinished: 7200|ttlSecondsAfterFinished: $([ "$SMOKE_TEST" == "true" ] && echo "300" || echo "7200")|g" > "$TEMP_JOB"
+    sed "s|ttlSecondsAfterFinished: 7200|ttlSecondsAfterFinished: $([ "$SMOKE_TEST" == "true" ] && echo "300" || echo "7200")|g" | \
+    sed "s|name: pqc-bench-config|name: $CONFIGMAP_NAME|g" > "$TEMP_JOB"
 
 kubectl apply -f "$TEMP_JOB"
 rm -f "$TEMP_JOB"
@@ -1157,8 +1193,8 @@ fi
 sleep 5
 
 # List artifacts
-log_info "Listing artifacts in gs://${BUCKET}/experiments/${EXP_ID}/"
-ARTIFACTS=$(gsutil ls "gs://${BUCKET}/experiments/${EXP_ID}/" 2>/dev/null || echo "")
+log_info "Listing artifacts in gs://${BUCKET}/experiments/${RUN_EXP_ID}/"
+ARTIFACTS=$(gsutil ls "gs://${BUCKET}/experiments/${RUN_EXP_ID}/" 2>/dev/null || echo "")
 
 if [[ -z "$ARTIFACTS" ]]; then
     log_error "No artifacts found in GCS!"
@@ -1198,26 +1234,26 @@ done
 # =============================================================================
 # Step 8: Download results locally (optional but recommended)
 # =============================================================================
-log_step "Step 8/8: Downloading results locally"
+log_step "Step 8/8: Downloading results locally (Run $RUN_INDEX/$RUNS)"
 
-LOCAL_OUTPUT_DIR="$SCRIPT_DIR/results/gcp/${EXP_ID}"
-log_info "Downloading results to: $LOCAL_OUTPUT_DIR"
+log_info "Downloading results to: $RUN_OUT_DIR"
 
 # Create output directory
-create_output_directories "$LOCAL_OUTPUT_DIR"
+create_output_directories "$RUN_OUT_DIR"
 
 # Use unified result retrieval function for raw data
-if ! download_results_from_gcs "$EXP_ID" "$BUCKET" "$LOCAL_OUTPUT_DIR"; then
-    log_error "Failed to download raw data from GCS"
-    exit 1
+if ! download_results_from_gcs "$RUN_EXP_ID" "$BUCKET" "$RUN_OUT_DIR"; then
+    log_error "Failed to download raw data from GCS for run $RUN_INDEX"
+    FAILED_RUNS=$((FAILED_RUNS + 1))
+    continue
 fi
 
 # Download additional metadata files (not included in download_results_from_gcs)
-gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/merged.jsonl" "$LOCAL_OUTPUT_DIR/merged/merged.jsonl" 2>/dev/null || log_warn "merged.jsonl not found"
-gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/manifest.json" "$LOCAL_OUTPUT_DIR/manifest.json" 2>/dev/null || log_warn "manifest.json not found"
-gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/provenance.json" "$LOCAL_OUTPUT_DIR/provenance.json" 2>/dev/null || log_warn "provenance.json not found"
-gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/cloud_metadata.json" "$LOCAL_OUTPUT_DIR/cloud_metadata.json" 2>/dev/null || log_warn "cloud_metadata.json not found"
-gsutil -q cp "gs://${BUCKET}/experiments/${EXP_ID}/summary.json" "$LOCAL_OUTPUT_DIR/stats/summary.json" 2>/dev/null || log_warn "summary.json not found"
+gsutil -q cp "gs://${BUCKET}/experiments/${RUN_EXP_ID}/merged.jsonl" "$RUN_OUT_DIR/merged/merged.jsonl" 2>/dev/null || log_warn "merged.jsonl not found"
+gsutil -q cp "gs://${BUCKET}/experiments/${RUN_EXP_ID}/manifest.json" "$RUN_OUT_DIR/manifest.json" 2>/dev/null || log_warn "manifest.json not found"
+gsutil -q cp "gs://${BUCKET}/experiments/${RUN_EXP_ID}/provenance.json" "$RUN_OUT_DIR/provenance.json" 2>/dev/null || log_warn "provenance.json not found"
+gsutil -q cp "gs://${BUCKET}/experiments/${RUN_EXP_ID}/cloud_metadata.json" "$RUN_OUT_DIR/cloud_metadata.json" 2>/dev/null || log_warn "cloud_metadata.json not found"
+gsutil -q cp "gs://${BUCKET}/experiments/${RUN_EXP_ID}/summary.json" "$RUN_OUT_DIR/stats/summary.json" 2>/dev/null || log_warn "summary.json not found"
 
 # Validate downloaded data integrity
 RAW_JSONL_FILE="$LOCAL_OUTPUT_DIR/raw/run.jsonl"
@@ -1260,10 +1296,45 @@ if [[ -f "$RAW_JSONL_FILE" ]]; then
     fi
 else
     log_error "Data integrity check failed: run.jsonl not found after download"
-    exit 1
+    FAILED_RUNS=$((FAILED_RUNS + 1))
+    continue
 fi
 
-log_success "Results downloaded and validated: $LOCAL_OUTPUT_DIR"
+log_success "Results downloaded and validated: $RUN_OUT_DIR"
+
+COMPLETED_RUNS=$((COMPLETED_RUNS + 1))
+
+# End of run loop
+done
+
+TOTAL_RUN_END=$(date +%s)
+TOTAL_ELAPSED=$((TOTAL_RUN_END - TOTAL_RUN_START))
+
+log_info ""
+log_info "Completed: $COMPLETED_RUNS/$RUNS runs"
+[[ $FAILED_RUNS -gt 0 ]] && log_warn "Failed: $FAILED_RUNS runs"
+
+# =============================================================================
+# Aggregation (for multiple runs)
+# =============================================================================
+if [[ $RUNS -gt 1 ]] && [[ "$SKIP_AGGREGATION" != "true" ]] && [[ $COMPLETED_RUNS -gt 0 ]]; then
+    log_step "Aggregating results across $COMPLETED_RUNS runs"
+    
+    AGGREGATE_OUT_DIR="$SCRIPT_DIR/results/gcp/${EXP_ID}"
+    
+    if [[ -f "${SCRIPT_DIR}/analysis/aggregate_runs.py" ]]; then
+        python3 "${SCRIPT_DIR}/analysis/aggregate_runs.py" \
+            --input "$AGGREGATE_OUT_DIR" \
+            --runs "$COMPLETED_RUNS" \
+            --output "$AGGREGATE_OUT_DIR" 2>&1 | while read -r line; do
+            log_info "  $line"
+        done || log_warn "Aggregation completed with warnings"
+        
+        log_success "Aggregation complete"
+    else
+        log_warn "aggregate_runs.py not found, skipping aggregation"
+    fi
+fi
 
 # =============================================================================
 # Step 8: Summary
@@ -1280,21 +1351,40 @@ echo "╚═══════════════════════�
 echo -e "${NC}"
 
 log_info "Experiment ID: $EXP_ID"
-log_info "Duration: ${ELAPSED}s"
+log_info "Runs: $COMPLETED_RUNS/$RUNS completed"
+[[ $FAILED_RUNS -gt 0 ]] && log_warn "Failed runs: $FAILED_RUNS"
+log_info "Duration: ${ELAPSED}s (total), ${TOTAL_ELAPSED}s (runs only)"
 echo ""
 
 log_info "Results location:"
-echo "  Local:  $LOCAL_OUTPUT_DIR"
-echo "  GCS:    gs://${BUCKET}/experiments/${EXP_ID}/"
+if [[ $RUNS -gt 1 ]]; then
+    echo "  Local:  $SCRIPT_DIR/results/gcp/${EXP_ID}/ (with run-1/, run-2/, etc. subdirectories)"
+    echo "  GCS:    gs://${BUCKET}/experiments/${EXP_ID}_run*/"
+else
+    echo "  Local:  $SCRIPT_DIR/results/gcp/${EXP_ID}/"
+    echo "  GCS:    gs://${BUCKET}/experiments/${EXP_ID}/"
+fi
 echo ""
 
 log_info "To analyze results:"
-echo "  python3 analysis/scripts/compute_statistics.py \\"
-echo "    --input $LOCAL_OUTPUT_DIR/merged/merged.jsonl \\"
-echo "    --output $LOCAL_OUTPUT_DIR/stats"
+if [[ $RUNS -gt 1 ]]; then
+    echo "  # Aggregated results (after aggregation):"
+    echo "  python3 analysis/scripts/compute_statistics.py \\"
+    echo "    --input $SCRIPT_DIR/results/gcp/${EXP_ID}/merged/merged.jsonl \\"
+    echo "    --output $SCRIPT_DIR/results/gcp/${EXP_ID}/stats"
+    echo ""
+    echo "  # Or analyze individual runs:"
+    echo "  python3 analysis/scripts/compute_statistics.py \\"
+    echo "    --input $SCRIPT_DIR/results/gcp/${EXP_ID}/run-1/merged/merged.jsonl \\"
+    echo "    --output $SCRIPT_DIR/results/gcp/${EXP_ID}/run-1/stats"
+else
+    echo "  python3 analysis/scripts/compute_statistics.py \\"
+    echo "    --input $SCRIPT_DIR/results/gcp/${EXP_ID}/merged/merged.jsonl \\"
+    echo "    --output $SCRIPT_DIR/results/gcp/${EXP_ID}/stats"
+fi
 echo ""
 echo "  python3 analysis/scripts/plot_latency.py \\"
-echo "    --input $LOCAL_OUTPUT_DIR/merged/merged.jsonl \\"
+echo "    --input $SCRIPT_DIR/results/gcp/${EXP_ID}/merged/merged.jsonl \\"
 echo "    --output $LOCAL_OUTPUT_DIR/figures"
 echo ""
 

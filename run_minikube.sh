@@ -462,6 +462,14 @@ else
     JSONL_OUT_PATH="/results/raw/run.jsonl"
 fi
 
+# Use unique ConfigMap name per run to prevent overwrites (for consistency with GCP)
+# Note: submit_k8s_job() creates its own ConfigMap, but we create this one for consistency
+if [[ $RUNS -gt 1 ]]; then
+    CONFIGMAP_NAME="pqc-bench-scenario-run${RUN_INDEX}"
+else
+    CONFIGMAP_NAME="pqc-bench-scenario"
+fi
+
 # Use unified ConfigMap creation function
 CONFIGMAP_NAME=$(create_scenario_configmap \
     "$SCENARIO" \

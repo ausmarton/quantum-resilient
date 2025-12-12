@@ -303,8 +303,10 @@ if [[ ! -f "$OUT_DIR/merged/merged.jsonl" ]]; then
         fi
         
         # Validate JSONL format
+        # Use Python's json module directly for more robust validation
+        # This handles long lines and special characters better than json.tool
         if [[ -n "$FIRST_LINE" ]]; then
-            if ! echo "$FIRST_LINE" | $PYTHON_CMD -m json.tool >/dev/null 2>&1; then
+            if ! $PYTHON_CMD -c "import json, sys; json.loads(sys.stdin.read())" <<< "$FIRST_LINE" >/dev/null 2>&1; then
                 log_error "Invalid file (not valid JSONL): $(basename "$jsonl_file")"
                 log_error "  First line: ${FIRST_LINE:0:80}..."
                 INVALID_COUNT=$((INVALID_COUNT + 1))
