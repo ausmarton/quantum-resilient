@@ -915,11 +915,11 @@ for ((RUN_INDEX = 1; RUN_INDEX <= RUNS; RUN_INDEX++)); do
 
     log_step "Step 5/8: Deploying Kubernetes resources (Run $RUN_INDEX/$RUNS)"
 
-    # Use consistent namespace for all test types
-    NAMESPACE="default"
+# Use consistent namespace for all test types
+NAMESPACE="default"
 
-    # Clean up any existing job
-    cleanup_job "$NAMESPACE"
+# Clean up any existing job
+cleanup_job "$NAMESPACE"
 
 # Create scenario ConfigMap (with smoke-test overrides if needed)
 log_info "Creating scenario ConfigMap..."
@@ -1362,14 +1362,14 @@ if [[ $RUNS -gt 1 ]]; then
     echo "  GCS:    gs://${BUCKET}/experiments/${EXP_ID}_run*/"
 else
     echo "  Local:  $SCRIPT_DIR/results/gcp/${EXP_ID}/"
-    echo "  GCS:    gs://${BUCKET}/experiments/${EXP_ID}/"
+echo "  GCS:    gs://${BUCKET}/experiments/${EXP_ID}/"
 fi
 echo ""
 
 log_info "To analyze results:"
 if [[ $RUNS -gt 1 ]]; then
     echo "  # Aggregated results (after aggregation):"
-    echo "  python3 analysis/scripts/compute_statistics.py \\"
+echo "  python3 analysis/scripts/compute_statistics.py \\"
     echo "    --input $SCRIPT_DIR/results/gcp/${EXP_ID}/merged/merged.jsonl \\"
     echo "    --output $SCRIPT_DIR/results/gcp/${EXP_ID}/stats"
     echo ""

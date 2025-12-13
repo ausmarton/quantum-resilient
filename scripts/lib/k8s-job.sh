@@ -605,12 +605,22 @@ submit_k8s_job() {
             return 1
         }
         
-        # Extract replica suffix if present (e.g., _r4, _r8)
+        # Extract replica suffix and run suffix separately
+        # Pattern: <base>_r<replicas>_run<run_num> or <base>_run<run_num>
         local replica_suffix=""
+        local run_suffix=""
         local base_exp_id="$exp_id"
-        if [[ "$exp_id" =~ _r([0-9]+)$ ]]; then
+        
+        # First, extract run suffix (e.g., _run1, _run2) if present
+        if [[ "$exp_id" =~ _run([0-9]+)$ ]]; then
+            run_suffix="_run${BASH_REMATCH[1]}"
+            base_exp_id="${exp_id%_run*}"
+        fi
+        
+        # Then, extract replica suffix (e.g., _r2, _r4, _r8) if present
+        if [[ "$base_exp_id" =~ _r([0-9]+)$ ]]; then
             replica_suffix="_r${BASH_REMATCH[1]}"
-            base_exp_id="${exp_id%_r*}"
+            base_exp_id="${base_exp_id%_r*}"
         else
             if [[ "$replicas" -gt 1 ]]; then
                 replica_suffix="_r${replicas}"
@@ -618,10 +628,15 @@ submit_k8s_job() {
         fi
         
         # Sanitize and truncate (Kubernetes job names max 63 chars)
-        # "pqc-bench-" is 10 chars, replica suffix is max 4 chars (_r8), so we have 49 chars for base ID
-        local sanitized_base=$(sanitize_k8s_name "$base_exp_id" | cut -c1-49)
-        local sanitized_suffix=$(sanitize_k8s_name "$replica_suffix" | sed 's/^_//')
-        job_name="pqc-bench-${sanitized_base}${sanitized_suffix}"
+        # "pqc-bench-" is 10 chars
+        # Replica suffix is max 4 chars (_r8)
+        # Run suffix is max 6 chars (_run9)
+        # So we have: 63 - 10 - 4 - 6 = 43 chars for base ID
+        # But to be safe and allow for edge cases, use 42 chars
+        local sanitized_base=$(sanitize_k8s_name "$base_exp_id" | cut -c1-42)
+        local sanitized_replica=$(sanitize_k8s_name "$replica_suffix" | sed 's/^_//')
+        local sanitized_run=$(sanitize_k8s_name "$run_suffix" | sed 's/^_//')
+        job_name="pqc-bench-${sanitized_base}${sanitized_replica}${sanitized_run}"
     fi
     
     # Determine JSONL output path (scaling mode uses different path)

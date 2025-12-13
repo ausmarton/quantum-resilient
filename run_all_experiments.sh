@@ -457,6 +457,7 @@ run_experiment() {
                     # Submit multiple jobs (one per run) to support multiple runs in parallel mode
                     # Each run gets a unique experiment ID with _run<N> suffix
                     # Check GCS for existing runs and only submit missing ones
+                    # CRITICAL: Each run must use its own scenario file (run-1, run-2, etc.)
                     export GCP_CLUSTER_NAME="$CLUSTER_NAME"
                     runs_submitted=0
                     runs_skipped=0
@@ -475,10 +476,24 @@ run_experiment() {
                             continue
                         fi
                         
+                        # Find the correct scenario file for this run (run-1, run-2, etc.)
+                        # scenario_path is for run-1, so we need to find the corresponding run-N scenario
+                        RUN_SCENARIO_PATH="$scenario_path"
+                        if [[ $num_runs -gt 1 ]] && [[ $run_idx -gt 1 ]]; then
+                            # Replace run-1 with run-<N> in the path
+                            RUN_SCENARIO_PATH=$(echo "$scenario_path" | sed "s|/run-1/|/run-${run_idx}/|")
+                            # Verify the scenario file exists
+                            if [[ ! -f "$RUN_SCENARIO_PATH" ]]; then
+                                log_error "  Scenario file not found for run $run_idx: $RUN_SCENARIO_PATH"
+                                exit_code=1
+                                continue
+                            fi
+                        fi
+                        
                         # Submit job immediately (non-blocking) - all jobs submitted, then wait for all at end
-                        log_info "  Submitting run $run_idx/$num_runs for $run_scenario_id (EXP_ID: $RUN_EXP_ID)"
+                        log_info "  Submitting run $run_idx/$num_runs for $run_scenario_id (EXP_ID: $RUN_EXP_ID, scenario: $(basename "$RUN_SCENARIO_PATH"))"
                         JOB_SUBMIT_OUTPUT=$("$SCRIPT_DIR/scripts/submit_gcp_job_parallel.sh" \
-                            --scenario "$scenario_path" \
+                            --scenario "$RUN_SCENARIO_PATH" \
                             --exp-id "$RUN_EXP_ID" \
                             --project "$PROJECT" \
                             --bucket "$BUCKET" \
@@ -1996,8 +2011,23 @@ for s in manifest['scenarios']:
                         fi
                     done
                     if [[ "$all_runs_in_gcs" == "true" ]]; then
-                        is_complete=true
-                        log_info "  Found all ${total_runs} runs in GCS for $run_scenario_id"
+                        # Check if all runs are also downloaded locally
+                        all_runs_local=true
+                        for ((run_idx = 1; run_idx <= total_runs; run_idx++)); do
+                            local_run_file="$output_dir/run-${run_idx}/raw/run.jsonl"
+                            if [[ ! -f "$local_run_file" ]] || [[ ! -s "$local_run_file" ]]; then
+                                all_runs_local=false
+                                break
+                            fi
+                        done
+                        if [[ "$all_runs_local" == "true" ]]; then
+                            is_complete=true
+                            log_info "  Found all ${total_runs} runs in GCS and locally for $run_scenario_id"
+                        else
+                            # Data exists in GCS but not locally - mark for download
+                            is_complete=false
+                            log_info "  Found all ${total_runs} runs in GCS for $run_scenario_id, but missing locally - will download"
+                        fi
                     fi
                 else
                     # Single-run or ephemeral mode: check base experiment path
@@ -2066,6 +2096,49 @@ for s in manifest['scenarios']:
                 add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
                 env_skipped=$((env_skipped + 1))
                 continue
+            elif [[ "$env" == "gcp" ]] && [[ -n "${BUCKET:-}" ]] && [[ "${GCP_USE_PERSISTENT_CLUSTER:-false}" == "true" ]] && [[ "$total_runs" -gt 1 ]]; then
+                # Check if data exists in GCS but not locally - download it
+                all_runs_in_gcs=true
+                missing_runs=()
+                for ((run_idx = 1; run_idx <= total_runs; run_idx++)); do
+                    RUN_GCS_PATH="gs://${BUCKET}/experiments/${run_scenario_id}_run${run_idx}"
+                    local_run_file="$output_dir/run-${run_idx}/raw/run.jsonl"
+                    if gsutil -q ls "$RUN_GCS_PATH/raw/run.jsonl" &>/dev/null 2>&1; then
+                        if [[ ! -f "$local_run_file" ]] || [[ ! -s "$local_run_file" ]]; then
+                            missing_runs+=("$run_idx")
+                        fi
+                    else
+                        all_runs_in_gcs=false
+                        break
+                    fi
+                done
+                
+                if [[ "$all_runs_in_gcs" == "true" ]] && [[ ${#missing_runs[@]} -gt 0 ]]; then
+                    # Download missing runs from GCS
+                    log_info "  Downloading ${#missing_runs[@]} missing run(s) from GCS for $run_scenario_id"
+                    mkdir -p "$output_dir"
+                    for run_idx in "${missing_runs[@]}"; do
+                        RUN_EXP_ID="${run_scenario_id}_run${run_idx}"
+                        run_output_dir="$output_dir/run-${run_idx}"
+                        mkdir -p "$run_output_dir"
+                        
+                        if "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
+                            --exp-id "$RUN_EXP_ID" \
+                            --bucket "$BUCKET" \
+                            --out "$run_output_dir" 2>&1; then
+                            log_success "  Downloaded run $run_idx/$total_runs for $run_scenario_id"
+                        else
+                            log_error "  Failed to download run $run_idx/$total_runs for $run_scenario_id"
+                        fi
+                    done
+                    
+                    # Mark as complete after download
+                    env_completed=$((env_completed + 1))
+                    update_progress $env_completed $ENV_TOTAL_EXPERIMENTS "$env" "$run_scenario_id (downloaded from GCS)"
+                    add_to_index "$run_scenario_id" "$env" "$algorithm" "$payload" "$rate" "$output_dir" "cached" "$replica_count"
+                    env_skipped=$((env_skipped + 1))
+                    continue
+                fi
             elif [[ -d "$output_dir" ]]; then
                 # Directory exists but incomplete - might be partial data
                 if [[ -f "$raw_file" ]] && [[ ! -s "$raw_file" ]]; then
@@ -2269,12 +2342,21 @@ for s in manifest['scenarios']:
             # Wait for job to complete using unified function
             if wait_for_job "$job_name" "$GCP_NAMESPACE" "900s" "false"; then
                 # Job completed successfully, download results
+                # Extract run number from scenario_id (format: <base_id>_run<N>)
+                # For multi-run experiments, download to run-<N>/ subdirectory
+                run_output_dir="$output_dir"
+                if [[ "$scenario_id" =~ _run([0-9]+)(_[a-f0-9]{8})?$ ]]; then
+                    run_index="${BASH_REMATCH[1]}"
+                    run_output_dir="$output_dir/run-${run_index}"
+                    mkdir -p "$run_output_dir"
+                fi
+                
                 if "$SCRIPT_DIR/fetch_and_analyse_from_gcs.sh" \
                     --exp-id "$scenario_id" \
                     --bucket "$BUCKET" \
-                    --out "$output_dir" 2>&1; then
+                    --out "$run_output_dir" 2>&1; then
                     # Validate data integrity after download
-                    raw_file="$output_dir/raw/run.jsonl"
+                    raw_file="$run_output_dir/raw/run.jsonl"
                     if [[ -f "$raw_file" ]]; then
                         file_size=$(stat -f%z "$raw_file" 2>/dev/null || stat -c%s "$raw_file" 2>/dev/null || echo 0)
                         if [[ $file_size -gt 0 ]]; then

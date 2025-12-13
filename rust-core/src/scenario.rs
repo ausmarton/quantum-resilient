@@ -256,7 +256,7 @@ impl Scenario {
     pub fn requires_keypair(&self) -> bool {
         matches!(
             self.algorithm.operation.as_str(),
-            "kem_aead_encrypt" | "kem_aead_decrypt"
+            "kem_aead_encrypt" | "kem_aead_decrypt" | "kem_aead_sign"
         )
     }
 

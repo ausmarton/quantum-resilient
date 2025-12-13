@@ -100,8 +100,8 @@ echo ""
 # Calculate expected experiments from matrix
 # Note: We count experiments (unique configs), not scenarios (all runs)
 # Each experiment handles multiple runs internally via --runs parameter
-# Native has 94 experiments (no scaling), Minikube/GCP have 99 (94 baseline + 5 scaling)
-BASELINE_EXPECTED=$(python3 <<EOF
+# We need to separate non-scaling and scaling experiments to avoid double-counting
+read -r BASELINE_EXPECTED SCALING_BASE_COUNT <<< $(python3 <<EOF
 import yaml
 from pathlib import Path
 
@@ -111,15 +111,21 @@ with open(Path("$MATRIX")) as f:
 experiments = matrix.get('experiments', [])
 defaults = matrix.get('defaults', {})
 
-total = 0
+# Count ALL experiments (for native, includes scaling as single-replica)
+baseline_total = 0
+# Count only scaling experiments (base count, before multiplying by replicas)
+scaling_base = 0
+
 for exp in experiments:
     payload_sizes = exp.get('payload_sizes', [1024])
     rates = exp.get('rates', [500])
-    # Count unique configurations (algorithm/payload/rate combinations)
-    # Each experiment handles multiple runs internally, so we don't multiply by runs
-    total += len(payload_sizes) * len(rates)
+    count = len(payload_sizes) * len(rates)
+    baseline_total += count
+    
+    if exp.get('scaling_experiment', False):
+        scaling_base += count
 
-print(total)
+print(f"{baseline_total} {scaling_base}")
 EOF
 )
 
@@ -156,11 +162,14 @@ EOF
 
 # Expected counts per environment
 # Note: These are experiment counts (unique configs), not scenario counts (all runs)
-# Native: baseline only (no scaling)
-# Minikube/GCP: baseline + scaling experiments (with all replicas 1,2,4,8)
-NATIVE_EXPECTED=$BASELINE_EXPECTED  # 95 experiments (no scaling)
-MINIKUBE_EXPECTED=$((BASELINE_EXPECTED + SCALING_EXPECTED))  # 115 experiments (95 baseline + 20 scaling)
-GCP_EXPECTED=$((BASELINE_EXPECTED + SCALING_EXPECTED))  # 115 experiments (95 baseline + 20 scaling)
+# Native: all experiments (100 total, scaling run as single-replica)
+# Minikube/GCP: non-scaling + scaling with replicas (95 + 20 = 115)
+#   - Non-scaling: BASELINE_EXPECTED - SCALING_BASE_COUNT
+#   - Scaling: SCALING_EXPECTED (already includes all replicas)
+NATIVE_EXPECTED=$BASELINE_EXPECTED  # 100 experiments (includes scaling as single-replica)
+NON_SCALING_COUNT=$((BASELINE_EXPECTED - SCALING_BASE_COUNT))  # 95 non-scaling experiments
+MINIKUBE_EXPECTED=$((NON_SCALING_COUNT + SCALING_EXPECTED))  # 115 experiments (95 non-scaling + 20 scaling)
+GCP_EXPECTED=$((NON_SCALING_COUNT + SCALING_EXPECTED))  # 115 experiments (95 non-scaling + 20 scaling)
 
 # Calculate total expected across all environments
 TOTAL_EXPECTED=0
@@ -394,9 +403,9 @@ else
 fi
 
 echo "  Total Expected: $TOTAL_EXPECTED experiments"
-echo "    - Native: $NATIVE_EXPECTED experiments (baseline only, no scaling)"
-echo "    - Minikube: $MINIKUBE_EXPECTED experiments ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
-echo "    - GCP: $GCP_EXPECTED experiments ($BASELINE_EXPECTED baseline + $SCALING_EXPECTED scaling)"
+echo "    - Native: $NATIVE_EXPECTED experiments (all experiments, scaling run as single-replica)"
+echo "    - Minikube: $MINIKUBE_EXPECTED experiments ($NON_SCALING_COUNT non-scaling + $SCALING_EXPECTED scaling)"
+echo "    - GCP: $GCP_EXPECTED experiments ($NON_SCALING_COUNT non-scaling + $SCALING_EXPECTED scaling)"
 echo ""
 echo "  Note: Each experiment handles multiple runs internally (5 runs per experiment)"
 echo ""
