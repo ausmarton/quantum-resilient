@@ -14,8 +14,12 @@
 #   --dry-run              Show what would be removed without actually removing
 #   --error-only           Only remove experiments with errors (keep incomplete runs)
 #   --incomplete-only      Only remove experiments with insufficient runs (keep errors)
+#   --all-unusable         Remove ALL unusable data (errors + incomplete) [DEFAULT]
 #   --confirm              Require confirmation before removing (default: true)
 #   --force                Remove without confirmation (use with caution)
+#   --validate-first       Run validation script first to verify (default: true)
+#   --backup                Create backup before removing (default: false)
+#   --backup-dir DIR       Backup directory (default: results_backup_TIMESTAMP)
 # =============================================================================
 
 set -euo pipefail
@@ -26,8 +30,12 @@ ENV_FILTER=""
 DRY_RUN=false
 ERROR_ONLY=false
 INCOMPLETE_ONLY=false
+ALL_UNUSABLE=false  # Default behavior when no flags specified
 CONFIRM=true
 FORCE=false
+VALIDATE_FIRST=true
+BACKUP=false
+BACKUP_DIR=""
 
 # Colors
 RED='\033[0;31m'
@@ -70,14 +78,20 @@ OPTIONS:
     -h, --help             Show this help message
 
 EXAMPLES:
-    # Dry run to see what would be removed
+    # Dry run to see what would be removed (all unusable by default)
     ./scripts/remove_unusable_data.sh --env gcp --dry-run
 
-    # Remove only experiments with errors
-    ./scripts/remove_unusable_data.sh --env gcp --error-only
+    # Remove only experiments with errors (with backup)
+    ./scripts/remove_unusable_data.sh --env gcp --error-only --backup
 
-    # Remove all unusable data (errors + incomplete)
-    ./scripts/remove_unusable_data.sh --env gcp --force
+    # Remove only incomplete experiments
+    ./scripts/remove_unusable_data.sh --env gcp --incomplete-only --backup
+
+    # Remove ALL unusable data (errors + incomplete) - DEFAULT behavior
+    ./scripts/remove_unusable_data.sh --env gcp --all-unusable --backup
+
+    # Remove without validation (use with caution)
+    ./scripts/remove_unusable_data.sh --env gcp --no-validate --force
 EOF
     exit 1
 }
@@ -98,10 +112,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         --error-only)
             ERROR_ONLY=true
+            ALL_UNUSABLE=false
             shift
             ;;
         --incomplete-only)
             INCOMPLETE_ONLY=true
+            ALL_UNUSABLE=false
+            shift
+            ;;
+        --all-unusable)
+            ALL_UNUSABLE=true
+            ERROR_ONLY=false
+            INCOMPLETE_ONLY=false
             shift
             ;;
         --confirm)
@@ -112,6 +134,22 @@ while [[ $# -gt 0 ]]; do
             FORCE=true
             CONFIRM=false
             shift
+            ;;
+        --validate-first)
+            VALIDATE_FIRST=true
+            shift
+            ;;
+        --no-validate)
+            VALIDATE_FIRST=false
+            shift
+            ;;
+        --backup)
+            BACKUP=true
+            shift
+            ;;
+        --backup-dir)
+            BACKUP_DIR="$2"
+            shift 2
             ;;
         -h|--help)
             usage
@@ -202,22 +240,23 @@ def find_unusable_experiments(results_dir: Path, env_filter: str = "",
             pass
     
     # Identify unusable experiments
+    # Determine expected runs: 5 for baseline, 3 for scaling (matching validation script)
+    expected_runs_baseline = 5
+    expected_runs_scaling = 3
+    
     for exp_name, data in experiments.items():
         reasons = []
+        is_scaling = "scaling" in exp_name.lower()
+        expected_runs = expected_runs_scaling if is_scaling else expected_runs_baseline
+        run_count = len(data["runs"])
         
         # Check for errors
         if data["has_errors"] and not incomplete_only:
             reasons.append(f"Has errors: {dict(data['error_types'])}")
         
-        # Check for insufficient runs
-        run_count = len(data["runs"])
-        if run_count < 3 and not error_only:
-            reasons.append(f"Insufficient runs: {run_count} (need at least 3)")
-        elif run_count < 5 and not error_only:
-            # Check if this is a scaling experiment (3 runs expected) or regular (5 runs expected)
-            # For now, flag anything with < 5 runs as potentially incomplete
-            if "scaling" not in exp_name.lower():
-                reasons.append(f"Incomplete runs: {run_count} (expected 5)")
+        # Check for insufficient runs (matching validation script logic)
+        if run_count < expected_runs and not error_only:
+            reasons.append(f"Insufficient runs: {run_count}/{expected_runs} (missing {expected_runs - run_count})")
         
         if reasons:
             unusable.append({
@@ -265,12 +304,68 @@ if __name__ == "__main__":
 PYTHON_EOF
 )
 
+# Safety: Validate first if requested
+if [[ "$VALIDATE_FIRST" == "true" ]] && [[ "$DRY_RUN" != "true" ]]; then
+    log_info "Running validation first to ensure data integrity..."
+    VALIDATION_SCRIPT="$SCRIPT_DIR/scripts/validate_dissertation_data.sh"
+    
+    if [[ ! -f "$VALIDATION_SCRIPT" ]]; then
+        log_error "Validation script not found: $VALIDATION_SCRIPT"
+        exit 1
+    fi
+    
+    # Run validation and capture output
+    VALIDATION_OUTPUT=$(mktemp)
+    if bash "$VALIDATION_SCRIPT" \
+        --results-dir "$RESULTS_DIR" \
+        --env "$ENV_FILTER" \
+        --output "$VALIDATION_OUTPUT" 2>&1; then
+        log_success "Validation completed successfully"
+        
+        # Check if validation found issues
+        VALIDATION_FIT=$(python3 -c "
+import json
+try:
+    with open('$VALIDATION_OUTPUT') as f:
+        data = json.load(f)
+    print('YES' if data.get('summary', {}).get('fit_for_purpose', False) else 'NO')
+except:
+    print('UNKNOWN')
+" 2>/dev/null || echo "UNKNOWN")
+        
+        if [[ "$VALIDATION_FIT" == "NO" ]]; then
+            log_warn "Validation found issues - proceeding with removal of unusable data"
+        elif [[ "$VALIDATION_FIT" == "YES" ]]; then
+            log_warn "Validation shows data is fit for purpose - are you sure you want to remove data?"
+            if [[ "$FORCE" != "true" ]]; then
+                read -p "Continue anyway? [y/N] " -n 1 -r
+                echo ""
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    log_info "Removal cancelled"
+                    rm -f "$VALIDATION_OUTPUT" 2>/dev/null || true
+                    exit 0
+                fi
+            fi
+        fi
+    else
+        log_error "Validation failed - aborting removal for safety"
+        rm -f "$VALIDATION_OUTPUT" 2>/dev/null || true
+        exit 1
+    fi
+    rm -f "$VALIDATION_OUTPUT" 2>/dev/null || true
+fi
+
 # Find unusable experiments
 log_info "Identifying unusable experiments..."
 
 TMP_SCRIPT=$(mktemp)
 TMP_OUTPUT=$(mktemp)
 echo "$PYTHON_SCRIPT" > "$TMP_SCRIPT"
+
+# Determine removal mode: if neither flag is set, remove all unusable (default behavior)
+if [[ "$ERROR_ONLY" != "true" ]] && [[ "$INCOMPLETE_ONLY" != "true" ]]; then
+    ALL_UNUSABLE=true
+fi
 
 # Get JSON output to temp file
 python3 "$TMP_SCRIPT" \
@@ -372,13 +467,165 @@ if [[ "$DRY_RUN" == "true" ]]; then
     exit 0
 fi
 
+# Calculate total size to be removed
+TOTAL_SIZE=$(python3 << PYTHON_EOF
+import json
+from pathlib import Path
+
+try:
+    with open('$TMP_OUTPUT') as f:
+        data = json.load(f)
+    
+    total_size = 0
+    for exp in data:
+        exp_dir = Path(exp['experiment_dir'])
+        if exp_dir.exists():
+            try:
+                size = sum(f.stat().st_size for f in exp_dir.rglob('*') if f.is_file())
+                total_size += size
+            except:
+                pass
+    
+    print(f"{total_size / 1024 / 1024:.2f}")
+except:
+    print("0.00")
+PYTHON_EOF
+)
+
+# Verify experiments exist and match expected patterns
+log_info "Verifying experiments before removal..."
+VERIFICATION_FAILED=0
+
+python3 << PYTHON_EOF
+import json
+import sys
+from pathlib import Path
+
+try:
+    with open('$TMP_OUTPUT') as f:
+        data = json.load(f)
+    
+    failed = []
+    for exp in data:
+        exp_dir = Path(exp['experiment_dir'])
+        
+        # Check if directory exists
+        if not exp_dir.exists():
+            print(f"⚠️  Warning: Directory does not exist: {exp_dir}", file=sys.stderr)
+            failed.append(exp['experiment'])
+            continue
+        
+        # Check if it's actually in the results directory
+        results_dir = Path('$RESULTS_DIR')
+        try:
+            exp_dir.resolve().relative_to(results_dir.resolve())
+        except ValueError:
+            print(f"⚠️  Warning: Directory outside results dir: {exp_dir}", file=sys.stderr)
+            failed.append(exp['experiment'])
+            continue
+        
+        # Check if it matches expected experiment name pattern
+        if exp_dir.name != exp['experiment']:
+            print(f"⚠️  Warning: Directory name mismatch: {exp_dir.name} != {exp['experiment']}", file=sys.stderr)
+            failed.append(exp['experiment'])
+    
+    if failed:
+        print(f"Verification failed for {len(failed)} experiments", file=sys.stderr)
+        sys.exit(1)
+    else:
+        print("✅ All experiments verified successfully", file=sys.stderr)
+        sys.exit(0)
+except Exception as e:
+    print(f"Verification error: {e}", file=sys.stderr)
+    sys.exit(1)
+PYTHON_EOF
+
+VERIFICATION_FAILED=$?
+
+if [[ $VERIFICATION_FAILED -ne 0 ]]; then
+    log_error "Verification failed - aborting removal for safety"
+    log_error "Some experiments don't match expected patterns or don't exist"
+    rm -f "$TMP_OUTPUT" 2>/dev/null || true
+    exit 1
+fi
+
+# Create backup if requested
+if [[ "$BACKUP" == "true" ]]; then
+    if [[ -z "$BACKUP_DIR" ]]; then
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+        BACKUP_DIR="${RESULTS_DIR}_backup_${TIMESTAMP}"
+    fi
+    
+    log_info "Creating backup to: $BACKUP_DIR"
+    
+    # Create backup directory
+    mkdir -p "$BACKUP_DIR"
+    
+    # Copy experiments to backup
+    python3 << PYTHON_EOF
+import json
+import shutil
+from pathlib import Path
+
+try:
+    with open('$TMP_OUTPUT') as f:
+        data = json.load(f)
+    
+    backup_base = Path('$BACKUP_DIR')
+    results_dir = Path('$RESULTS_DIR')
+    
+    for exp in data:
+        exp_dir = Path(exp['experiment_dir'])
+        if exp_dir.exists():
+            # Maintain directory structure in backup
+            rel_path = exp_dir.relative_to(results_dir)
+            backup_path = backup_base / rel_path
+            
+            # Create parent directories
+            backup_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Copy directory
+            shutil.copytree(exp_dir, backup_path, dirs_exist_ok=True)
+            print(f"Backed up: {exp['experiment']}")
+except Exception as e:
+    print(f"Backup error: {e}", file=sys.stderr)
+    sys.exit(1)
+PYTHON_EOF
+    
+    if [[ $? -eq 0 ]]; then
+        log_success "Backup created successfully"
+    else
+        log_error "Backup failed - aborting removal"
+        rm -f "$TMP_OUTPUT" 2>/dev/null || true
+        exit 1
+    fi
+fi
+
+# Show summary before removal
+echo ""
+echo "=================================================================================="
+echo "REMOVAL SUMMARY"
+echo "=================================================================================="
+echo "  Experiments to remove: $UNUSABLE_COUNT"
+echo "  Total size: ${TOTAL_SIZE} MB"
+if [[ "$BACKUP" == "true" ]] && [[ -n "$BACKUP_DIR" ]]; then
+    echo "  Backup location: $BACKUP_DIR"
+fi
+echo "=================================================================================="
+echo ""
+
 # Confirm removal
 if [[ "$CONFIRM" == "true" ]] && [[ "$FORCE" != "true" ]]; then
+    echo "⚠️  WARNING: This will permanently delete $UNUSABLE_COUNT experiment(s) (${TOTAL_SIZE} MB)"
+    if [[ "$BACKUP" != "true" ]]; then
+        echo "⚠️  WARNING: No backup will be created!"
+        echo "   Use --backup to create a backup first"
+    fi
     echo ""
-    read -p "Remove these $UNUSABLE_COUNT experiment(s)? [y/N] " -n 1 -r
+    read -p "Are you sure you want to proceed? Type 'DELETE' to confirm: " -r
     echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Removal cancelled"
+    if [[ "$REPLY" != "DELETE" ]]; then
+        log_info "Removal cancelled (expected 'DELETE' but got: '$REPLY')"
         rm -f "$TMP_OUTPUT" 2>/dev/null || true
         exit 0
     fi
@@ -387,12 +634,19 @@ fi
 # Remove experiments
 log_info "Removing unusable experiments..."
 
-# Read directly from file
+# Create removal log
+REMOVAL_LOG=$(mktemp)
+REMOVAL_LOG_FINAL="${RESULTS_DIR}/.removal_log_$(date +%Y%m%d_%H%M%S).txt"
+
+# Read directly from file and remove
 python3 << PYTHON_EOF
 import json
 import sys
 import shutil
 from pathlib import Path
+from datetime import datetime
+
+removal_log = []
 
 try:
     with open('$TMP_OUTPUT') as f:
@@ -402,9 +656,21 @@ try:
         data = []
     
     removed_count = 0
+    failed_count = 0
+    total_size_removed = 0
+    
     for exp in data:
         exp_dir = Path(exp['experiment_dir'])
         if exp_dir.exists():
+            # Double-check it's in results directory (safety)
+            results_dir = Path('$RESULTS_DIR')
+            try:
+                exp_dir.resolve().relative_to(results_dir.resolve())
+            except ValueError:
+                print(f"⚠️  SKIPPED (outside results dir): {exp['experiment']}", file=sys.stderr)
+                failed_count += 1
+                continue
+            
             # Calculate size before removal
             try:
                 size = sum(f.stat().st_size for f in exp_dir.rglob('*') if f.is_file())
@@ -412,14 +678,47 @@ try:
                 size = 0
             
             # Remove directory
-            shutil.rmtree(exp_dir)
-            
-            print(f"Removed: {exp['experiment']} ({size / 1024 / 1024:.2f} MB)")
-            removed_count += 1
+            try:
+                shutil.rmtree(exp_dir)
+                print(f"✅ Removed: {exp['experiment']} ({size / 1024 / 1024:.2f} MB)")
+                
+                removal_log.append({
+                    'timestamp': datetime.now().isoformat(),
+                    'experiment': exp['experiment'],
+                    'directory': str(exp_dir),
+                    'size_mb': size / 1024 / 1024,
+                    'reasons': exp.get('reasons', []),
+                    'status': 'removed'
+                })
+                
+                removed_count += 1
+                total_size_removed += size
+            except Exception as e:
+                print(f"❌ Failed to remove: {exp['experiment']} - {e}", file=sys.stderr)
+                failed_count += 1
         else:
-            print(f"Warning: Directory not found: {exp_dir}")
+            print(f"⚠️  Directory not found: {exp_dir}")
+            failed_count += 1
     
-    print(f"\nTotal removed: {removed_count} experiment(s)")
+    print(f"\n{'=' * 60}")
+    print(f"Removal Summary:")
+    print(f"  Successfully removed: {removed_count} experiment(s)")
+    print(f"  Failed: {failed_count} experiment(s)")
+    print(f"  Total size removed: {total_size_removed / 1024 / 1024:.2f} MB")
+    print(f"{'=' * 60}")
+    
+    # Write removal log
+    with open('$REMOVAL_LOG', 'w') as f:
+        f.write(f"Removal log - {datetime.now().isoformat()}\n")
+        f.write(f"Total removed: {removed_count}\n")
+        f.write(f"Total failed: {failed_count}\n")
+        f.write(f"Total size: {total_size_removed / 1024 / 1024:.2f} MB\n\n")
+        f.write("Removed experiments:\n")
+        for entry in removal_log:
+            f.write(f"\n{json.dumps(entry, indent=2)}\n")
+    
+    if failed_count > 0:
+        sys.exit(1)
 except Exception as e:
     print(f"Error removing experiments: {e}", file=sys.stderr)
     import traceback
@@ -427,12 +726,25 @@ except Exception as e:
     sys.exit(1)
 PYTHON_EOF
 
-if [[ $? -eq 0 ]]; then
-    log_success "Removed unusable experiment(s)"
+REMOVAL_EXIT=$?
+
+# Move removal log to results directory
+if [[ -f "$REMOVAL_LOG" ]]; then
+    mkdir -p "$RESULTS_DIR"
+    mv "$REMOVAL_LOG" "$REMOVAL_LOG_FINAL"
+    log_info "Removal log saved to: $REMOVAL_LOG_FINAL"
+fi
+
+if [[ $REMOVAL_EXIT -eq 0 ]]; then
+    log_success "Successfully removed unusable experiment(s)"
     log_info "You can now re-run these experiments"
+    if [[ "$BACKUP" == "true" ]] && [[ -n "$BACKUP_DIR" ]]; then
+        log_info "Backup available at: $BACKUP_DIR"
+    fi
     rm -f "$TMP_OUTPUT" 2>/dev/null || true
 else
-    log_error "Failed to remove experiments"
+    log_error "Some experiments failed to remove - check output above"
+    log_error "Removal log: $REMOVAL_LOG_FINAL"
     rm -f "$TMP_OUTPUT" 2>/dev/null || true
     exit 1
 fi

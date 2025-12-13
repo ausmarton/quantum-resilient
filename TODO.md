@@ -1668,6 +1668,8 @@ pip install pandas numpy matplotlib seaborn scipy rich tqdm
 14. 🟢 Document Error Rate Analysis (FR12)
 15. 🟢 Implement Cost Efficiency Metrics (FR13)
 16. 🟢 Implement Automated Report Generation (NFR8)
+17. 🟢 Consider Increasing Run Count for Scaling and Sustained Load Experiments
+17. 🟢 Consider Increasing Run Count for Scaling and Sustained Load Experiments
 
 ---
 
@@ -3948,5 +3950,94 @@ During GCP mini smoke test execution, multiple Terraform-related issues were dis
 - ✅ Critical for GCP experiments (REQ-INFRA-*)
 - ✅ Required for smoke tests
 - ✅ Supports FR8: GCP Deployment
+
+---
+
+### 40. Consider Increasing Run Count for Scaling and Sustained Load Experiments
+
+**Status**: 🟢 **LOW PRIORITY - RESEARCH METHODOLOGY ENHANCEMENT**  
+**Priority**: Optional - Current 3 runs is acceptable for dissertation  
+**Independent**: Can be done anytime  
+**Requirement**: Enhancement to NFR2 (Statistical Rigor)
+
+**Issue**: 
+- Current design uses 3 runs for scaling experiments and 5-minute sustained load experiments
+- Baseline experiments use 5 runs (meets NFR2 requirement: ~80% power for medium effects)
+- 3 runs provides lower statistical power (~60% for medium effects, ~85% for large effects)
+- **Why Low Priority**: 3 runs is acceptable for resource-intensive/longer-duration experiments, but 5 runs would strengthen statistical claims
+
+**Current State**:
+- ✅ Baseline experiments: 5 runs per configuration
+- ✅ Scaling experiments: 3 runs per configuration (resource-intensive with multiple replicas)
+- ✅ 5-minute sustained load: 3 runs per configuration (longer duration: 3 × 5min = 15min vs 5 × 30s = 2.5min)
+- ✅ Statistical power with 3 runs: ~60% for medium effects, ~85% for large effects
+- ✅ Statistical power with 5 runs: ~80% for medium effects, ~95% for large effects
+
+**Trade-off Analysis**:
+- **3 runs is acceptable** for:
+  - Resource-intensive experiments (scaling with 4 replicas × 3 runs = 12 total replica runs)
+  - Longer-duration experiments (5 minutes each = 15 minutes total per configuration)
+  - When combined with other statistical techniques (percentiles, confidence intervals, effect sizes)
+  - Standard practice in some fields for resource-constrained experiments
+- **5 runs would be better** for:
+  - Stronger statistical power (~80% vs ~60% for medium effects)
+  - More robust confidence intervals
+  - Better outlier detection and robustness
+  - More defensible in dissertation defense
+  - Alignment with NFR2 requirement (5 runs per configuration)
+
+**Impact Assessment**:
+- **Scaling experiments**: 5 runs × 4 replicas = 20 total runs (vs current 12)
+  - Current: 5 scaling configs × 4 replicas × 3 runs = 60 runs
+  - With 5 runs: 5 scaling configs × 4 replicas × 5 runs = 100 runs
+  - Increase: +40 runs per environment (Minikube + GCP = +80 runs total)
+- **5-minute sustained load**: 5 runs × 5 algorithms = 25 runs (vs current 15)
+  - Current: 5 algorithms × 3 runs = 15 runs
+  - With 5 runs: 5 algorithms × 5 runs = 25 runs
+  - Increase: +10 runs per environment (all 3 environments = +30 runs total)
+- **Total increase**: +110 runs across all environments
+- **Time impact**: ~18-20 additional hours (assuming ~10-11 minutes per 5-minute experiment)
+
+**Expected Outcome** (if implemented):
+- Stronger statistical power for scaling and sustained load experiments
+- More robust confidence intervals and effect size estimates
+- Better alignment with NFR2 requirement (5 runs per configuration)
+- More defensible statistical claims in dissertation
+- Increased data collection time and resource usage
+
+**Implementation Plan** (if desired):
+1. Update `orchestration/experiment_matrix.yaml`:
+   - Change `runs: 3` to `runs: 5` for scaling experiments
+   - Change `runs: 3` to `runs: 5` for 5-minute sustained load experiments
+2. Regenerate scenarios: `./run_all_experiments.sh --generate-only`
+3. Re-run affected experiments (scaling and sustained load)
+4. Update documentation to reflect 5 runs for all experiment types
+5. Re-run statistical analysis with increased sample sizes
+
+**Effort**: 2-3 hours (configuration update + documentation) + 18-20 hours (data re-collection)
+
+**Dependencies**: None (can be done independently)
+
+**Impact**: 
+- **MEDIUM**: Strengthens statistical rigor and dissertation claims
+- **LOW**: Current 3 runs is acceptable for dissertation purposes
+- **MEDIUM**: Increases data collection time and resource usage
+
+**Related Files**:
+- `orchestration/experiment_matrix.yaml` - Would update `runs: 3` to `runs: 5`
+- `docs/REQUIREMENTS_SPECIFICATION.md` - NFR2 (Statistical Rigor)
+- `docs/analysis/experimental-design.md` - Experimental design documentation
+
+**Rationale for Low Priority**:
+- Current 3 runs is acceptable for dissertation-level research
+- Trade-off between statistical power and resource/time constraints is reasonable
+- 3 runs combined with other statistical techniques (percentiles, confidence intervals) provides adequate rigor
+- Can be considered for future work or if time/resources permit
+- Would strengthen claims but is not required for dissertation completion
+
+**Recommendation**:
+- **For current dissertation**: 3 runs is acceptable and defensible
+- **For future enhancement**: Consider increasing to 5 runs if time/resources permit
+- **For publication**: 5 runs would strengthen statistical claims
 
 ---

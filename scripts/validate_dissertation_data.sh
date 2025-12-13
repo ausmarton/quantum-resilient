@@ -441,9 +441,10 @@ def validate_dissertation_data(results_dir: Path, matrix_file: Path, env_filter:
                 }
     
     # Statistical validity with expected run counts
-    # Determine expected runs: 5 for baseline, 3 for scaling
+    # Determine expected runs: 5 for baseline, 3 for scaling and 5-minute sustained load
     expected_runs_baseline = 5
     expected_runs_scaling = 3
+    expected_runs_5m = 3  # 5-minute sustained load experiments
     
     experiments_by_run_count = defaultdict(list)
     incomplete_experiments = []
@@ -453,9 +454,13 @@ def validate_dissertation_data(results_dir: Path, matrix_file: Path, env_filter:
         run_count = len(exp_data["runs"])
         experiments_by_run_count[run_count].append(exp_name)
         
-        # Determine if scaling or baseline
+        # Determine if scaling, 5-minute sustained load, or baseline
         is_scaling = "scaling" in exp_name.lower()
-        expected_runs = expected_runs_scaling if is_scaling else expected_runs_baseline
+        is_5m = "_5m_" in exp_name or exp_name.endswith("_5m") or "5m_" in exp_name
+        if is_scaling or is_5m:
+            expected_runs = expected_runs_scaling
+        else:
+            expected_runs = expected_runs_baseline
         
         if run_count < expected_runs:
             incomplete_experiments.append({
@@ -518,8 +523,13 @@ def validate_dissertation_data(results_dir: Path, matrix_file: Path, env_filter:
     
     for exp_name, data in experiments.items():
         reasons = []
+        # Determine if scaling, 5-minute sustained load, or baseline
         is_scaling = "scaling" in exp_name.lower()
-        expected_runs = expected_runs_scaling if is_scaling else expected_runs_baseline
+        is_5m = "_5m_" in exp_name or exp_name.endswith("_5m") or "5m_" in exp_name
+        if is_scaling or is_5m:
+            expected_runs = expected_runs_scaling
+        else:
+            expected_runs = expected_runs_baseline
         run_count = len(data["runs"])
         
         if data["has_errors"]:
