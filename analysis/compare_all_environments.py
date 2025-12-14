@@ -124,9 +124,36 @@ EXPECTED_RANGES = {
 
 
 def load_summary(path: Path) -> dict:
-    """Load summary JSON file."""
-    with open(path) as f:
-        return json.load(f)
+    """Load summary JSON file.
+    
+    Handles both absolute and relative paths, mapping container paths if needed.
+    """
+    # Try the path as-is first
+    if path.exists():
+        with open(path) as f:
+            return json.load(f)
+    
+    # If absolute path doesn't exist, try mapping to container workspace
+    if path.is_absolute() and '/home/ausmarton/scratchpad/quantum-resilient' in str(path):
+        container_path = Path('/workspace') / Path(str(path).replace('/home/ausmarton/scratchpad/quantum-resilient', '').lstrip('/'))
+        if container_path.exists():
+            with open(container_path) as f:
+                return json.load(f)
+    
+    # Try as relative to workspace
+    workspace_path = Path('/workspace') / path
+    if workspace_path.exists():
+        with open(workspace_path) as f:
+            return json.load(f)
+    
+    # Last resort: try relative to current directory
+    if not path.is_absolute():
+        cwd_path = Path.cwd() / path
+        if cwd_path.exists():
+            with open(cwd_path) as f:
+                return json.load(f)
+    
+    raise FileNotFoundError(f"Summary file not found: {path}")
 
 
 def extract_metrics(summary: dict, name: str, path: str) -> EnvironmentMetrics:
@@ -494,9 +521,13 @@ def main():
         print()
     
     # Save comparison table
-    output_path = args.output
-    if output_path is None:
+    if args.output is None:
         output_path = args.gcp.parent / "comparison_table.json"
+    elif args.output.is_dir():
+        # If output is a directory, create comparison_table.json inside it
+        output_path = args.output / "comparison_table.json"
+    else:
+        output_path = args.output
     
     result = {
         "environments": [e.to_dict() for e in envs],

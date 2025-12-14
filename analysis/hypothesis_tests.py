@@ -153,12 +153,20 @@ class TestResult:
 
 
 def load_latencies_from_jsonl(path: Path) -> Optional[np.ndarray]:
-    """Load latency values from merged JSONL or Parquet file."""
+    """Load latency values from merged JSONL or Parquet file.
+    
+    All data is stored in nanoseconds (latency_ns). Converts to microseconds
+    for statistical analysis compatibility.
+    """
     try:
         # Try parquet first (faster)
         parquet_path = path.parent / 'merged.parquet'
         if parquet_path.exists():
             df = pd.read_parquet(parquet_path)
+            if 'latency_ns' in df.columns:
+                # Convert nanoseconds to microseconds
+                return (df['latency_ns'].values / 1000.0)
+            # Fallback (should not happen with current data)
             if 'latency_us' in df.columns:
                 return df['latency_us'].values
         
@@ -171,8 +179,9 @@ def load_latencies_from_jsonl(path: Path) -> Optional[np.ndarray]:
             for line in f:
                 try:
                     event = json.loads(line)
-                    if 'latency_us' in event:
-                        latencies.append(event['latency_us'])
+                    # All data uses latency_ns (nanoseconds) - convert to microseconds
+                    if 'latency_ns' in event:
+                        latencies.append(event['latency_ns'] / 1000.0)
                 except json.JSONDecodeError:
                     continue
         
@@ -484,11 +493,34 @@ def main():
         if entry.get('status') not in ['success', 'cached']:
             continue
         
-        output_dir = Path(entry['output_dir'])
-        jsonl_path = output_dir / 'merged' / 'merged.jsonl'
+        output_dir_str = entry['output_dir']
+        # Handle both absolute and relative paths
+        # In container, paths are mounted at /workspace
+        if Path(output_dir_str).is_absolute():
+            # Absolute path - try to map to container workspace
+            # Replace /home/ausmarton/scratchpad/quantum-resilient with /workspace
+            if '/home/ausmarton/scratchpad/quantum-resilient' in output_dir_str:
+                output_dir = Path(output_dir_str.replace('/home/ausmarton/scratchpad/quantum-resilient', '/workspace'))
+            else:
+                output_dir = Path(output_dir_str)
+        else:
+            # Relative path - assume relative to workspace root
+            output_dir = Path('/workspace') / output_dir_str
+        
+        # Try multiple possible locations for merged.jsonl
+        jsonl_path = output_dir / 'merged' / 'merged.jsonl'  # Most common location
         
         if not jsonl_path.exists():
             jsonl_path = output_dir / 'merged.jsonl'
+        if not jsonl_path.exists() and output_dir.exists():
+            # Check for run-level merged files
+            try:
+                run_dirs = sorted([d for d in output_dir.iterdir() if d.is_dir() and d.name.startswith('run-')])
+                if run_dirs:
+                    # Try first run's merged file
+                    jsonl_path = run_dirs[0] / 'merged.jsonl'
+            except (OSError, FileNotFoundError):
+                pass
         if not jsonl_path.exists():
             jsonl_path = output_dir / 'raw' / 'run.jsonl'
         

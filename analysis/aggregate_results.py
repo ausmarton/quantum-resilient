@@ -223,7 +223,12 @@ def compute_effect_size(group_a: list[float], group_b: list[float]) -> dict:
     var_a = np.var(group_a, ddof=1) if n_a > 1 else 0
     var_b = np.var(group_b, ddof=1) if n_b > 1 else 0
     
-    pooled_std = np.sqrt(((n_a - 1) * var_a + (n_b - 1) * var_b) / (n_a + n_b - 2))
+    # Handle division by zero: need at least 2 total samples
+    denominator = n_a + n_b - 2
+    if denominator <= 0:
+        return {'cohens_d': 0, 'interpretation': 'insufficient_samples'}
+    
+    pooled_std = np.sqrt(((n_a - 1) * var_a + (n_b - 1) * var_b) / denominator)
     
     if pooled_std == 0:
         return {'cohens_d': 0, 'interpretation': 'no_variance'}
@@ -276,6 +281,27 @@ def main():
             continue
         
         output_dir = Path(entry['output_dir'])
+        
+        # Handle container path mapping: if /workspace exists, convert absolute paths
+        if Path('/workspace').exists() and output_dir.is_absolute():
+            # We're in container - convert host path to container path
+            # Assume project root is mounted at /workspace
+            # Extract relative path from absolute path
+            # Try to find the project root in the path
+            parts = output_dir.parts
+            if 'results' in parts:
+                idx = parts.index('results')
+                rel_path = Path(*parts[idx:])
+                output_dir = Path('/workspace') / rel_path
+            elif output_dir.parts[0] == 'results' or str(output_dir).startswith('/workspace'):
+                # Already relative or in workspace
+                if not str(output_dir).startswith('/workspace'):
+                    output_dir = Path('/workspace') / output_dir
+        elif not output_dir.is_absolute():
+            # Relative path - resolve relative to current working directory or script location
+            script_dir = Path(__file__).parent.parent
+            output_dir = script_dir / output_dir
+        
         summary_path = output_dir / 'stats' / 'summary.json'
         
         # Try alternative paths
@@ -284,7 +310,53 @@ def main():
         if not summary_path.exists():
             summary_path = output_dir / 'summary.json'
         
-        summary = load_summary(summary_path)
+        # If experiment-level summary doesn't exist, try to aggregate from run-level summaries
+        if not summary_path.exists():
+            # Look for run-level summaries: output_dir/run-*/stats/summary.json
+            run_summaries = []
+            for run_dir in sorted(output_dir.glob("run-*/stats/summary.json")):
+                run_summary = load_summary(run_dir)
+                if run_summary:
+                    run_summaries.append(run_summary)
+            
+            # If we found run summaries, aggregate them into a single summary
+            if run_summaries:
+                # Aggregate latency metrics across runs (use 'latency' field in microseconds)
+                all_p50 = [s.get('latency', {}).get('p50', 0) for s in run_summaries if s.get('latency', {}).get('p50', 0) > 0]
+                all_p90 = [s.get('latency', {}).get('p90', 0) for s in run_summaries if s.get('latency', {}).get('p90', 0) > 0]
+                all_p95 = [s.get('latency', {}).get('p95', 0) for s in run_summaries if s.get('latency', {}).get('p95', 0) > 0]
+                all_p99 = [s.get('latency', {}).get('p99', 0) for s in run_summaries if s.get('latency', {}).get('p99', 0) > 0]
+                all_p999 = [s.get('latency', {}).get('p999', 0) for s in run_summaries if s.get('latency', {}).get('p999', 0) > 0]
+                all_mean = [s.get('latency', {}).get('mean', 0) for s in run_summaries if s.get('latency', {}).get('mean', 0) > 0]
+                all_std = [s.get('latency', {}).get('std', 0) for s in run_summaries if s.get('latency', {}).get('std', 0) > 0]
+                
+                # Aggregate throughput
+                all_throughput = [s.get('throughput', {}).get('mean_msgs_per_sec', 0) for s in run_summaries if s.get('throughput', {}).get('mean_msgs_per_sec', 0) > 0]
+                all_max_throughput = [s.get('throughput', {}).get('max_msgs_per_sec', 0) for s in run_summaries if s.get('throughput', {}).get('max_msgs_per_sec', 0) > 0]
+                total_events = sum(s.get('total_events', 0) for s in run_summaries)
+                
+                # Create aggregated summary matching expected structure
+                summary = {
+                    'latency': {
+                        'p50': float(np.mean(all_p50)) if all_p50 else 0,
+                        'p90': float(np.mean(all_p90)) if all_p90 else 0,
+                        'p95': float(np.mean(all_p95)) if all_p95 else 0,
+                        'p99': float(np.mean(all_p99)) if all_p99 else 0,
+                        'p999': float(np.mean(all_p999)) if all_p999 else 0,
+                        'mean': float(np.mean(all_mean)) if all_mean else 0,
+                        'std': float(np.mean(all_std)) if all_std else 0,
+                    },
+                    'throughput': {
+                        'mean_msgs_per_sec': float(np.mean(all_throughput)) if all_throughput else 0,
+                        'max_msgs_per_sec': float(np.mean(all_max_throughput)) if all_max_throughput else 0,
+                    },
+                    'total_events': total_events,
+                }
+            else:
+                summary = None
+        else:
+            summary = load_summary(summary_path)
+        
         if summary:
             result = extract_result(entry, summary)
             results.append(result)

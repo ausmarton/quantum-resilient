@@ -115,8 +115,11 @@ done
 # Mount results directory if it exists
 # Set working directory to /workspace
 # Use :Z flag for Podman on SELinux systems (Fedora)
+# Also try :z for shared content (alternative SELinux option)
 if [[ "$DOCKER_CMD" == "podman" ]]; then
-    VOLUME_FLAGS="-v $SCRIPT_DIR:/workspace:rw,Z"
+    # Try :z (shared) first, fall back to :Z (private) if needed
+    # :z allows multiple containers to share the same content
+    VOLUME_FLAGS="-v $SCRIPT_DIR:/workspace:rw,z"
 else
     VOLUME_FLAGS="-v $SCRIPT_DIR:/workspace:rw"
 fi

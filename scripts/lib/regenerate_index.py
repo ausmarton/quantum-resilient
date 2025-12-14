@@ -81,11 +81,21 @@ def main():
             scenario_id = exp_dir.name
             
             # Check for data files
+            # Support multiple structures:
+            # 1. Direct raw file: exp_dir/raw/run.jsonl
+            # 2. Run-based structure: exp_dir/run-*/raw/run.jsonl
             merged_file = exp_dir / "merged" / "merged.jsonl"
             stats_file = exp_dir / "stats" / "summary.json"
             raw_file = exp_dir / "raw" / "run.jsonl"
             
-            has_data = merged_file.exists() or stats_file.exists() or raw_file.exists()
+            # Check for run-based structure
+            has_run_data = False
+            for run_dir in exp_dir.glob("run-*/raw/run.jsonl"):
+                if run_dir.exists():
+                    has_run_data = True
+                    break
+            
+            has_data = merged_file.exists() or stats_file.exists() or raw_file.exists() or has_run_data
             
             if not has_data:
                 continue
@@ -128,11 +138,18 @@ def main():
             aggregated_file = exp_dir / "aggregated_stats.json"
             run1_raw = exp_dir / "run-1" / "raw" / "run.jsonl"
             
+            # Check for any run data
+            has_any_run_data = False
+            for run_dir in exp_dir.glob("run-*/raw/run.jsonl"):
+                if run_dir.exists():
+                    has_any_run_data = True
+                    break
+            
             has_stats = stats_file.exists() or merged_file.exists()
             has_aggregated = aggregated_file.exists()
             has_run1 = run1_raw.exists()
             
-            if has_stats or has_aggregated or has_run1:
+            if has_stats or has_aggregated or has_run1 or has_any_run_data or raw_file.exists():
                 status = "success"
                 index["completed_scenarios"] += 1
             else:

@@ -26,10 +26,30 @@ sns.set_palette("husl")
 
 
 def load_data(filepath: Path) -> pd.DataFrame:
-    """Load data from JSONL or Parquet file."""
+    """Load data from JSONL or Parquet file.
+    
+    Optimized for large files: uses chunking for JSONL files > 100MB.
+    """
     if filepath.suffix == ".parquet":
         return pd.read_parquet(filepath)
     else:
+        # Check file size for optimization
+        file_size = filepath.stat().st_size
+        use_chunks = file_size > 100 * 1024 * 1024  # 100MB threshold
+        
+        if use_chunks:
+            # For large files, use chunked reading to reduce memory usage
+            console.print(f"[blue]Large file detected ({file_size / 1024 / 1024:.1f}MB), using chunked reading...[/blue]")
+            chunks = []
+            chunk_size = 100000  # 100k lines per chunk
+            try:
+                for chunk in pd.read_json(filepath, lines=True, chunksize=chunk_size):
+                    chunks.append(chunk)
+                return pd.concat(chunks, ignore_index=True)
+            except ValueError as e:
+                # Fall back to line-by-line if chunked reading fails
+                console.print(f"[yellow]Chunked reading failed, falling back to line-by-line: {e}[/yellow]")
+        
         # Try to load JSONL with error handling for malformed lines
         try:
             return pd.read_json(filepath, lines=True)

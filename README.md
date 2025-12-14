@@ -1595,6 +1595,43 @@ gsutil ls gs://public-artifacts/quantum-resilient/exp_001/
 
 #### Complete Publishing Workflow
 
+### Analysis Pipeline Overview
+
+The analysis pipeline consists of several stages:
+
+1. **Summary Generation**: Merge raw data and compute statistics
+   ```bash
+   ./scripts/generate_experiment_summaries.sh --parallel 16
+   ```
+
+2. **Aggregation**: Aggregate statistics across all experiments
+   ```bash
+   ./scripts/lib/run-python-container.sh analysis/aggregate_results.py \
+     --index final-results/index.json --output final-results/
+   ```
+
+3. **Visualization**: Generate CDF plots, scaling curves, comparisons
+   ```bash
+   ./scripts/lib/run-python-container.sh analysis/plot_combined_cdfs.py \
+     --index final-results/index.json --output final-results/figures
+   ```
+
+4. **Statistical Testing**: Run hypothesis tests with effect sizes
+   ```bash
+   ./scripts/lib/run-python-container.sh analysis/hypothesis_tests.py \
+     --index final-results/index.json --matrix orchestration/experiment_matrix.yaml \
+     --output final-results/
+   ```
+
+5. **Table Extraction**: Generate LaTeX/CSV tables for dissertation
+   ```bash
+   ./scripts/lib/run-python-container.sh scripts/extract_dissertation_tables.py \
+     --aggregated final-results/aggregated_stats.json \
+     --hypothesis final-results/hypothesis_tests.json \
+     --output final-results/tables/
+   ```
+
+**Complete Pipeline**:
 1. **Run full analysis pipeline:**
    ```bash
    python research/scripts/pipeline_runner.py \
