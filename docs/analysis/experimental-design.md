@@ -3,21 +3,21 @@
 ## Current Experimental Design
 
 ### Coverage Matrix
-- **Algorithms**: 5 (RSA-2048, ECDSA P-256, Kyber-512, Dilithium-2, Hybrid)
+- **Algorithms**: 6 (RSA-2048, ECDSA P-256, ECDHE P-256, Kyber-512, Dilithium-2, Hybrid)
 - **Payload sizes**: 4 (256B, 1KB, 4KB, 16KB)
 - **Workload rates**: 3 (100, 500, 2000 msg/s) + 10K msg/s (enterprise-scale)
 - **Workload patterns**: Constant (baseline) + Burst (enterprise patterns)
 - **Duration**: 30s (baseline) + 300s (5-min sustained load)
 - **Runs per configuration**: 5 (3 for 5-min duration)
 - **Environments**: 3 (native, minikube, gcp)
-- **Total scenarios per environment**: **468**
-  - Baseline: 300 (5 × 4 × 3 × 5)
-  - Burst pattern: 50 (5 × 2 × 1 × 5)
-  - 10K msg/s: 100 (5 × 4 × 1 × 5)
-  - 5-minute duration: 9 (3 × 1 × 1 × 3)
-  - Horizontal scaling baseline: 9 (3 × 1 × 1 × 3)
-- **Total experiments**: 468 × 3 = **1,404** (baseline)
-- **With scaling** (replicas 2,4,8 on Minikube+GCP): +54 = **1,458 total**
+- **Total scenarios per environment**: **564**
+  - Baseline: 360 (6 × 4 × 3 × 5)
+  - Burst pattern: 60 (6 × 2 × 1 × 5)
+  - 10K msg/s: 120 (6 × 4 × 1 × 5)
+  - 5-minute duration: 18 (6 × 1 × 1 × 3)
+  - Horizontal scaling baseline: 18 (6 × 1 × 1 × 3)
+- **Total experiments**: 564 × 3 = **1,692** (baseline)
+- **With scaling** (replicas 2,4,8 on Minikube+GCP): +108 = **1,800 total**
 
 ### Research Questions to Answer
 
@@ -38,11 +38,11 @@
    - Allows detection of outliers and variability assessment
    - **Verdict**: Sufficient for academic rigor
 
-2. **Multiple Algorithms (5)**
-   - Covers classical baselines (RSA, ECDSA)
+2. **Multiple Algorithms (6)**
+   - Covers classical baselines (RSA, ECDSA, ECDHE)
    - Covers PQC primitives (Kyber, Dilithium)
    - Includes hybrid approach
-   - **Verdict**: Comprehensive coverage
+   - **Verdict**: Comprehensive coverage with apples-to-apples KEM comparison
 
 3. **Multiple Environments (3)**
    - Native (baseline)
@@ -106,7 +106,7 @@
 - **Cost**: Would double/triple experiment time for marginal statistical improvement
 
 #### 4. Algorithm Coverage
-**Current**: RSA-2048, ECDSA P-256, Kyber-512, Dilithium-2, Hybrid
+**Current**: RSA-2048, ECDSA P-256, ECDHE P-256, Kyber-512, Dilithium-2, Hybrid
 
 **Analysis**:
 - Covers main PQC algorithms (NIST selected)
@@ -115,8 +115,8 @@
 - Missing: Other classical algorithms (Ed25519, ChaCha20-Poly1305) - could add value
 
 **Value Assessment**:
-- **Current is sufficient** - Adding more algorithms would be nice-to-have, not essential
-- **Cost**: +45 scenarios per algorithm per environment
+- **Current is sufficient** - ECDHE added for apples-to-apples KEM comparison (Kyber vs ECDHE)
+- **Cost**: +45 scenarios per algorithm per environment (ECDHE adds 66 experiments total)
 
 #### 5. Environment Coverage
 **Current**: Native, Minikube, GCP
@@ -132,20 +132,20 @@
 
 ## Recommendations
 
-### ✅ Enhanced Design (468 scenarios - includes enterprise quick wins + horizontal scaling baseline)
+### ✅ Enhanced Design (564 scenarios - includes enterprise quick wins + horizontal scaling baseline + ECDHE)
 
 **Reasons**:
 1. **Statistical rigor**: 5 runs per configuration is sufficient for dissertation-level analysis
-2. **Comprehensive coverage**: Algorithms, payloads (including 16KB), rates, and environments are well-covered
-3. **Time efficiency**: 468 scenarios × 3 environments = 1,404 baseline experiments provides comprehensive coverage
+2. **Comprehensive coverage**: Algorithms (including ECDHE for KEM comparison), payloads (including 16KB), rates, and environments are well-covered
+3. **Time efficiency**: 564 scenarios × 3 environments = 1,692 baseline experiments provides comprehensive coverage
 4. **Diminishing returns**: Adding more scenarios would provide marginal value for significant time cost
 
 ### 🎯 Optional Enhancements (If Time Permits)
 
-#### Option 1: Add Larger Payload Size (+45 scenarios per env)
+#### Option 1: Add Larger Payload Size (+54 scenarios per env with 6 algorithms)
 **What**: Add 16KB payload size
 **Why**: Shows performance with larger documents/files
-**Cost**: +1 hour per environment, +135 total experiments
+**Cost**: +1 hour per environment, +162 total experiments
 **Value**: Medium - useful if your use case involves large payloads
 
 #### Option 2: Add Intermediate Rate (+45 scenarios per env)
@@ -162,7 +162,7 @@
 
 ### ❌ Not Recommended
 
-1. **Adding more algorithms**: Current 5 provide comprehensive coverage
+1. **Adding more algorithms**: Current 6 provide comprehensive coverage (includes ECDHE for KEM comparison)
 2. **Adding more environments**: Three environments are sufficient
 3. **Adding more runs**: 5 runs is the sweet spot (diminishing returns beyond this)
 4. **Adding very high rates**: 2000 msg/s is already high load
@@ -195,9 +195,10 @@
 
 ### Question 1: PQC vs Classical Performance
 **Current coverage**: ✅ **Sufficient**
-- Direct comparisons: RSA vs Kyber, ECDSA vs Dilithium
+- Direct comparisons: RSA vs Kyber, ECDSA vs Dilithium, **ECDHE vs Kyber (KEM-to-KEM)**
 - Multiple payload sizes and rates
 - Statistical tests enabled
+- **Apples-to-apples KEM comparison**: ECDHE vs Kyber (both key exchange mechanisms)
 
 ### Question 2: Environment Impact
 **Current coverage**: ✅ **Sufficient**
@@ -230,14 +231,15 @@
 
 ## Final Verdict
 
-### ✅ **468 experiments per environment (with enterprise quick wins + horizontal scaling baseline) is SUFFICIENT**
+### ✅ **564 experiments per environment (with enterprise quick wins + horizontal scaling baseline + ECDHE) is SUFFICIENT**
 
 **Reasons**:
-1. **Comprehensive coverage**: All research questions can be answered
+1. **Comprehensive coverage**: All research questions can be answered, including apples-to-apples KEM comparison (ECDHE vs Kyber)
 2. **Statistical rigor**: 5 runs provides adequate power for medium/large effects (~80% for medium effects, ~95% for large effects)
-3. **Time efficiency**: Already requires 9-15 hours total (3-5 hours × 3 environments)
+3. **Time efficiency**: Already requires 11-18 hours total (3-6 hours × 3 environments)
 4. **Diminishing returns**: Adding more scenarios provides marginal value for significant time cost
 5. **Academic standard**: 5 runs per configuration is standard practice for benchmarking studies
+6. **KEM comparison**: ECDHE provides classical KEM baseline for direct comparison with Kyber
 
 ### 📊 **Sample Size Per Configuration**
 
@@ -307,7 +309,7 @@ The framework supports **separate scaling experiments** (not included in the 300
 
 ## Recommendation
 
-**Proceed with 468 experiments per environment (includes enterprise quick wins: burst patterns, 10K msg/s, 5-min duration, plus horizontal scaling baseline).**
+**Proceed with 564 experiments per environment (includes enterprise quick wins: burst patterns, 10K msg/s, 5-min duration, plus horizontal scaling baseline, plus ECDHE for KEM comparison).**
 
 This design:
 - ✅ Answers all your research questions

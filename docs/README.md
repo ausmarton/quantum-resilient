@@ -24,7 +24,6 @@ User-facing guides for running experiments and using the framework:
 - **[Horizontal Scaling Guide](guides/horizontal-scaling-guide.md)** - Horizontal scaling experiments guide
 - **[Parallel Execution](guides/parallel-execution.md)** - Running experiments in parallel
 - **[Containerization](guides/containerization.md)** - Using containerized analysis pipeline (Podman/Docker)
-- **[Refactoring Plan](guides/refactoring-plan.md)** - Code refactoring plan and progress
 
 ### 📖 Reference (`reference/`)
 
@@ -53,6 +52,8 @@ Research analysis and experimental design documents:
 - **[Cluster Sizing Analysis](analysis/cluster-sizing-analysis.md)** - Cluster sizing analysis
 - **[Horizontal Scaling Analysis](analysis/horizontal-scaling-analysis.md)** - Horizontal scaling analysis
 - **[GCP Optimization](analysis/gcp-optimization.md)** - GCP optimization analysis
+- **[ECDHE Reference](analysis/ecdhe-reference.md)** - ECDHE P-256 implementation reference
+- **[Comparison Issue Assessment](analysis/comparison-issue-assessment.md)** - Apples-to-apples comparison analysis
 
 ### 🔧 Troubleshooting (`troubleshooting/`)
 
@@ -110,7 +111,8 @@ This documentation was consolidated and reorganized on 2025-12-10 to:
 - Option 2 preserved as `reference/option2-precision.md`
 
 **Archived Documents**:
-- See `archive/documentation-2025-12-10/` for archived files
+- See `archive/documentation-2025-12-10/` for archived files (2025-12-10 consolidation)
+- See `archive/documentation-2025-01-27/` for archived files (2025-01-27 cleanup)
 - See `ARCHIVE.md` for archive index
 
 ### Active Work Tracking

@@ -16,7 +16,7 @@
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| Baseline (constant, 30s, standard rates) | 300 | 5 algorithms × 4 payloads × 3 rates × 5 runs |
+| Baseline (constant, 30s, standard rates) | 360 | 6 algorithms × 4 payloads × 3 rates × 5 runs |
 | Burst pattern | 50 | Enterprise workload patterns |
 | 10K msg/s rate | 100 | High-throughput scenarios |
 | 5-minute duration | 9 | Sustained load tests |
@@ -80,7 +80,7 @@
 
 | Phase | Time | Description |
 |-------|------|-------------|
-| **Baseline experiments** | 3.75 hours | Core algorithm comparison (300 core + 168 additional = 468 total) |
+| **Baseline experiments** | 4.5 hours | Core algorithm comparison (360 core + 216 additional = 576 total, includes ECDHE) |
 | **Burst pattern** | 0.625 hours | Enterprise workload patterns (50 experiments) |
 | **10K msg/s** | 1.25 hours | High-throughput scenarios (100 experiments) |
 | **5-minute duration** | 0.788 hours | Sustained load tests (9 experiments) |

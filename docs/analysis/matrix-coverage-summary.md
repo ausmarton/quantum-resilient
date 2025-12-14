@@ -13,9 +13,10 @@ The experiment matrix has been updated to ensure **complete coverage** across al
 **Key Changes**:
 - ✅ Added sustained load (5-minute) experiments for RSA-2048 and ECDSA P-256
 - ✅ Added scaling experiments for RSA-2048 and ECDSA P-256
+- ✅ Added ECDHE P-256 for apples-to-apples KEM comparison with Kyber-512
 - ✅ Updated scaling configuration to include all algorithms
 
-**Result**: Complete coverage across all 5 algorithms for all experiment types.
+**Result**: Complete coverage across all 6 algorithms for all experiment types.
 
 ---
 
@@ -35,13 +36,13 @@ The experiment matrix has been updated to ensure **complete coverage** across al
 ### After Updates
 
 **Complete Coverage**:
-- ✅ Baseline (constant, 30s): All 5 algorithms × 4 payloads × 3 rates × 5 runs = **300 scenarios**
-- ✅ Burst pattern: All 5 algorithms × 2 payloads × 1 rate × 5 runs = **50 scenarios**
-- ✅ 10K msg/s rate: All 5 algorithms × 4 payloads × 1 rate × 5 runs = **100 scenarios**
-- ✅ Sustained load (5-min): All 5 algorithms × 1 payload × 1 rate × 3 runs = **15 scenarios**
-- ✅ Scaling experiments: All 5 algorithms × 1 payload × 1 rate × 3 runs = **15 scenarios**
+- ✅ Baseline (constant, 30s): All 6 algorithms × 4 payloads × 3 rates × 5 runs = **360 scenarios**
+- ✅ Burst pattern: All 6 algorithms × 2 payloads × 1 rate × 5 runs = **60 scenarios**
+- ✅ 10K msg/s rate: All 6 algorithms × 4 payloads × 1 rate × 5 runs = **120 scenarios**
+- ✅ Sustained load (5-min): All 6 algorithms × 1 payload × 1 rate × 3 runs = **18 scenarios**
+- ✅ Scaling experiments: All 6 algorithms × 1 payload × 1 rate × 3 runs = **18 scenarios**
 
-**Total Scenarios per Environment**: **480 scenarios** (up from 468)
+**Total Scenarios per Environment**: **576 scenarios** (includes ECDHE)
 
 ---
 
@@ -141,20 +142,20 @@ scaling_algorithms:
 
 | Experiment Type | Scenarios | Algorithms | Payloads | Rates | Runs |
 |----------------|-----------|------------|----------|-------|------|
-| Baseline | 300 | 5 | 4 | 3 | 5 |
-| Burst | 50 | 5 | 2 | 1 | 5 |
-| 10K msg/s | 100 | 5 | 4 | 1 | 5 |
-| Sustained (5-min) | 15 | 5 | 1 | 1 | 3 |
-| Scaling | 15 | 5 | 1 | 1 | 3 |
-| **Total** | **480** | | | | |
+| Baseline | 360 | 6 | 4 | 3 | 5 |
+| Burst | 60 | 6 | 2 | 1 | 5 |
+| 10K msg/s | 120 | 6 | 4 | 1 | 5 |
+| Sustained (5-min) | 18 | 6 | 1 | 1 | 3 |
+| Scaling | 18 | 6 | 1 | 1 | 3 |
+| **Total** | **576** | | | | |
 
 ### Across All Environments
 
-- **Native**: 480 scenarios (no scaling replicas > 1)
-- **Minikube**: 480 baseline + 60 scaling (15 × 4 replicas) = **540 scenarios**
-- **GCP**: 480 baseline + 60 scaling (15 × 4 replicas) = **540 scenarios**
+- **Native**: 576 scenarios (no scaling replicas > 1)
+- **Minikube**: 576 baseline + 72 scaling (18 × 4 replicas) = **648 scenarios**
+- **GCP**: 576 baseline + 72 scaling (18 × 4 replicas) = **648 scenarios**
 
-**Total Experiments**: 480 + 540 + 540 = **1,560 experiments**
+**Total Experiments**: 576 + 648 + 648 = **1,872 experiments**
 
 ---
 
@@ -162,7 +163,7 @@ scaling_algorithms:
 
 ### Coverage Verification
 
-✅ **All algorithms covered**: RSA-2048, ECDSA P-256, Kyber-512, Dilithium-2, Hybrid  
+✅ **All algorithms covered**: RSA-2048, ECDSA P-256, ECDHE P-256, Kyber-512, Dilithium-2, Hybrid  
 ✅ **All experiment types covered**: Baseline, Burst, 10K, Sustained, Scaling  
 ✅ **All payload sizes covered**: 256B, 1KB, 4KB, 16KB (where applicable)  
 ✅ **All rates covered**: 100, 500, 2000, 10000 msg/s (where applicable)  

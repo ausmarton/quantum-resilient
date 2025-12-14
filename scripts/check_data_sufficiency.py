@@ -89,13 +89,15 @@ def check_data_sufficiency():
     
     # 1. Native analysis
     native_jsonl = data_status.get('native', {}).get('jsonl', 0)
-    if native_jsonl >= 468:
+    # Expected: 576 scenarios per environment (includes ECDHE)
+    expected_native = 576
+    if native_jsonl >= expected_native:
         print("✅ Native Analysis: FULL")
         print("   - Can do complete algorithm comparison")
         print("   - Can do statistical analysis")
         print("   - Can generate all native plots")
     elif native_jsonl > 0:
-        print(f"⚠️  Native Analysis: PARTIAL ({native_jsonl}/468 experiments)")
+        print(f"⚠️  Native Analysis: PARTIAL ({native_jsonl}/{expected_native} experiments)")
         print("   - Can do limited algorithm comparison")
     else:
         print("❌ Native Analysis: NO DATA")
@@ -156,10 +158,11 @@ def check_data_sufficiency():
     print()
     print("=== Recommendations ===")
     
-    # Calculate gaps
-    native_gap = max(0, 468 - data_status.get('native', {}).get('jsonl', 0))
-    minikube_gap = max(0, 468 - data_status.get('minikube', {}).get('jsonl', 0))
-    gcp_gap = max(0, 468 - data_status.get('gcp', {}).get('jsonl', 0))
+    # Calculate gaps (expected: 576 scenarios per environment with ECDHE)
+    expected_per_env = 576
+    native_gap = max(0, expected_per_env - data_status.get('native', {}).get('jsonl', 0))
+    minikube_gap = max(0, expected_per_env - data_status.get('minikube', {}).get('jsonl', 0))
+    gcp_gap = max(0, expected_per_env - data_status.get('gcp', {}).get('jsonl', 0))
     
     if native_gap == 0:
         print("✅ Native: Complete")
@@ -169,17 +172,18 @@ def check_data_sufficiency():
     if minikube_gap == 0:
         print("✅ Minikube: Complete")
     else:
-        print(f"⚠️  Minikube: Missing {minikube_gap} experiments ({minikube_gap/468*100:.1f}%)")
+        print(f"⚠️  Minikube: Missing {minikube_gap} experiments ({minikube_gap/expected_per_env*100:.1f}%)")
     
     if gcp_gap == 0:
         print("✅ GCP: Complete")
     else:
-        print(f"❌ GCP: Missing {gcp_gap} experiments ({gcp_gap/468*100:.1f}%)")
+        print(f"❌ GCP: Missing {gcp_gap} experiments ({gcp_gap/expected_per_env*100:.1f}%)")
     
     print()
     print("=== What You Can Do Now ===")
     
-    if native_jsonl >= 468:
+    expected_per_env = 576  # With ECDHE
+    if native_jsonl >= expected_per_env:
         print("✅ Run full native analysis")
         print("   python3 analysis/compute_statistics.py --input results/native/...")
         print("   python3 analysis/compare_native_vs_minikube.py --native ...")
@@ -188,7 +192,7 @@ def check_data_sufficiency():
         print("⚠️  Run partial cross-environment comparison")
         print("   (Limited to overlapping experiments)")
     
-    if native_jsonl >= 468:
+    if native_jsonl >= expected_per_env:
         print("✅ Generate native-only plots and figures")
         print("   (Algorithm comparison, latency distributions, etc.)")
     
@@ -204,7 +208,7 @@ def check_data_sufficiency():
     if not index_path.exists() or len(scaling_exps) == 0:
         print("❌ Scaling analysis (no scaling experiments)")
     
-    if native_jsonl < 468 or minikube_jsonl < 468 or gcp_jsonl < 468:
+    if native_jsonl < expected_per_env or minikube_jsonl < expected_per_env or gcp_jsonl < expected_per_env:
         print("❌ Full 3-way cross-environment comparison")
     
     print()

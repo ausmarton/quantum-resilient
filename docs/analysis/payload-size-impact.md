@@ -21,7 +21,7 @@ This document analyzes the impact of payload size on cryptographic operation lat
 ## Data Source
 
 - **Aggregated Statistics**: `final-results/aggregated_stats.json`
-- **Experiments**: All baseline experiments (330 total)
+- **Experiments**: All baseline experiments (396 total with ECDHE: 120 native + 138 minikube + 138 gcp)
 - **Environments**: Native, Minikube, GCP
 
 ---

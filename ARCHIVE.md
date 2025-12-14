@@ -1,9 +1,38 @@
 # Documentation Archive Index
 
-**Date**: 2025-12-10  
+**Latest Archive**: 2025-01-27 - Documentation cleanup and consolidation  
+**Previous Archive**: 2025-12-10 - Initial documentation consolidation
+
+---
+
+## Latest Archive (2025-01-27)
+
+**Archive Location**: `archive/documentation-2025-01-27/`
+
+### Summary
+Cleaned up transient documentation files and consolidated redundant ECDHE documentation.
+
+**Files Archived**: 11 files
+- 4 transient query responses
+- 2 task tracking files  
+- 4 redundant ECDHE documentation files
+- 1 refactoring plan
+
+**See**: `archive/documentation-2025-01-27/README.md` for complete details
+
+**Key Changes**:
+- Consolidated all ECDHE information into `docs/analysis/ecdhe-reference.md`
+- Archived task tracking files (use TODO.md instead)
+- Archived query response files (not permanent documentation)
+- Removed refactoring plan (temporary planning document)
+
+---
+
+## Previous Archive (2025-12-10)
+
 **Archive Location**: `archive/documentation-2025-12-10/`
 
-## Latest Consolidation (2025-12-10)
+### Latest Consolidation (2025-12-10)
 
 ### Test-Related Documents (Consolidated)
 **Consolidated into**: `docs/reference/test-coverage.md`

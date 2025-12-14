@@ -115,13 +115,14 @@ def verify_data_completeness(base_dir: Path) -> dict:
     """Verify data completeness requirements."""
     results = {}
     
-    # Check summaries
+    # Check summaries (expected: 396 total with ECDHE: 120 native + 138 minikube + 138 gcp)
     summaries = list(Path('results').rglob('**/stats/summary.json'))
+    expected_total = 396  # With ECDHE
     results['summaries'] = {
         'description': 'Experiment summaries',
         'count': len(summaries),
-        'expected': 330,
-        'valid': len(summaries) >= 330
+        'expected': expected_total,
+        'valid': len(summaries) >= expected_total
     }
     
     # Check index
@@ -132,8 +133,8 @@ def verify_data_completeness(base_dir: Path) -> dict:
         results['index'] = {
             'description': 'Experiment index',
             'count': len(index_data.get('experiments', [])),
-            'expected': 330,
-            'valid': len(index_data.get('experiments', [])) >= 330
+            'expected': expected_total,
+            'valid': len(index_data.get('experiments', [])) >= expected_total
         }
     
     return results
@@ -217,10 +218,10 @@ def verify_dissertation_claims(base_dir: Path) -> dict:
     with open(stats_file) as f:
         stats = json.load(f)
     
-    # Claim: PQC algorithms have data
+    # Claim: PQC algorithms have data (includes ECDHE for KEM comparison)
     native = [a for a in stats.get('aggregated', []) if a.get('environment') == 'native']
     algorithms = set(a.get('algorithm') for a in native)
-    required_algorithms = {'rsa2048', 'ecdsa_p256', 'kyber512', 'dilithium2', 'hybrid_kyber_dilithium'}
+    required_algorithms = {'rsa2048', 'ecdsa_p256', 'ecdhe_p256', 'kyber512', 'dilithium2', 'hybrid_kyber_dilithium'}
     
     # Normalize algorithm names for comparison (handle variations)
     normalized_found = set()

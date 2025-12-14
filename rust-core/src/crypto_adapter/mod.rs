@@ -4,6 +4,7 @@
 //! for both classical and post-quantum cryptographic operations.
 
 pub mod dilithium_adapter;
+pub mod ecdhe_adapter;
 pub mod ecdsa_adapter;
 pub mod kem_hybrid;
 pub mod kyber_adapter;
@@ -12,6 +13,7 @@ pub mod registry;
 pub mod rsa_adapter;
 
 pub use dilithium_adapter::DilithiumAdapter;
+pub use ecdhe_adapter::EcdheP256Adapter;
 pub use ecdsa_adapter::EcdsaP256Adapter;
 pub use kem_hybrid::{
     aead_decrypt, aead_encrypt, derive_aead_key, hybrid_decrypt, hybrid_encrypt, HybridSizes,

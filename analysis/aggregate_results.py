@@ -429,7 +429,7 @@ def main():
             effect_sizes.append(effect)
     
     # PQC vs Classical comparisons
-    classical_algos = ['rsa2048', 'ecdsa_p256']
+    classical_algos = ['rsa2048', 'ecdsa_p256', 'ecdhe_p256']
     pqc_algos = ['kyber512', 'dilithium2', 'hybrid_kyber_dilithium']
     
     for env in ['native', 'minikube', 'gcp']:

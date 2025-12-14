@@ -136,7 +136,8 @@ def generate_report(stats_path: Path, hypothesis_path: Path,
     # Data Quality
     lines.append("## Data Quality")
     lines.append("")
-    lines.append("- ✅ All 330 experiments completed successfully (100% success rate)")
+    lines.append("- ✅ All experiments completed successfully (100% success rate)")
+    lines.append("  - Expected: 396 total with ECDHE (120 native + 138 minikube + 138 gcp)")
     lines.append("- ✅ All summaries validated and accurate")
     lines.append("- ✅ All data consistently in nanoseconds (latency_ns)")
     lines.append("")

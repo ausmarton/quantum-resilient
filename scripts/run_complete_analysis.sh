@@ -110,7 +110,7 @@ fi
 
 # Check summary count
 SUMMARY_COUNT=$(find results -path "*/stats/summary.json" -type f 2>/dev/null | wc -l || echo 0)
-TOTAL_EXPERIMENTS=$(python3 -c "import json; idx=json.load(open('$INDEX_FILE')); print(len(idx.get('experiments', [])))" 2>/dev/null || echo 330)
+TOTAL_EXPERIMENTS=$(python3 -c "import json; idx=json.load(open('$INDEX_FILE')); print(len(idx.get('experiments', [])))" 2>/dev/null || echo 396)
 
 log_info "Found $SUMMARY_COUNT summaries out of $TOTAL_EXPERIMENTS experiments"
 

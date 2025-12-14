@@ -590,7 +590,7 @@ def main():
     
     # 3. PQC vs Classical comparisons
     print("\nRunning PQC vs Classical comparisons...")
-    classical = ['rsa2048', 'ecdsa_p256']
+    classical = ['rsa2048', 'ecdsa_p256', 'ecdhe_p256']
     pqc = ['kyber512', 'dilithium2', 'hybrid_kyber_dilithium']
     
     for env in ['native', 'minikube', 'gcp']:

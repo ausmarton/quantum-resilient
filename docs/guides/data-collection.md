@@ -124,14 +124,14 @@ results/<env>/<scenario-id>/
 
 Based on `orchestration/experiment_matrix.yaml`:
 
-- **Algorithms**: 5 (RSA-2048, ECDSA P-256, Kyber-512, Dilithium-2, Hybrid)
+- **Algorithms**: 6 (RSA-2048, ECDSA P-256, ECDHE P-256, Kyber-512, Dilithium-2, Hybrid)
 - **Payload sizes**: 4 (256B, 1KB, 4KB, 16KB)
 - **Rates**: 3 (100, 500, 2000 msg/s) + 10K msg/s (enterprise-scale)
 - **Workload patterns**: Constant (baseline) + Burst (enterprise patterns)
 - **Duration**: 30s (baseline) + 300s (5-min sustained load)
 - **Horizontal scaling**: Replicas 1,2,4,8 (Minikube + GCP only)
 - **Runs per configuration**: 5 (3 for 5-min duration and scaling)
-- **Total scenarios per environment**: **480 scenarios**
+- **Total scenarios per environment**: **576 scenarios** (includes ECDHE P-256 for KEM comparison)
   - Baseline: 300 (5 × 4 × 3 × 5)
   - Burst pattern: 50 (5 × 2 × 1 × 5)
   - 10K msg/s: 100 (5 × 4 × 1 × 5)

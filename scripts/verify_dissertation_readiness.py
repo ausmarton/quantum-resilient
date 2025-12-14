@@ -37,12 +37,13 @@ def verify_data_completeness(base_dir: Path) -> dict:
     """Verify data completeness requirements."""
     results = {}
     
-    # Check summaries
+    # Check summaries (expected: 396 total with ECDHE: 120 native + 138 minikube + 138 gcp)
     summaries = list(Path('results').rglob('**/stats/summary.json'))
+    expected_total = 396  # With ECDHE
     results['summaries'] = {
         'count': len(summaries),
-        'expected': 330,
-        'valid': len(summaries) == 330,
+        'expected': expected_total,
+        'valid': len(summaries) >= expected_total,  # >= to allow for extra experiments
         'description': 'Experiment summaries'
     }
     
@@ -53,8 +54,8 @@ def verify_data_completeness(base_dir: Path) -> dict:
             index_data = json.load(f)
         results['index'] = {
             'count': len(index_data.get('experiments', [])),
-            'expected': 330,
-            'valid': len(index_data.get('experiments', [])) == 330,
+            'expected': expected_total,
+            'valid': len(index_data.get('experiments', [])) >= expected_total,  # >= to allow for extra
             'description': 'Experiment index'
         }
     
@@ -125,7 +126,7 @@ def verify_dissertation_claims(base_dir: Path) -> dict:
     # Claim: PQC key generation overhead (1-3μs)
     native = [a for a in stats.get('aggregated', []) if a.get('environment') == 'native']
     pqc_algorithms = ['kyber512', 'dilithium2', 'hybrid']
-    classical_algorithms = ['rsa2048', 'ecdsa']
+    classical_algorithms = ['rsa2048', 'ecdsa_p256', 'ecdhe_p256']  # Includes ECDHE for KEM comparison
     
     pqc_latencies = []
     classical_latencies = []

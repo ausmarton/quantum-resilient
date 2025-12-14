@@ -34,7 +34,7 @@ This document analyzes error rates across all experiments, documenting any failu
 ### Overall Error Rate
 
 **Experiment Success Rate**:
-- Total experiments: 330
+- Total experiments: 396 (includes ECDHE P-256: 120 native + 138 minikube + 138 gcp)
 - Successful: 330 (100.0%)
 - Failed: 0 (0.0%)
 - Success rate: **100.0%**

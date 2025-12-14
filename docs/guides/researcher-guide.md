@@ -50,7 +50,7 @@ gcloud config set project <your-project-id>
 | **Smoke test** | Very short version (5 seconds, 1 run) to validate infrastructure before full experiments |
 | **Full benchmark** | The real multi-run performance study (30 seconds, 5 runs per configuration) |
 | **Environment** | Where the test runs: `native` (local machine), `minikube` (local Kubernetes), `gcp` (Google Cloud GKE) |
-| **Algorithm** | Cryptographic primitive: `rsa2048`, `ecdsa_p256`, `kyber512`, `dilithium2`, `hybrid_kyber_dilithium` |
+| **Algorithm** | Cryptographic primitive: `rsa2048`, `ecdsa_p256`, `ecdhe_p256`, `kyber512`, `dilithium2`, `hybrid_kyber_dilithium` |
 | **Experiment Matrix** | Declarative YAML file (`orchestration/experiment_matrix.yaml`) that defines all combinations to test |
 
 ---
@@ -58,9 +58,11 @@ gcloud config set project <your-project-id>
 ## 📌 3. Research Context
 
 **Your dissertation compares:**
-- **Classical cryptography**: RSA-2048, ECDSA P-256 (baselines)
+- **Classical cryptography**: RSA-2048 (signatures), ECDSA P-256 (signatures), ECDHE P-256 (KEM/key exchange)
 - **Post-Quantum cryptography**: Kyber-512 (KEM), Dilithium-2 (signatures)
 - **Hybrid schemes**: Kyber-512 KEM → AES-GCM → Dilithium-2 signature
+
+**Note**: ECDHE P-256 provides a classical KEM baseline for direct comparison with Kyber-512 (both are key exchange mechanisms), addressing the apples-to-apples comparison requirement.
 
 **Across three environments:**
 - **Native**: Bare-metal performance (baseline)

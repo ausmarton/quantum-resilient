@@ -3,9 +3,9 @@
 //! Provides a factory function to instantiate crypto adapters by name.
 
 use super::{
-    dilithium_adapter::DilithiumAdapter, ecdsa_adapter::EcdsaP256Adapter,
-    kyber_adapter::KyberAdapter, noop_adapter::NoOpCryptoAdapter, rsa_adapter::Rsa2048Adapter,
-    CryptoAdapter, CryptoError,
+    dilithium_adapter::DilithiumAdapter, ecdhe_adapter::EcdheP256Adapter,
+    ecdsa_adapter::EcdsaP256Adapter, kyber_adapter::KyberAdapter,
+    noop_adapter::NoOpCryptoAdapter, rsa_adapter::Rsa2048Adapter, CryptoAdapter, CryptoError,
 };
 use std::sync::Arc;
 
@@ -21,6 +21,7 @@ use std::sync::Arc;
 /// - `"noop"` - NoOp baseline adapter (zero-cost operations)
 /// - `"rsa2048"` - RSA-2048 adapter
 /// - `"ecdsa_p256"` - ECDSA P-256 adapter
+/// - `"ecdhe_p256"` - ECDHE P-256 KEM adapter (classical key exchange)
 /// - `"kyber"` - Kyber-512 PQC KEM adapter
 /// - `"dilithium"` - Dilithium-2 PQC signature adapter
 ///
@@ -31,6 +32,7 @@ pub fn get_adapter(name: &str) -> Result<Arc<dyn CryptoAdapter>, CryptoError> {
         "noop" => Ok(Arc::new(NoOpCryptoAdapter)),
         "rsa2048" => Ok(Arc::new(Rsa2048Adapter::new()?)),
         "ecdsa_p256" => Ok(Arc::new(EcdsaP256Adapter::new()?)),
+        "ecdhe_p256" => Ok(Arc::new(EcdheP256Adapter::new()?)),
         "kyber" => Ok(Arc::new(KyberAdapter::new("kyber512")?)),
         "dilithium" => Ok(Arc::new(DilithiumAdapter::new("dilithium2")?)),
         _ => Err(CryptoError::InvalidKey),
@@ -39,12 +41,12 @@ pub fn get_adapter(name: &str) -> Result<Arc<dyn CryptoAdapter>, CryptoError> {
 
 /// Returns a list of all supported adapter names
 pub fn supported_adapters() -> &'static [&'static str] {
-    &["noop", "rsa2048", "ecdsa_p256", "kyber", "dilithium"]
+    &["noop", "rsa2048", "ecdsa_p256", "ecdhe_p256", "kyber", "dilithium"]
 }
 
 /// Returns whether the adapter supports KEM operations
 pub fn adapter_supports_kem(name: &str) -> bool {
-    matches!(name, "kyber" | "noop")
+    matches!(name, "kyber" | "ecdhe_p256" | "noop")
 }
 
 /// Returns whether the adapter supports signature operations
@@ -78,6 +80,13 @@ mod tests {
     }
 
     #[test]
+    fn test_get_ecdhe_adapter() {
+        let adapter = get_adapter("ecdhe_p256");
+        assert!(adapter.is_ok());
+        assert_eq!(adapter.unwrap().name(), "ecdhe_p256");
+    }
+
+    #[test]
     fn test_get_kyber_adapter() {
         let adapter = get_adapter("kyber");
         assert!(adapter.is_ok());
@@ -97,12 +106,14 @@ mod tests {
         assert!(adapters.contains(&"noop"));
         assert!(adapters.contains(&"rsa2048"));
         assert!(adapters.contains(&"ecdsa_p256"));
+        assert!(adapters.contains(&"ecdhe_p256"));
         assert!(adapters.contains(&"kyber"));
     }
 
     #[test]
     fn test_adapter_supports_kem() {
         assert!(adapter_supports_kem("kyber"));
+        assert!(adapter_supports_kem("ecdhe_p256"));
         assert!(adapter_supports_kem("noop"));
         assert!(!adapter_supports_kem("ecdsa_p256"));
         assert!(!adapter_supports_kem("rsa2048"));

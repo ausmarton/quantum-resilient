@@ -4,20 +4,20 @@ Use this checklist to verify all documentation is accurate and up-to-date.
 
 ## Experiment Counts
 
-✅ **Verified**: Current experiment counts are correct
-- Native: 468 experiments
-- Minikube: 495 experiments (468 baseline + 27 scaling)
-- GCP: 495 experiments (468 baseline + 27 scaling)
-- Total: 1,458 experiments
+✅ **Verified**: Current experiment counts are correct (updated with ECDHE)
+- Native: 576 experiments (120 unique configs)
+- Minikube: 648 experiments (576 baseline + 72 scaling)
+- GCP: 648 experiments (576 baseline + 72 scaling)
+- Total: 1,872 experiments
 
 **Breakdown**:
-- Core baseline: 300 (5 algorithms × 4 payloads × 3 rates × 5 runs)
-- Burst pattern: 50
-- 10K msg/s: 100
-- 5-minute duration: 9
-- Scaling baseline: 9
-- **Total baseline**: 468
-- **Scaling additional**: 27 (9 scenarios × 3 replica counts: 2,4,8)
+- Core baseline: 360 (6 algorithms × 4 payloads × 3 rates × 5 runs)
+- Burst pattern: 60 (6 algorithms × 2 payloads × 1 rate × 5 runs)
+- 10K msg/s: 120 (6 algorithms × 4 payloads × 1 rate × 5 runs)
+- 5-minute duration: 18 (6 algorithms × 1 payload × 1 rate × 3 runs)
+- Scaling baseline: 18 (6 algorithms × 1 payload × 1 rate × 3 runs)
+- **Total baseline**: 576
+- **Scaling additional**: 72 (18 scenarios × 4 replica counts: 1,2,4,8, but native only uses replica 1)
 
 ## Script References
 

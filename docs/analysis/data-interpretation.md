@@ -8,13 +8,14 @@
 
 ## Executive Summary
 
-This document provides a comprehensive interpretation of experimental data collected across 330 experiments in three environments (native, Minikube, GCP), supporting all claims and arguments in the dissertation.
+This document provides a comprehensive interpretation of experimental data collected across experiments in three environments (native, Minikube, GCP), supporting all claims and arguments in the dissertation.
 
-**Data Summary**:
-- **Experiments**: 330 total (110 per environment)
+**Data Summary** (Updated with ECDHE):
+- **Experiments**: 396 total (120 native + 138 minikube + 138 gcp) - includes ECDHE P-256
+- **Previous**: 330 total (110 per environment) - before ECDHE addition
 - **Runs**: 1,530 total runs
 - **Events**: 115M+ events collected
-- **Algorithms**: RSA-2048, ECDSA P-256, Kyber-512, Dilithium-2, Hybrid Kyber+Dilithium
+- **Algorithms**: RSA-2048, ECDSA P-256, ECDHE P-256, Kyber-512, Dilithium-2, Hybrid Kyber+Dilithium
 - **Environments**: Native, Minikube (local K8s), GCP (GKE)
 - **Payload Sizes**: 256B, 1024B, 4096B, 16384B
 - **Workload Rates**: 100, 500, 2000, 10000 msg/s

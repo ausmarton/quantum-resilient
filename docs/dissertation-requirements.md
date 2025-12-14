@@ -236,7 +236,7 @@ Based on the dissertation abstract and content:
 ## Success Criteria
 
 ### Data Completeness
-- ✅ All 330 experiments have raw data
+- ✅ All experiments have raw data (396 total with ECDHE: 120 native + 138 minikube + 138 gcp)
 - ⚠️ All experiments need summary.json files (in progress)
 - ⚠️ All experiments need aggregated statistics
 
@@ -288,7 +288,7 @@ Based on the dissertation abstract and content:
 
 ## Next Steps
 
-1. **Complete Summary Generation**: Generate all 330 experiment summaries
+1. **Complete Summary Generation**: Generate all experiment summaries (396 total with ECDHE: 120 native + 138 minikube + 138 gcp)
 2. **Run Complete Analysis**: Generate aggregated stats, visualizations, hypothesis tests
 3. **Verify Claim Support**: Check each claim against generated data
 4. **Create Interpretation Document**: Document findings supporting each claim

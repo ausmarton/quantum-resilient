@@ -23,7 +23,7 @@ This document describes the complete analysis pipeline for processing experiment
 - Experiments run across three environments: native, minikube, GCP
 - Each experiment has 1-5 runs
 - Each run produces a JSONL file with event-level telemetry
-- Total: 330 experiments, 1,530 runs, 115M+ events
+- Total: 396 experiments with ECDHE (120 native + 138 minikube + 138 gcp), runs, events
 
 **Validation**:
 ```bash
@@ -403,7 +403,7 @@ final-results/
 ## Performance
 
 **Summary Generation**:
-- **Time**: ~3-5 minutes for 330 experiments (with 16 parallel jobs)
+- **Time**: ~3-6 minutes for 396 experiments (with 16 parallel jobs, includes ECDHE)
 - **Rate**: ~100+ summaries/minute
 - **Optimizations**: Parallelization, chunked reading, resume capability
 

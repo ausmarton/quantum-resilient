@@ -365,7 +365,7 @@ def plot_classical_vs_pqc(
     output_dir: Path,
 ):
     """Plot classical vs PQC algorithm comparison."""
-    classical = ['rsa2048', 'ecdsa_p256']
+    classical = ['rsa2048', 'ecdsa_p256', 'ecdhe_p256']
     pqc = ['kyber512', 'dilithium2', 'hybrid_kyber_dilithium']
     
     # Group by environment -> algorithm -> metrics

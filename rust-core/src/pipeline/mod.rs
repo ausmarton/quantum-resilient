@@ -347,6 +347,18 @@ fn generate_keypair_with_secret(
         }
     }
 
+    // For ECDHE adapter, generate a new keypair
+    // Note: The adapter stores its own keypair internally for decapsulate operations
+    // The pipeline will use the generated keypair for encapsulation
+    if adapter.name() == "ecdhe_p256" {
+        use p256::{SecretKey, EncodedPoint};
+        use rand::rngs::OsRng;
+        
+        let sk = SecretKey::random(&mut OsRng);
+        let pk = EncodedPoint::from(sk.public_key());
+        return Ok((pk.as_bytes().to_vec(), sk.to_bytes().to_vec()));
+    }
+
     // For other adapters, use the standard keygen
     let meta = adapter
         .keygen()

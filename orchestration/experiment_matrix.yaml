@@ -32,6 +32,7 @@ scaling:
   scaling_algorithms:
     - rsa2048
     - ecdsa_p256
+    - ecdhe_p256
     - kyber512
     - dilithium2
     - hybrid_kyber_dilithium
@@ -81,6 +82,15 @@ experiments:
     description: "ECDSA P-256 signature baseline"
     adapter: ecdsa_p256
     operation: sign
+    payload_sizes: [256, 1024, 4096, 16384]
+    rates: [100, 500, 2000]
+    runs: 5
+    category: classical
+
+  - algorithm: ecdhe_p256
+    description: "ECDHE P-256 KEM + AES-GCM encryption (classical key exchange baseline)"
+    adapter: ecdhe_p256
+    operation: kem_aead_encrypt
     payload_sizes: [256, 1024, 4096, 16384]
     rates: [100, 500, 2000]
     runs: 5
@@ -161,6 +171,20 @@ experiments:
       factor: 5
       duration_ms: 5000
       interval_ms: 30000
+
+  - algorithm: ecdhe_p256
+    description: "ECDHE P-256 with burst pattern (enterprise workload)"
+    adapter: ecdhe_p256
+    operation: kem_aead_encrypt
+    payload_sizes: [1024, 4096]
+    rates: [2000]
+    runs: 5
+    category: classical
+    workload_pattern: burst
+    burst_config:
+      factor: 5
+      duration_ms: 5000
+      interval_ms: 30000
       
   - algorithm: kyber512
     description: "Kyber-512 with burst pattern (enterprise workload)"
@@ -230,6 +254,15 @@ experiments:
     rates: [10000]
     runs: 5
     category: classical
+
+  - algorithm: ecdhe_p256
+    description: "ECDHE P-256 at 10K msg/s (enterprise-scale rate)"
+    adapter: ecdhe_p256
+    operation: kem_aead_encrypt
+    payload_sizes: [256, 1024, 4096, 16384]
+    rates: [10000]
+    runs: 5
+    category: classical
     
   - algorithm: kyber512
     description: "Kyber-512 at 10K msg/s (enterprise-scale rate)"
@@ -282,6 +315,16 @@ experiments:
     description: "ECDSA P-256 sustained load (5-minute duration)"
     adapter: ecdsa_p256
     operation: sign
+    payload_sizes: [1024]
+    rates: [2000]
+    runs: 3
+    duration_sec: 300
+    category: classical
+
+  - algorithm: ecdhe_p256
+    description: "ECDHE P-256 sustained load (5-minute duration)"
+    adapter: ecdhe_p256
+    operation: kem_aead_encrypt
     payload_sizes: [1024]
     rates: [2000]
     runs: 3
@@ -349,6 +392,16 @@ experiments:
     description: "ECDSA P-256 horizontal scaling (replicas 1,2,4,8)"
     adapter: ecdsa_p256
     operation: sign
+    payload_sizes: [1024]
+    rates: [500]
+    runs: 3
+    category: classical
+    scaling_experiment: true
+
+  - algorithm: ecdhe_p256
+    description: "ECDHE P-256 horizontal scaling (replicas 1,2,4,8)"
+    adapter: ecdhe_p256
+    operation: kem_aead_encrypt
     payload_sizes: [1024]
     rates: [500]
     runs: 3

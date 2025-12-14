@@ -33,12 +33,12 @@ This document defines the **requirements** for the codebase to support dissertat
 ### Dissertation Claims & Objectives
 
 #### Objective 1: Algorithm Performance Comparison
-**Goal**: Compare PQC algorithms (Kyber-512, Dilithium-2, Hybrid) against classical baselines (RSA-2048, ECDSA P-256)
+**Goal**: Compare PQC algorithms (Kyber-512, Dilithium-2, Hybrid) against classical baselines (RSA-2048, ECDSA P-256, ECDHE P-256)
 
 **Required Capabilities**:
 - ✅ Measure latency with sufficient precision (nanosecond)
 - ✅ Measure throughput accurately
-- ✅ Support multiple algorithms (5 algorithms)
+- ✅ Support multiple algorithms (6 algorithms: RSA-2048, ECDSA P-256, ECDHE P-256, Kyber-512, Dilithium-2, Hybrid)
 - ✅ Statistical comparison (hypothesis tests, effect sizes)
 - ✅ Distribution analysis (percentiles, CDFs)
 - ✅ Payload size impact analysis
@@ -611,10 +611,10 @@ This document defines the **requirements** for the codebase to support dissertat
 **Requirement**: Cover PQC and classical algorithms
 
 **Required**:
-- ✅ Classical: RSA-2048, ECDSA P-256
+- ✅ Classical: RSA-2048, ECDSA P-256, ECDHE P-256
 - ✅ PQC: Kyber-512, Dilithium-2
 - ✅ Hybrid: Kyber + Dilithium
-- ✅ **Status**: Meets requirements (5 algorithms)
+- ✅ **Status**: Meets requirements (6 algorithms, including ECDHE for KEM comparison)
 
 ---
 
