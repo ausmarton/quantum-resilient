@@ -4041,3 +4041,209 @@ During GCP mini smoke test execution, multiple Terraform-related issues were dis
 - **For publication**: 5 runs would strengthen statistical claims
 
 ---
+
+### 41. Roll Out Environment Naming Standardization Across Repository
+
+**Status**: 🔄 **PENDING**  
+**Priority**: Medium (post-dissertation enhancement)  
+**Category**: Code Quality & Consistency
+
+**Context**:
+Chapter 4 of the dissertation has been updated to use academically rigorous environment terminology:
+- `native` → `bare-metal` (Bare-metal (non-containerised) execution)
+- `minikube` → `local-k8s` (Containerised local Kubernetes execution)
+- `gcp` → `cloud-k8s` (Cloud-managed Kubernetes execution)
+
+This change improves academic rigor by:
+1. Avoiding implementation-specific terminology (Minikube, GCP) in favor of deployment model terminology
+2. Focusing on scientific distinctions (execution model, infrastructure location) rather than tool names
+3. Making the codebase more maintainable and extensible
+
+**Current State**:
+- Chapter 4 dissertation text: ✅ **COMPLETED** (uses Bare-metal, Local-K8s, Cloud-K8s)
+- Reference table (Table 4.0): ✅ **COMPLETED** (includes implementation details for reproducibility)
+- Repository code/scripts: ❌ **PENDING** (still uses native, minikube, gcp)
+
+**Target State**:
+- All code, scripts, configuration files use: `bare-metal`, `local-k8s`, `cloud-k8s`
+- Directory names: `results/bare-metal/`, `results/local-k8s/`, `results/cloud-k8s/`
+- Documentation updated to reflect new terminology
+- Backward compatibility considered (may need migration path for existing data)
+
+**Impact Assessment**:
+
+**High Impact Areas** (Core functionality):
+1. **Configuration Files**:
+   - `orchestration/experiment_matrix.yaml` - Environment definitions (lines 47-64)
+   - Environment keys: `native`, `minikube`, `gcp` → `bare-metal`, `local-k8s`, `cloud-k8s`
+   - Output directories: `results/native` → `results/bare-metal`, etc.
+
+2. **Shell Scripts** (40+ files):
+   - `run_all_experiments.sh` - Environment case statements (lines 834-842)
+   - `run_full_scale_data_collection.sh` - Environment loops (lines 233-240)
+   - `scripts/run_experiment.sh` - Environment routing (lines 133-147)
+   - `run_local.sh`, `run_minikube.sh`, `deploy_gcp.sh` - May need renaming or aliasing
+   - All scripts with environment validation/checking logic
+
+3. **Python Scripts** (Analysis & Orchestration):
+   - `orchestration/generate_scenarios.py` - Environment handling
+   - `analysis/aggregate_results.py` - Environment filtering
+   - `analysis/hypothesis_tests.py` - Environment comparisons
+   - `analysis/compare_all_environments.py` - Environment-specific logic
+   - All plotting scripts with environment parameters
+
+4. **Kubernetes Configurations**:
+   - `k8s/gcp/` directory - May need renaming or restructuring
+   - Environment-specific configmaps and job definitions
+   - Namespace/environment labeling
+
+5. **Directory Structure**:
+   - `results/native/` → `results/bare-metal/`
+   - `results/minikube/` → `results/local-k8s/`
+   - `results/gcp/` → `results/cloud-k8s/`
+   - **Migration**: Existing data directories need handling (move or symlink)
+
+**Medium Impact Areas** (Documentation & Validation):
+6. **Documentation Files** (50+ files):
+   - All `.md` files in `docs/` referencing environments
+   - README files
+   - Guides and reference documentation
+   - Examples and usage instructions
+
+7. **Validation & Analysis Scripts**:
+   - `scripts/validate_*.sh` - Environment parameter validation
+   - `scripts/verify_*.sh` - Environment-specific checks
+   - `scripts/analyze_*.py` - Environment filtering logic
+
+8. **Terraform/Infrastructure**:
+   - `iac/terraform/gcp/` - May need consideration for cloud-k8s naming
+   - Variable names and resource labels
+   - State file references
+
+**Low Impact Areas** (Comments, Examples):
+9. **Code Comments**: Update environment references in comments
+10. **Example Commands**: Update CLI examples in documentation
+11. **Error Messages**: Update validation error messages
+
+**Caveat - Cloud Provider Abstraction**:
+⚠️ **IMPORTANT**: While we're standardizing to `cloud-k8s`, the current implementation is specifically GCP/GKE:
+- Current: `cloud-k8s` = GKE on GCP (n2-standard-2 VMs)
+- Future consideration: If expanding to AWS (EKS) or Azure (AKS), we may need:
+  - Option A: Keep `cloud-k8s` as generic, add provider-specific sub-configurations
+  - Option B: Use `cloud-k8s-gcp`, `cloud-k8s-aws`, `cloud-k8s-azure` if provider-specific behavior is needed
+  - Option C: Use `gcp-k8s`, `aws-k8s`, `azure-k8s` if provider differences are significant
+
+**Recommendation**: Start with Option A (generic `cloud-k8s`) and add provider-specific configuration layers if needed. This maintains abstraction while allowing provider-specific optimizations.
+
+**Implementation Strategy**:
+
+**Phase 1: Configuration & Core Scripts** (High Priority)
+1. Update `orchestration/experiment_matrix.yaml`:
+   - Change environment keys: `native` → `bare-metal`, `minikube` → `local-k8s`, `gcp` → `cloud-k8s`
+   - Update `output_base` paths
+   - Update any environment-specific logic
+
+2. Update core execution scripts:
+   - `run_all_experiments.sh` - Environment case statements
+   - `run_full_scale_data_collection.sh` - Environment loops
+   - `scripts/run_experiment.sh` - Environment routing
+   - Consider backward compatibility (accept old names, map to new)
+
+3. Update directory structure:
+   - Create migration script to move/rename existing `results/` subdirectories
+   - Or create symlinks for backward compatibility during transition
+   - Update all scripts referencing directory paths
+
+**Phase 2: Analysis & Python Scripts** (Medium Priority)
+4. Update Python analysis scripts:
+   - Environment parameter handling
+   - Environment filtering logic
+   - Environment display names in plots
+   - Data loading paths
+
+5. Update orchestration scripts:
+   - `orchestration/generate_scenarios.py`
+   - Any environment-specific generation logic
+
+**Phase 3: Documentation & Validation** (Lower Priority)
+6. Update documentation:
+   - All `.md` files in `docs/`
+   - README files
+   - Usage examples
+   - Error messages
+
+7. Update validation scripts:
+   - Environment parameter validation
+   - Environment-specific checks
+
+**Phase 4: Infrastructure & Advanced** (Optional)
+8. Consider Kubernetes/Infrastructure:
+   - Directory naming (`k8s/gcp/` → `k8s/cloud-k8s/` or keep as-is)
+   - Resource labeling
+   - Terraform variable names (if needed)
+
+**Backward Compatibility Considerations**:
+- **Option 1**: Accept both old and new names during transition period
+  - Scripts accept `native`/`minikube`/`gcp` and map to new names
+  - Gradual migration of all references
+- **Option 2**: Hard cutover with migration script
+  - Update all references at once
+  - Provide migration script for existing data directories
+- **Recommendation**: Option 1 (backward compatibility) for smoother transition
+
+**Testing Requirements**:
+1. ✅ Verify all three environments still work after changes
+2. ✅ Verify existing data can be accessed (symlinks or migration)
+3. ✅ Verify analysis scripts can process data with new naming
+4. ✅ Verify documentation examples are accurate
+5. ✅ Verify no hardcoded environment checks break
+
+**Risk Assessment**:
+- **HIGH**: Breaking existing workflows and data access
+- **MEDIUM**: Incomplete migration leaving some references unchanged
+- **LOW**: Documentation inconsistencies
+
+**Mitigation**:
+- Implement backward compatibility layer
+- Comprehensive testing before full rollout
+- Gradual migration with validation at each phase
+- Keep old directory names as symlinks during transition
+
+**Dependencies**: 
+- None (can be done independently)
+- Consider timing: After dissertation submission or during maintenance phase
+
+**Effort Estimate**:
+- **Phase 1** (Core): 4-6 hours
+- **Phase 2** (Analysis): 3-4 hours
+- **Phase 3** (Documentation): 2-3 hours
+- **Phase 4** (Infrastructure): 1-2 hours
+- **Testing**: 2-3 hours
+- **Total**: 12-18 hours
+
+**Impact**:
+- **HIGH**: Improves code maintainability and academic rigor
+- **MEDIUM**: Better alignment between dissertation and codebase
+- **MEDIUM**: Easier to extend to other cloud providers in future
+- **LOW**: Breaking change risk (mitigated by backward compatibility)
+
+**Related Files** (Sample - 157 files total found):
+- `orchestration/experiment_matrix.yaml` - Primary configuration
+- `run_all_experiments.sh` - Core execution
+- `scripts/run_experiment.sh` - Environment routing
+- `analysis/aggregate_results.py` - Analysis pipeline
+- `docs/guides/data-collection.md` - Documentation
+- `results/native/`, `results/minikube/`, `results/gcp/` - Data directories
+
+**Rationale for Medium Priority**:
+- Chapter 4 is complete with new terminology
+- Repository changes are not blocking for dissertation
+- Can be done as post-dissertation cleanup/enhancement
+- Improves long-term maintainability and extensibility
+
+**Recommendation**:
+- **For current dissertation**: Repository changes not required (Chapter 4 already updated)
+- **For post-dissertation**: Implement gradually with backward compatibility
+- **For future work**: Standardized naming makes cloud provider expansion easier
+
+---

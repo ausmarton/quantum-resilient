@@ -51,17 +51,33 @@ ALGO_COLORS = {
     'hybrid_kyber_dilithium': '#c0392b',
 }
 
+# Environment label mapping (for display)
+ENV_DISPLAY_NAMES = {
+    'native': 'Bare-metal',
+    'minikube': 'Local-K8s',
+    'gcp': 'Cloud-K8s',
+    'bare-metal': 'Bare-metal',
+    'local-k8s': 'Local-K8s',
+    'cloud-k8s': 'Cloud-K8s',
+}
+
 # Markers for environments
 ENV_MARKERS = {
     'native': 'o',
     'minikube': 's',
     'gcp': '^',
+    'bare-metal': 'o',
+    'local-k8s': 's',
+    'cloud-k8s': '^',
 }
 
 ENV_COLORS = {
     'native': '#2ecc71',
     'minikube': '#3498db',
     'gcp': '#e74c3c',
+    'bare-metal': '#2ecc71',
+    'local-k8s': '#3498db',
+    'cloud-k8s': '#e74c3c',
 }
 
 
@@ -130,7 +146,8 @@ def plot_throughput_vs_payload(
         
         ax.set_xlabel('Payload Size (bytes)')
         ax.set_ylabel('Throughput (ops/sec)')
-        ax.set_title(f'Throughput vs Payload Size ({env.capitalize()})')
+        display_env = ENV_DISPLAY_NAMES.get(env, env.capitalize())
+        ax.set_title(f'Throughput vs Payload Size ({display_env})')
         # Only add legend if there are labeled artists
         handles, labels = ax.get_legend_handles_labels()
         if labels:
@@ -138,7 +155,11 @@ def plot_throughput_vs_payload(
         ax.set_xscale('log')
         
         plt.tight_layout()
-        output_path = output_dir / f'throughput_vs_payload_{env}.png'
+        # Use display name for filename, but map old names for backward compatibility
+        env_for_file = env
+        if env in ['native', 'minikube', 'gcp']:
+            env_for_file = {'native': 'bare-metal', 'minikube': 'local-k8s', 'gcp': 'cloud-k8s'}.get(env, env)
+        output_path = output_dir / f'throughput_vs_payload_{env_for_file}.png'
         plt.savefig(output_path)
         plt.close()
         print(f"  Saved: {output_path}")
@@ -248,7 +269,8 @@ def plot_latency_vs_rate(
         
         ax.set_xlabel('Message Rate (msgs/sec)')
         ax.set_ylabel('p95 Latency (μs)')
-        ax.set_title(f'Latency vs Message Rate ({env.capitalize()})')
+        display_env = ENV_DISPLAY_NAMES.get(env, env.capitalize())
+        ax.set_title(f'Latency vs Message Rate ({display_env})')
         # Only add legend if there are labeled artists
         handles, labels = ax.get_legend_handles_labels()
         if labels:
@@ -256,7 +278,11 @@ def plot_latency_vs_rate(
         ax.set_xscale('log')
         
         plt.tight_layout()
-        output_path = output_dir / f'latency_vs_rate_{env}.png'
+        # Use display name for filename, but map old names for backward compatibility
+        env_for_file = env
+        if env in ['native', 'minikube', 'gcp']:
+            env_for_file = {'native': 'bare-metal', 'minikube': 'local-k8s', 'gcp': 'cloud-k8s'}.get(env, env)
+        output_path = output_dir / f'latency_vs_rate_{env_for_file}.png'
         plt.savefig(output_path)
         plt.close()
         print(f"  Saved: {output_path}")

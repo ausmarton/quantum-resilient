@@ -1,25 +1,27 @@
 # Dissertation Readiness Checklist
 
-**Date**: 2025-12-14  
-**Purpose**: Comprehensive verification that all artifacts are ready for dissertation chapters
+**Date**: 2025-12-14 (Updated with ECDHE data)  
+**Purpose**: Comprehensive verification that all artifacts are ready for dissertation chapters  
+**Total Experiments**: 396 (120 native + 138 minikube + 138 gcp) - includes ECDHE P-256
 
 ---
 
-## Task 1: Regenerate All Artifacts ✅
+## Task 1: Regenerate All Artifacts ✅ (WITH ECDHE)
 
-- [x] Run full analysis pipeline with --force
+- [x] Run full analysis pipeline with --force (including ECDHE data)
 - [x] Verify all outputs generated successfully
 - [x] Check file counts and sizes
+- [x] Regenerate index.json to include all 396 experiments
 
 ---
 
-## Task 2: Data Completeness Verification ✅
+## Task 2: Data Completeness Verification ✅ (WITH ECDHE)
 
-- [x] All 330 experiments have summaries
+- [x] All 396 experiments have summaries (includes ECDHE)
 - [x] All summaries validated (structure + accuracy)
-- [x] Index.json contains all experiments
-- [x] Aggregated statistics cover all configurations (270 configs)
-- [x] Hypothesis tests cover all required comparisons (54 comparisons)
+- [x] Index.json contains all 396 experiments (120 native + 138 minikube + 138 gcp)
+- [x] Aggregated statistics cover all configurations
+- [x] Hypothesis tests cover all required comparisons (including ECDHE vs Kyber-512)
 
 ---
 

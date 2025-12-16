@@ -10,6 +10,18 @@
 
 This document describes the complete analysis pipeline for processing experiment data, generating summaries, and producing dissertation-ready artifacts.
 
+**Related Documentation**:
+- **[Framework Architecture Diagram](../diagrams/framework-architecture.mmd)** - Visual representation of all framework components including the analysis layer
+- **[Diagrams README](../diagrams/README.md)** - Complete description of all architectural diagrams
+
+The analysis pipeline corresponds to the **Analysis Layer** in the framework architecture diagram (Figure 3.1), which includes:
+- Hypothesis Testing (t-test, Mann-Whitney U)
+- Effect Size Computation (Cohen's d, Confidence Intervals)
+- Statistics Computation (Percentiles, Aggregates)
+- Visualization Scripts (CDFs, Comparison Charts)
+- Jupyter Notebooks (Exploratory Analysis)
+- Export Utilities (Dataset Export, Merge)
+
 ---
 
 ## Pipeline Stages

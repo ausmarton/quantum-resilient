@@ -1,0 +1,41 @@
+flowchart LR
+    subgraph RESEARCH["Research Methodology"]
+        LIT["Systematic Literature Analysis"]
+        
+        LIT -.->|Iterative<br/>Refinement, Informs All<br/>Experimental Stages| LIT
+        LIT --> ALGO
+        
+        ALGO@{ shape: card, label: "<b>Algorithm Selection</b><br/>Objective 1" }
+        FRAMEWORK@{ shape: card, label: "<b>Framework Development</b><br/>Objective 2" }
+        BENCH@{ shape: card, label: "<b>Benchmarking</b><br/>Objective 3" }
+        STATS["Statistical Hypothesis Testing"]
+        COMP@{ shape: card, label: "<b>Comparative Analysis</b><br/>Objective 4" }
+        METRICS["Performance Metrics<br/>Latency, Throughput, Resource Utilisation"]
+        RECS@{ shape: card, label: "<b>Engineering Recommendations</b><br/>Objective 5" }
+        
+        FRAMEWORK --> BENCH
+        BENCH -->|Quantitative<br/>Performance<br/>Measurement| STATS
+        STATS --> COMP
+        COMP --> METRICS
+        METRICS -->|Synthesis of<br/>Empirical Findings| RECS
+        COMP -->|Performance<br/>Trade-offs| RECS
+        ALGO --> FRAMEWORK
+    end
+    
+    classDef literature fill:#81d4fa,stroke:#000000,stroke-width:3px
+    classDef objective1 fill:#b3e5fc,stroke:#000000,stroke-width:3px
+    classDef objective2 fill:#ce93d8,stroke:#000000,stroke-width:3px
+    classDef objective3 fill:#ffcc80,stroke:#000000,stroke-width:3px
+    classDef objective4 fill:#81c784,stroke:#000000,stroke-width:3px
+    classDef objective5 fill:#a5d6a7,stroke:#000000,stroke-width:3px
+    classDef nonobjective fill:#fff9c4,stroke:#000000,stroke-width:3px
+    classDef nonobjective2 fill:#c8e6c9,stroke:#000000,stroke-width:3px
+    
+    class LIT literature
+    class ALGO objective1
+    class FRAMEWORK objective2
+    class BENCH objective3
+    class STATS nonobjective
+    class COMP objective4
+    class METRICS nonobjective2
+    class RECS objective5

@@ -50,6 +50,68 @@ This document analyzes the impact of payload size on cryptographic operation lat
 - 16384 bytes: 99.54μs
   → ++1.2% (+0.10% per KB)
 
+**ecdhe**:
+- 256 bytes: 198.05μs
+- 1024 bytes: 194.73μs
+  → +-1.7% (-2.23% per KB)
+- 4096 bytes: 195.86μs
+  → ++0.6% (+0.19% per KB)
+- 16384 bytes: 208.44μs
+  → ++6.4% (+0.54% per KB)
+
+**ecdsa**:
+- 256 bytes: 114.51μs
+- 1024 bytes: 115.50μs
+  → ++0.9% (+1.15% per KB)
+- 4096 bytes: 115.91μs
+  → ++0.4% (+0.12% per KB)
+- 16384 bytes: 120.26μs
+  → ++3.8% (+0.31% per KB)
+
+**hybrid**:
+- 256 bytes: 111.93μs
+- 1024 bytes: 114.62μs
+  → ++2.4% (+3.21% per KB)
+- 4096 bytes: 124.13μs
+  → ++8.3% (+2.77% per KB)
+- 16384 bytes: 161.52μs
+  → ++30.1% (+2.51% per KB)
+
+**kyber512**:
+- 256 bytes: 10.94μs
+- 1024 bytes: 11.81μs
+  → ++8.0% (+10.66% per KB)
+- 4096 bytes: 14.50μs
+  → ++22.7% (+7.58% per KB)
+- 16384 bytes: 24.64μs
+  → ++70.0% (+5.83% per KB)
+
+**rsa2048**:
+- 256 bytes: 126.85μs
+- 1024 bytes: 126.49μs
+  → +-0.3% (-0.39% per KB)
+- 4096 bytes: 126.11μs
+  → +-0.3% (-0.10% per KB)
+- 16384 bytes: 131.68μs
+  → ++4.4% (+0.37% per KB)
+
+## Native Environment
+
+**Algorithm Performance by Payload Size (p95 latency in microseconds)**:
+
+## Native Environment
+
+**Algorithm Performance by Payload Size (p95 latency in microseconds)**:
+
+**dilithium2**:
+- 256 bytes: 73.41μs
+- 1024 bytes: 78.76μs
+  → ++7.3% (+9.70% per KB)
+- 4096 bytes: 98.31μs
+  → ++24.8% (+8.28% per KB)
+- 16384 bytes: 99.54μs
+  → ++1.2% (+0.10% per KB)
+
 **ecdsa**:
 - 256 bytes: 114.51μs
 - 1024 bytes: 115.50μs

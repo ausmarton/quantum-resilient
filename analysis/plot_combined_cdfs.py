@@ -43,11 +43,24 @@ plt.rcParams.update({
     'grid.alpha': 0.3,
 })
 
+# Environment label mapping (for display)
+ENV_DISPLAY_NAMES = {
+    'native': 'Bare-metal',
+    'minikube': 'Local-K8s',
+    'gcp': 'Cloud-K8s',
+    'bare-metal': 'Bare-metal',
+    'local-k8s': 'Local-K8s',
+    'cloud-k8s': 'Cloud-K8s',
+}
+
 # Color palette for environments
 ENV_COLORS = {
     'native': '#2ecc71',     # Green
     'minikube': '#3498db',   # Blue
     'gcp': '#e74c3c',        # Red
+    'bare-metal': '#2ecc71',     # Green
+    'local-k8s': '#3498db',   # Blue
+    'cloud-k8s': '#e74c3c',        # Red
 }
 
 # Color palette for algorithms
@@ -64,6 +77,9 @@ ENV_LINESTYLES = {
     'native': '-',
     'minikube': '--',
     'gcp': ':',
+    'bare-metal': '-',
+    'local-k8s': '--',
+    'cloud-k8s': ':',
 }
 
 
@@ -146,22 +162,38 @@ def plot_combined_ecdf_by_algorithm(
     for algorithm in data:
         fig, ax = plt.subplots(figsize=(8, 6))
         
-        for env in ['native', 'minikube', 'gcp']:
+        for env in ['native', 'minikube', 'gcp', 'bare-metal', 'local-k8s', 'cloud-k8s']:
+            # Support both old and new names
+            env_key = env
             if env not in data[algorithm]:
+                # Try old name mapping
+                if env == 'bare-metal' and 'native' in data[algorithm]:
+                    env_key = 'native'
+                elif env == 'local-k8s' and 'minikube' in data[algorithm]:
+                    env_key = 'minikube'
+                elif env == 'cloud-k8s' and 'gcp' in data[algorithm]:
+                    env_key = 'gcp'
+                else:
+                    continue
+            else:
+                env_key = env
+            
+            if env_key not in data[algorithm]:
                 continue
             
             # Combine all runs for this algorithm/environment
-            all_latencies = np.concatenate(data[algorithm][env]) if data[algorithm][env] else np.array([])
+            all_latencies = np.concatenate(data[algorithm][env_key]) if data[algorithm][env_key] else np.array([])
             
             if len(all_latencies) == 0:
                 continue
             
             x, y = compute_ecdf(all_latencies)
-            ax.plot(x, y, 
-                   color=ENV_COLORS.get(env, '#333'),
-                   linestyle=ENV_LINESTYLES.get(env, '-'),
+            display_name = ENV_DISPLAY_NAMES.get(env, env.capitalize())
+            ax.plot(x, y,
+                   color=ENV_COLORS.get(env, ENV_COLORS.get(env_key, '#333')),
+                   linestyle=ENV_LINESTYLES.get(env, ENV_LINESTYLES.get(env_key, '-')),
                    linewidth=2,
-                   label=f'{env.capitalize()}')
+                   label=display_name)
         
         ax.set_xlabel('Latency (μs)')
         ax.set_ylabel('Cumulative Probability')
@@ -210,16 +242,34 @@ def plot_combined_ecdf_all_algorithms(
     
     ax.set_xlabel('Latency (μs)')
     ax.set_ylabel('Cumulative Probability')
-    ax.set_title(f'Latency ECDF - All Algorithms ({environment.capitalize()})')
+    display_env = ENV_DISPLAY_NAMES.get(environment, environment.capitalize())
+    ax.set_title(f'Latency ECDF - All Algorithms ({display_env})')
     # Only add legend if there are labeled artists
     handles, labels = ax.get_legend_handles_labels()
     if labels:
         ax.legend(loc='lower right')
-    ax.set_xlim(left=0)
+    # Set reasonable x-axis limits based on data
+    if len(data) > 0:
+        max_latency = 0
+        for algorithm in data:
+            if environment in data[algorithm]:
+                latencies = np.concatenate(data[algorithm][environment]) if data[algorithm][environment] else np.array([])
+                if len(latencies) > 0:
+                    max_latency = max(max_latency, np.percentile(latencies, 99))
+        if max_latency > 0:
+            ax.set_xlim(left=0, right=max_latency * 1.1)  # Add 10% padding
+        else:
+            ax.set_xlim(left=0)
+    else:
+        ax.set_xlim(left=0)
     ax.set_ylim(0, 1)
     
     plt.tight_layout()
-    output_path = output_dir / f'combined_ecdf_{environment}.png'
+    # Use display name for filename, but map old names for backward compatibility
+    env_for_file = environment
+    if environment in ['native', 'minikube', 'gcp']:
+        env_for_file = {'native': 'bare-metal', 'minikube': 'local-k8s', 'gcp': 'cloud-k8s'}.get(environment, environment)
+    output_path = output_dir / f'combined_ecdf_{env_for_file}.png'
     plt.savefig(output_path)
     plt.close()
     print(f"  Saved: {output_path}")
@@ -229,8 +279,10 @@ def plot_environment_comparison_panel(
     data: dict[str, dict[str, list[np.ndarray]]],
     output_dir: Path,
 ):
-    """Plot 3-panel comparison: native vs minikube vs gcp."""
+    """Plot 3-panel comparison: Bare-metal vs Local-K8s vs Cloud-K8s."""
+    # Support both old and new environment names
     envs = ['native', 'minikube', 'gcp']
+    env_display = ['Bare-metal', 'Local-K8s', 'Cloud-K8s']
     fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
     
     for idx, env in enumerate(envs):
@@ -254,8 +306,18 @@ def plot_environment_comparison_panel(
         ax.set_xlabel('Latency (μs)')
         if idx == 0:
             ax.set_ylabel('Cumulative Probability')
-        ax.set_title(env.capitalize())
-        ax.set_xlim(left=0)
+        ax.set_title(env_display[idx])
+        # Set reasonable x-axis limits based on data
+        max_latency = 0
+        for algorithm in data:
+            if env in data[algorithm]:
+                latencies = np.concatenate(data[algorithm][env]) if data[algorithm][env] else np.array([])
+                if len(latencies) > 0:
+                    max_latency = max(max_latency, np.percentile(latencies, 99))
+        if max_latency > 0:
+            ax.set_xlim(left=0, right=max_latency * 1.1)  # Add 10% padding
+        else:
+            ax.set_xlim(left=0)
         ax.set_ylim(0, 1)
         
         if idx == 2:
@@ -267,7 +329,7 @@ def plot_environment_comparison_panel(
     plt.suptitle('Latency Distribution by Environment', fontsize=14)
     plt.tight_layout()
     
-    output_path = output_dir / 'native_vs_minikube_vs_gcp.png'
+    output_path = output_dir / 'bare-metal_vs_local-k8s_vs_cloud-k8s.png'
     plt.savefig(output_path)
     plt.close()
     print(f"  Saved: {output_path}")
@@ -293,28 +355,60 @@ def plot_payload_panels(
         payload_data = data_by_payload[payload]
         
         for algorithm in payload_data:
-            for env in ['native', 'minikube', 'gcp']:
+            for env in ['native', 'minikube', 'gcp', 'bare-metal', 'local-k8s', 'cloud-k8s']:
+                # Support both old and new names
+                env_key = env
                 if env not in payload_data[algorithm]:
+                    # Try old name mapping
+                    if env == 'bare-metal' and 'native' in payload_data[algorithm]:
+                        env_key = 'native'
+                    elif env == 'local-k8s' and 'minikube' in payload_data[algorithm]:
+                        env_key = 'minikube'
+                    elif env == 'cloud-k8s' and 'gcp' in payload_data[algorithm]:
+                        env_key = 'gcp'
+                    else:
+                        continue
+                else:
+                    env_key = env
+                
+                if env_key not in payload_data[algorithm]:
                     continue
                 
-                all_latencies = np.concatenate(payload_data[algorithm][env]) if payload_data[algorithm][env] else np.array([])
+                all_latencies = np.concatenate(payload_data[algorithm][env_key]) if payload_data[algorithm][env_key] else np.array([])
                 
                 if len(all_latencies) == 0:
                     continue
                 
                 x, y = compute_ecdf(all_latencies)
-                ax.plot(x, y,
-                       color=ALGO_COLORS.get(algorithm, '#333'),
-                       linestyle=ENV_LINESTYLES.get(env, '-'),
-                       linewidth=1.5,
-                       alpha=0.8)
+                # Only plot bare-metal (native) environment to avoid clutter
+                if env_key == 'native':
+                    ax.plot(x, y,
+                           color=ALGO_COLORS.get(algorithm, '#333'),
+                           linewidth=2,
+                           label=algorithm.replace('_', ' ').title(),
+                           alpha=0.8)
         
         ax.set_xlabel('Latency (μs)')
         if idx == 0:
             ax.set_ylabel('Cumulative Probability')
         ax.set_title(f'Payload: {payload} bytes')
-        ax.set_xlim(left=0)
+        # Set reasonable x-axis limits based on data (only for native environment which we're plotting)
+        max_latency = 0
+        for algorithm in payload_data:
+            if 'native' in payload_data[algorithm]:
+                latencies = np.concatenate(payload_data[algorithm]['native']) if payload_data[algorithm]['native'] else np.array([])
+                if len(latencies) > 0:
+                    max_latency = max(max_latency, np.percentile(latencies, 99))
+        if max_latency > 0:
+            # Use a reasonable upper bound with some padding, but ensure it's not too compressed
+            ax.set_xlim(left=0, right=max(max_latency * 1.2, max_latency + 10))  # Add 20% padding or at least 10μs
+        else:
+            ax.set_xlim(left=0)
         ax.set_ylim(0, 1)
+        # Add legend if there are labels
+        handles, labels = ax.get_legend_handles_labels()
+        if labels:
+            ax.legend(loc='lower right', fontsize=8)
     
     plt.suptitle('Latency Distribution by Payload Size', fontsize=14)
     plt.tight_layout()
@@ -364,11 +458,24 @@ def main():
             continue
         
         output_dir = Path(entry['output_dir'])
+        # Convert container paths to host paths
+        if str(output_dir).startswith('/workspace/'):
+            output_dir = Path('results') / output_dir.relative_to('/workspace/results')
+        elif str(output_dir).startswith('/workspace'):
+            output_dir = Path('results') / output_dir.relative_to('/workspace')
+        
         jsonl_path = output_dir / 'merged' / 'merged.jsonl'
         
         # Try alternative paths
         if not jsonl_path.exists():
             jsonl_path = output_dir / 'merged.jsonl'
+        
+        # Try looking in run directories
+        if not jsonl_path.exists():
+            # Check if output_dir is a scenario directory, look in run-1
+            run_path = output_dir / 'run-1' / 'merged' / 'merged.jsonl'
+            if run_path.exists():
+                jsonl_path = run_path
         
         # Check if file exists
         if not jsonl_path.exists():

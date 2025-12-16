@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dissertation Diagrams - Mermaid Renderer</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+        }
+        .diagram-container {
+            margin: 40px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            page-break-after: always;
+        }
+        .diagram-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .mermaid {
+            background: white;
+            padding: 20px;
+        }
+        @media print {
+            .diagram-container {
+                page-break-after: always;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Dissertation Chapter 3 Diagrams</h1>
+    <p>Open this file in a browser and use Print to PDF or take screenshots of each diagram.</p>
+    
+    <div class="diagram-container">
+        <div class="diagram-title">Figure 3.0: High-Level Framework Overview</div>
+        <div class="mermaid">
+graph TB
+    subgraph "Research Methodology"
+        LIT[Literature<br/>Analysis]
+        EXP[Experimental<br/>Framework]
+        MEAS[Performance<br/>Measurement]
+        STAT[Statistical<br/>Analysis]
+    end
+    
+    subgraph "Framework Components"
+        ALGO[Algorithm<br/>Selection]
+        BENCH[Benchmarking<br/>Execution]
+        DATA[Data<br/>Collection]
+        COMP[Comparative<br/>Analysis]
+    end
+    
+    subgraph "Outputs"
+        METRICS[Performance<br/>Metrics]
+        RECS[Engineering<br/>Recommendations]
+    end
+    
+    LIT --> ALGO
+    EXP --> BENCH
+    MEAS --> DATA
+    STAT --> COMP
+    
+    ALGO --> BENCH
+    BENCH --> DATA
+    DATA --> COMP
+    
+    DATA --> METRICS
+    COMP --> RECS
+    
+    style MEAS fill:#e1f5ff,stroke:#01579b,stroke-width:3px
+    style DATA fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    style METRICS fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+        </div>
+    </div>
+
+    <div class="diagram-container">
+        <div class="diagram-title">Figure 3.1: Framework Architecture</div>
+        <div class="mermaid">
+graph TB
+    subgraph "Deployment Layer"
+        BM[Bare-metal<br/>Execution]
+        K8S[Kubernetes<br/>Orchestration]
+        CLOUD[Cloud<br/>Deployment]
+    end
+    
+    subgraph "Orchestration and Metrics Layer"
+        ORCH[Orchestrator<br/>Experiment Coordination]
+        CONFIG[Configuration<br/>YAML Files]
+        STATS[Statistical<br/>Analysis]
+        AGG[Data<br/>Aggregation]
+    end
+    
+    subgraph "Cryptographic Execution Layer"
+        PIPELINE[Streaming<br/>Pipeline]
+        CRYPTO[Crypto Adapters<br/>PQC & Classical]
+        WORKLOAD[Workload<br/>Generator]
+        TELEMETRY[Telemetry<br/>Collection]
+    end
+    
+    subgraph "Telemetry Outputs"
+        JSONL[Event Logs<br/>JSONL]
+        CSV[Statistical<br/>Summaries CSV/JSON]
+        METADATA[Environment<br/>Metadata]
+    end
+    
+    CONFIG --> ORCH
+    ORCH --> PIPELINE
+    ORCH --> STATS
+    ORCH --> AGG
+    
+    PIPELINE --> WORKLOAD
+    WORKLOAD --> CRYPTO
+    CRYPTO --> TELEMETRY
+    TELEMETRY --> JSONL
+    TELEMETRY --> CSV
+    TELEMETRY --> METADATA
+    
+    AGG --> STATS
+    JSONL --> AGG
+    CSV --> AGG
+    METADATA --> AGG
+    
+    BM --> PIPELINE
+    K8S --> PIPELINE
+    CLOUD --> PIPELINE
+    
+    style TELEMETRY fill:#e1f5ff,stroke:#01579b,stroke-width:3px
+    style CRYPTO fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style ORCH fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    style STATS fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px
+        </div>
+    </div>
+
+    <div class="diagram-container">
+        <div class="diagram-title">Figure 3.2: Live System vs Framework Comparison</div>
+        <div class="mermaid">
+graph LR
+    subgraph "Live Production System"
+        LIVE_IN[Data Input]
+        LIVE_PIPE[Streaming<br/>Pipeline]
+        LIVE_CRYPTO[Production<br/>Crypto]
+        LIVE_OUT[Data Output]
+        LIVE_MON[Production<br/>Monitoring]
+    end
+    
+    subgraph "Experimental Framework"
+        FW_IN[Workload<br/>Generator]
+        FW_PIPE[Streaming<br/>Pipeline]
+        FW_CRYPTO[Crypto Adapters<br/>PQC & Classical]
+        FW_OUT[Processed<br/>Events]
+        FW_TELEMETRY[Telemetry<br/>Instrumentation]
+    end
+    
+    subgraph "Instrumentation Points"
+        INST1[Timing<br/>Measurement]
+        INST2[Resource<br/>Monitoring]
+        INST3[Event<br/>Logging]
+    end
+    
+    LIVE_IN --> LIVE_PIPE
+    LIVE_PIPE --> LIVE_CRYPTO
+    LIVE_CRYPTO --> LIVE_OUT
+    LIVE_PIPE -.-> LIVE_MON
+    
+    FW_IN --> FW_PIPE
+    FW_PIPE --> FW_CRYPTO
+    FW_CRYPTO --> FW_OUT
+    FW_CRYPTO --> INST1
+    FW_CRYPTO --> INST2
+    FW_OUT --> INST3
+    INST1 --> FW_TELEMETRY
+    INST2 --> FW_TELEMETRY
+    INST3 --> FW_TELEMETRY
+    
+    style FW_TELEMETRY fill:#e1f5ff,stroke:#01579b,stroke-width:3px
+    style INST1 fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style INST2 fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style INST3 fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    style LIVE_MON fill:#f5f5f5,stroke:#616161,stroke-width:1px,stroke-dasharray: 5 5
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            themeVariables: {
+                primaryColor: '#fff',
+                primaryTextColor: '#000',
+                primaryBorderColor: '#000',
+                lineColor: '#000',
+                secondaryColor: '#f0f0f0',
+                tertiaryColor: '#fff'
+            }
+        });
+    </script>
+</body>
+</html>
