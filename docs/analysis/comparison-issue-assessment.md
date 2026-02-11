@@ -10,7 +10,7 @@
 
 The reviewer raises a valid concern: **Kyber-512 (KEM operations) is being compared to RSA-2048 and ECDSA P-256 (signature operations)** without explicit operational framing. This is indeed an apples-to-oranges comparison that needs qualification.
 
-**Key Finding**: The comparison is **contextually valid** for the research aim (real-time pipeline performance), but **requires explicit operational framing** throughout the dissertation to avoid misleading interpretations.
+**Key Finding**: The comparison is **contextually valid** for the research aim (real-time pipeline performance), but **requires explicit operational framing** in the written report to avoid misleading interpretations.
 
 **Update**: ✅ **ECDHE P-256 has been implemented** to provide a true apples-to-apples KEM comparison (ECDHE vs Kyber). This addresses the reviewer's concern by enabling direct KEM-to-KEM comparisons in addition to the contextually valid KEM-vs-signature comparisons.
 
@@ -151,7 +151,7 @@ The reviewer raises a valid concern: **Kyber-512 (KEM operations) is being compa
 **Cons**:
 - ⏭️ Requires running 66 new experiments (20 native + 23 minikube + 23 gcp) - **PENDING**
 - ⏭️ Requires re-running statistical analyses - **PENDING** (after data collection)
-- ⏭️ May delay dissertation submission slightly if experiments not yet run
+- ⏭️ May delay completion slightly if experiments not yet run
 
 ---
 
@@ -166,7 +166,8 @@ The reviewer raises a valid concern: **Kyber-512 (KEM operations) is being compa
 **Fix**: Add explicit operational framing to all comparison statements
 **Add**: Justification paragraph explaining why KEM vs Signature comparison is meaningful
 
-### 3. Section 4.3.4 (Line 652)
+### 3. Section 4.2.2 (Statistical Hypothesis Testing) - UPDATED
+**Note**: Section 4.3.4 referenced in the original document does not exist. This has been replaced with Figure 4.2a (Effect Size Forest Plot) in Section 4.2.2, which visualises the 59 comparisons with large effect sizes (|d| ≥ 0.8).
 **Fix**: "Kyber-512 key encapsulation operations significantly outperform classical signature generation operations (RSA-2048, ECDSA P-256), with 8.3x lower latency."
 
 ### 4. Section 4.4.1 (Line 693)
@@ -255,14 +256,9 @@ The reviewer may be **missing** that:
 
 ## Files Requiring Changes
 
-1. `FERNANDES_H2807295_F87_dissertation (1).md`:
-   - Abstract (line 16)
-   - Section 4.2.1 (lines 488-494)
-   - Section 4.3.4 (line 652)
-   - Section 4.4.1 (line 693)
-   - All other comparison statements (19 total instances)
+1. **Written report** (external to this repo): Abstract and results sections should frame comparisons operationally (KEM vs KEM, signature vs signature) and avoid general PQC-vs-classical wording where the data is algorithm-specific.
 
-2. **No code changes required** for Option A
+2. **No code changes required** for Option A.
 
 ---
 

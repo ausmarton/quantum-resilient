@@ -4,6 +4,7 @@ This directory contains all documentation for the Quantum-Resilient Cryptography
 
 ## Quick Links
 
+- **[Complete System Guide](COMPLETE_SYSTEM_GUIDE.md)** - ⭐ **COMPREHENSIVE END-TO-END GUIDE** - Complete low-level documentation covering code organization, development, execution, data capture, analysis, and reporting
 - **[Getting Started](guides/getting-started.md)** - Quick start guide (coming soon)
 - **[Running Experiments](guides/running-experiments.md)** - How to run experiments (coming soon)
 - **[Data Collection](guides/data-collection.md)** - Full-scale data collection guide
@@ -29,7 +30,11 @@ User-facing guides for running experiments and using the framework:
 
 Technical reference documentation:
 
-- **[Requirements Specification](REQUIREMENTS_SPECIFICATION.md)** - **Single source of truth** for dissertation requirements and codebase capabilities
+- **[Complete System Guide](COMPLETE_SYSTEM_GUIDE.md)** - ⭐ **COMPREHENSIVE END-TO-END GUIDE** - Complete low-level documentation covering everything from code organization to execution, data capture, analysis, and reporting (1,381 lines)
+- **[Requirements Specification](REQUIREMENTS_SPECIFICATION.md)** - **Single source of truth** for research requirements and codebase capabilities
+- **[Component Documentation](reference/component-documentation.md)** - **NEW** - Detailed documentation of all major components (rust-core, orchestrator, analysis suite, etc.)
+- **[Codebase Inventory](CODEBASE_INVENTORY.md)** - **NEW** - Comprehensive inventory of all files and directories
+- **[Algorithm Naming Standard](reference/algorithm-naming-standard.md)** - **NEW** - Standardized algorithm names
 - **[System Requirements](reference/system-requirements.md)** - System load and variability handling
 - **[GCP Deployment](reference/gcp-deployment.md)** - Complete GCP/GKE deployment guide
 - **[Scaling Experiments](reference/scaling-experiments.md)** - Horizontal scaling experiments guide
@@ -42,13 +47,16 @@ Technical reference documentation:
 
 Research analysis and experimental design documents:
 
+- **[Detailed Methodology](methodology-detailed.md)** - Comprehensive methodology (experimental design, data collection, analysis)
+- **[Methodology: Measurement](methodology-measurement.md)** - Measurement precision and resource utilization
+- **[Detailed Analysis](analysis-detailed.md)** - Analysis documentation (statistical methods, visualizations, interpretation)
 - **[Experimental Design](analysis/experimental-design.md)** - Experimental design analysis
 - **[Hardware Consistency](analysis/hardware-consistency.md)** - Cross-environment hardware analysis
 - **[Cost Analysis](analysis/cost-analysis.md)** - Cost and time analysis
 - **[Enterprise Representativeness](analysis/enterprise-representativeness.md)** - Enterprise deployment analysis
-- **[Telemetry Assessment](analysis/telemetry-assessment.md)** - Comprehensive telemetry assessment for dissertation objectives
+- **[Telemetry Assessment](analysis/telemetry-assessment.md)** - Comprehensive telemetry assessment for research objectives
 - **[Workflow](analysis/workflow.md)** - Analysis workflow guide
-- **[Dissertation Guide](analysis/dissertation-guide.md)** - Guide for dissertation analysis
+- **[Analysis Guide](analysis/analysis-guide.md)** - Guide for running analysis and generating reports
 - **[Cluster Sizing Analysis](analysis/cluster-sizing-analysis.md)** - Cluster sizing analysis
 - **[Horizontal Scaling Analysis](analysis/horizontal-scaling-analysis.md)** - Horizontal scaling analysis
 - **[GCP Optimization](analysis/gcp-optimization.md)** - GCP optimization analysis
@@ -68,11 +76,16 @@ Historical fixes and troubleshooting guides:
 The main project README is located at the repository root:
 - **[README.md](../README.md)** - Project overview and quick start
 
+## Additional Documentation
+
+- **[Development Guidelines](../DEVELOPMENT_GUIDELINES.md)** - Development guidelines and practices (also available at root)
+
 ## Finding Documentation
 
 ### By Task
 
-- **"What are the requirements for the dissertation?"** → [Requirements Specification](REQUIREMENTS_SPECIFICATION.md) ⭐ **START HERE**
+- **"I want to understand the entire codebase at a low level"** → [Complete System Guide](COMPLETE_SYSTEM_GUIDE.md) ⭐ **COMPREHENSIVE GUIDE**
+- **"What are the research requirements?"** → [Requirements Specification](REQUIREMENTS_SPECIFICATION.md) ⭐ **START HERE**
 - **"How do I run experiments?"** → [Data Collection Guide](guides/data-collection.md)
 - **"Where are my results?"** → [Storage and Output Guide](guides/storage-and-output.md)
 - **"How do I deploy to GCP?"** → [GCP Deployment Guide](reference/gcp-deployment.md)
@@ -91,34 +104,15 @@ The main project README is located at the repository root:
 
 ## Documentation Status
 
-This documentation was consolidated and reorganized on 2025-12-10 to:
-- ✅ Eliminate redundancies (consolidated 38+ root-level files)
-- ✅ Organize by category (guides, reference, analysis, troubleshooting)
-- ✅ Update outdated information (removed completed TODOs, archived outdated docs)
-- ✅ Improve discoverability (clear structure, updated index)
-- ✅ Centralize action items (all in `TODO.md`)
+Documentation is organized by category: **guides**, **reference**, **analysis**, and **troubleshooting**. Key entry points:
 
-### Consolidated Documents
-
-**Telemetry Documents** (5 → 1):
-- Consolidated into `analysis/telemetry-assessment.md`
-
-**Data Quality Documents** (6 → 1):
-- Consolidated into `reference/data-validation.md`
-
-**Implementation Documents** (3 → 1):
-- Consolidated into `reference/precision-implementation.md`
-- Option 2 preserved as `reference/option2-precision.md`
-
-**Archived Documents**:
-- See `archive/documentation-2025-12-10/` for archived files (2025-12-10 consolidation)
-- See `archive/documentation-2025-01-27/` for archived files (2025-01-27 cleanup)
-- See `ARCHIVE.md` for archive index
+- **Methodology and analysis**: [methodology-detailed.md](methodology-detailed.md), [analysis-detailed.md](analysis-detailed.md)
+- **Data quality**: [reference/data-validation.md](reference/data-validation.md), [analysis/telemetry-assessment.md](analysis/telemetry-assessment.md)
+- **Precision and implementation**: [reference/precision-implementation.md](reference/precision-implementation.md)
 
 ### Active Work Tracking
 
-All outstanding work items are tracked in:
-- **[TODO.md](../TODO.md)** - Single source of truth for all action items
+Outstanding work items are tracked in **[TODO.md](../TODO.md)**.
 
 If you find outdated information or have suggestions, please update the relevant document or create an issue.
 

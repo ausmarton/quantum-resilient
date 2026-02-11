@@ -1,129 +1,33 @@
-graph TB
-    subgraph CONFIG_LAYER["Configuration Layer"]
-        MATRIX[Experiment Matrix<br/>YAML Declarative Config]
-        GEN_SCENARIOS[Scenario Generator<br/>Python Script]
-        SCENARIOS[Individual Scenarios<br/>YAML Files]
-        RNG_SEED[RNG Seed Computation<br/>Deterministic from Parameters]
+%% Figure 3.1: Only the five layers and flow referenced in Section 3.1.4
+%% Caption: "flow from configuration and workload generation through execution and measurement to analysis outputs"
+graph LR
+    subgraph L1["1. Configuration layer"]
+        CONFIG[Defines parameters<br/>workload generation]
     end
-    
-    subgraph DEPLOY["Deployment Layer"]
-        BM[Bare-metal<br/>Native Execution]
-        K8S[Kubernetes<br/>Container Orchestration]
-        CLOUD[Cloud Deployment<br/>GCP GKE]
+    subgraph L2["2. Orchestration layer"]
+        ORCH[Generates and schedules<br/>workloads]
     end
-    
-    subgraph ORCH["Orchestration and Metrics Layer"]
-        ORCH_RUST[Rust Orchestrator<br/>Coordinator, Controller]
-        PYTHON_ORCH[Python Orchestration<br/>Experiment Execution]
-        AGG[Data Aggregator<br/>Multi-run Combination]
-        STATS[Statistical Analysis<br/>Hypothesis Testing, Effect Sizes]
+    subgraph L3["3. Execution layer"]
+        EXEC[Invokes cryptographic<br/>operations]
     end
-    
-    subgraph EXEC["Cryptographic Execution Layer"]
-        PIPELINE[Streaming Pipeline<br/>Async Event Processing]
-        EXEC_MODE[Execution Modes<br/>Single, FixedPool, Elastic]
-        WORKLOAD[Workload Generator<br/>Patterns: Constant, Burst, Ramp]
-        PAYLOAD[Payload Generation<br/>Deterministic RNG]
-        CRYPTO[Crypto Adapters<br/>PQC & Classical<br/>Unified Interface]
-        TELEMETRY[Telemetry Collection<br/>Timing, Resources, Events]
-        CONTROL[Control Plane<br/>Health, Readiness Endpoints]
+    subgraph L4["4. Instrumentation layer"]
+        INST[Captures timing<br/>and resource metrics]
     end
-    
-    subgraph OUTPUT["Telemetry Outputs"]
-        JSONL[Event Logs<br/>JSONL Format]
-        CSV[Statistical Summaries<br/>CSV/JSON]
-        METADATA[Environment Metadata<br/>Deployment Context]
+    subgraph L5["5. Analysis layer"]
+        ANALYSIS[Distributional summaries<br/>and statistical outputs]
     end
-    
-    subgraph ANALYSIS["Analysis Layer"]
-        HYPOTHESIS[Hypothesis Testing<br/>t-test, Mann-Whitney U]
-        EFFECT_SIZE[Effect Size Computation<br/>Cohen's d, Confidence Intervals]
-        STATS_COMPUTE[Statistics Computation<br/>Percentiles, Aggregates]
-        VISUALIZATION[Visualization Scripts<br/>CDFs, Comparison Charts]
-        NOTEBOOKS[Jupyter Notebooks<br/>Exploratory Analysis]
-        EXPORT[Export Utilities<br/>Dataset Export, Merge]
-    end
-    
-    MATRIX --> GEN_SCENARIOS
-    GEN_SCENARIOS --> SCENARIOS
-    GEN_SCENARIOS --> RNG_SEED
-    SCENARIOS --> PYTHON_ORCH
-    RNG_SEED --> PAYLOAD
-    PYTHON_ORCH --> ORCH_RUST
-    ORCH_RUST --> PIPELINE
-    ORCH_RUST --> AGG
-    ORCH_RUST --> STATS
-    
-    PIPELINE --> EXEC_MODE
-    EXEC_MODE --> WORKLOAD
-    WORKLOAD --> PAYLOAD
-    PAYLOAD --> CRYPTO
-    CRYPTO --> TELEMETRY
-    TELEMETRY --> JSONL
-    TELEMETRY --> CSV
-    TELEMETRY --> METADATA
-    PIPELINE --> CONTROL
-    
-    JSONL --> AGG
-    CSV --> AGG
-    METADATA --> AGG
-    AGG --> STATS
-    STATS --> HYPOTHESIS
-    STATS --> EFFECT_SIZE
-    STATS --> STATS_COMPUTE
-    JSONL --> VISUALIZATION
-    CSV --> VISUALIZATION
-    JSONL --> NOTEBOOKS
-    CSV --> NOTEBOOKS
-    STATS_COMPUTE --> EXPORT
-    
-    BM --> PIPELINE
-    K8S --> PIPELINE
-    CLOUD --> PIPELINE
-    
-    classDef config1 fill:#b3e5fc,stroke:#000000,stroke-width:3px
-    classDef config2 fill:#81d4fa,stroke:#000000,stroke-width:3px
-    classDef deployment1 fill:#64b5f6,stroke:#000000,stroke-width:3px
-    classDef deployment2 fill:#90caf9,stroke:#000000,stroke-width:3px
-    classDef deployment3 fill:#bbdefb,stroke:#000000,stroke-width:3px
-    classDef orchestration fill:#ce93d8,stroke:#000000,stroke-width:3px
-    classDef execution1 fill:#ffb74d,stroke:#000000,stroke-width:3px
-    classDef execution2 fill:#ffcc80,stroke:#000000,stroke-width:3px
-    classDef execution3 fill:#ffe082,stroke:#000000,stroke-width:3px
-    classDef crypto fill:#ffe082,stroke:#000000,stroke-width:3px
-    classDef telemetry fill:#fff9c4,stroke:#000000,stroke-width:3px
-    classDef control fill:#fff59d,stroke:#000000,stroke-width:3px
-    classDef output1 fill:#a5d6a7,stroke:#000000,stroke-width:3px
-    classDef output2 fill:#c8e6c9,stroke:#000000,stroke-width:3px
-    classDef output3 fill:#e8f5e9,stroke:#000000,stroke-width:3px
-    classDef analysis1 fill:#81c784,stroke:#000000,stroke-width:3px
-    classDef analysis2 fill:#a5d6a7,stroke:#000000,stroke-width:3px
-    classDef analysis3 fill:#c8e6c9,stroke:#000000,stroke-width:3px
-    
-    class MATRIX config1
-    class GEN_SCENARIOS config2
-    class SCENARIOS config1
-    class RNG_SEED config2
-    class BM deployment1
-    class K8S deployment2
-    class CLOUD deployment3
-    class ORCH_RUST orchestration
-    class PYTHON_ORCH orchestration
-    class PIPELINE execution1
-    class EXEC_MODE execution2
-    class WORKLOAD execution2
-    class PAYLOAD execution3
-    class CRYPTO crypto
-    class TELEMETRY telemetry
-    class CONTROL control
-    class JSONL output1
-    class CSV output2
-    class METADATA output3
-    class STATS analysis1
-    class AGG analysis2
-    class HYPOTHESIS analysis1
-    class EFFECT_SIZE analysis1
-    class STATS_COMPUTE analysis2
-    class VISUALIZATION analysis3
-    class NOTEBOOKS analysis3
-    class EXPORT analysis2
+    CONFIG --> ORCH
+    ORCH --> EXEC
+    EXEC --> INST
+    INST --> ANALYSIS
+
+    classDef config fill:#b3e5fc,stroke:#000,stroke-width:3px
+    classDef orch fill:#ce93d8,stroke:#000,stroke-width:3px
+    classDef exec fill:#ffb74d,stroke:#000,stroke-width:3px
+    classDef inst fill:#fff9c4,stroke:#000,stroke-width:3px
+    classDef analysis fill:#81c784,stroke:#000,stroke-width:3px
+    class CONFIG config
+    class ORCH orch
+    class EXEC exec
+    class INST inst
+    class ANALYSIS analysis

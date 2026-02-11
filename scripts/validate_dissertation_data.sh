@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================================
-# validate_dissertation_data.sh - Comprehensive validation for dissertation claims
+# validate_dissertation_data.sh - Validate experiment data for analysis
 #
-# Validates all collected experiment data against dissertation requirements:
+# Validates all collected experiment data against project requirements:
 # - Data format compliance (all required fields)
 # - Data quality (no errors, valid values)
 # - Completeness (all runs, all experiments)
 # - Statistical validity (sufficient runs per configuration)
-# - Dissertation claims support (all required data points present)
+# - Readiness for analysis (all required data points present)
 #
 # Usage:
 #   ./scripts/validate_dissertation_data.sh [OPTIONS]
@@ -19,7 +19,7 @@
 #   --output FILE          Write detailed report to JSON file
 #   --fail-on-issues       Exit with error if any issues found
 #   --list-unusable        List experiments that need to be re-run
-#   --check-claims        Validate data supports all dissertation claims
+#   --check-claims         Validate data supports all required analysis (default: true)
 # =============================================================================
 
 set -euo pipefail
@@ -62,7 +62,7 @@ usage() {
     cat <<EOF
 Usage: $0 [OPTIONS]
 
-Comprehensive validation for dissertation claims support.
+Validate experiment data completeness and quality for analysis.
 
 OPTIONS:
     --env ENV              Check specific environment (native, minikube, gcp)
@@ -71,7 +71,7 @@ OPTIONS:
     --output FILE          Write detailed report to JSON file
     --fail-on-issues       Exit with error if any issues found
     --list-unusable        List experiments that need to be re-run
-    --check-claims         Validate data supports all dissertation claims (default: true)
+    --check-claims         Validate data supports all required analysis (default: true)
     -h, --help             Show this help message
 
 EXAMPLES:
@@ -156,7 +156,7 @@ OPTIONAL_FIELDS = [
 
 def validate_dissertation_data(results_dir: Path, matrix_file: Path, env_filter: str = "", 
                                 check_claims: bool = True) -> Dict[str, Any]:
-    """Comprehensive validation for dissertation claims support."""
+    """Validate experiment data completeness and quality for analysis."""
     
     report = {
         "timestamp": "",
@@ -592,7 +592,7 @@ def validate_dissertation_data(results_dir: Path, matrix_file: Path, env_filter:
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="Validate dissertation data")
+    parser = argparse.ArgumentParser(description="Validate experiment data for analysis")
     parser.add_argument("--results-dir", type=str, default="results")
     parser.add_argument("--matrix", type=str, default="orchestration/experiment_matrix.yaml")
     parser.add_argument("--env", type=str, default="")
@@ -614,7 +614,7 @@ if __name__ == "__main__":
     else:
         # Print detailed summary
         print("=" * 80)
-        print("DISSERTATION DATA VALIDATION REPORT")
+        print("DATA VALIDATION REPORT")
         print("=" * 80)
         
         summary = report['summary']
@@ -758,7 +758,7 @@ PYTHON_EOF
 )
 
 # Run validation
-log_info "Starting dissertation data validation..."
+log_info "Starting data validation..."
 log_info "Results directory: $RESULTS_DIR"
 log_info "Experiment matrix: $MATRIX"
 

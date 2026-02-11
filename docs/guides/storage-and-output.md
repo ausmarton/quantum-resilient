@@ -51,7 +51,7 @@ quantum-resilient/
 │   └── gcp/
 │       └── <scenario-id>/
 │
-├── final-results/             # Full-scale run outputs (dissertation-ready)
+├── final-results/             # Full-scale run outputs (report-ready)
 │   ├── index.json                  # Master experiment index (all experiments)
 │   ├── aggregated_stats.json       # Statistics aggregated across all experiments
 │   ├── aggregated_stats.csv        # CSV version (if generated)
@@ -70,7 +70,7 @@ quantum-resilient/
 │   │   ├── aggregated_stats.json
 │   │   ├── effect_sizes.json
 │   │   └── environment_deltas.json
-│   └── tables/                     # CSV tables for dissertation
+│   └── tables/                     # CSV tables
 │
 # Note: final-results/ is unified for both smoke-test and full-scale runs
     ├── figures/                     # All figures (overwritten each run)
@@ -81,7 +81,7 @@ quantum-resilient/
 
 ### Analysis Notebooks Output
 
-**Location**: `analysis/figures/dissertation/`
+**Location**: `analysis/figures/`
 
 This folder is used by Jupyter notebooks (`analysis/notebooks/99_generate_figures.ipynb`) for manual figure generation. It's **separate** from the automated `run_all_experiments.sh` workflow.
 
@@ -378,7 +378,7 @@ mv results/native/* archive/2025-12-06/
    ```
 
 **Required Directories (Keep These)**
-- `final-results/` - **Main output for dissertation** (unified for both smoke-test and full-scale)
+- `final-results/` - **Main analysis output** (unified for both smoke-test and full-scale)
 - `results/<env>/<scenario-id>/merged/` - Raw data (needed for re-analysis)
 - `results/<env>/<scenario-id>/stats/` - Individual experiment stats
 - `generated-scenarios/` - Scenario definitions
@@ -430,7 +430,7 @@ mv final-results final-results-smoke-day3
 
 1. **Run experiments**: `./run_all_experiments.sh --smoke-test --envs native,minikube`
 2. **Check results**: Look in `final-results/` (unified for both modes)
-3. **Use figures**: Copy from `final-results/figures/` to your dissertation
+3. **Use figures**: Copy from `final-results/figures/` to your report or document
 4. **Use tables**: Copy from `final-results/tables/` (if generated)
 5. **Use stats**: Reference `final-results/aggregated_stats.json`
 

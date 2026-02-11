@@ -47,7 +47,7 @@ Then use a Python script to render (we can create this if needed).
 
 ## Recommended Approach
 
-For the dissertation Word document, I recommend:
+For Word or other document formats, we recommend:
 1. Use Option 1 (mermaid-cli) if you can install npm packages
 2. Use Option 2 (HTML renderer) if you prefer no installation - just open in browser and screenshot
 3. Use Option 3 (online editor) for quick one-off conversions

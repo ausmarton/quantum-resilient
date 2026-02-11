@@ -1,6 +1,6 @@
 # Full-Scale Data Collection Guide
 
-This guide explains how to run full-scale benchmarks separately for each environment to collect all raw data needed for dissertation analysis.
+This guide explains how to run full-scale benchmarks separately for each environment to collect all raw data needed for analysis.
 
 > **Related**: [STORAGE_AND_OUTPUT_GUIDE.md](STORAGE_AND_OUTPUT_GUIDE.md) - Where results are stored and overwrite behavior
 
@@ -787,7 +787,7 @@ The validation scripts (`validate_gcp_downloads.sh`) **never need a venv** - the
 
 ## Complete Workflow: From Data Collection to Dissertation
 
-This section provides a step-by-step workflow for collecting all data and generating dissertation-ready analysis.
+This section provides a step-by-step workflow for collecting all data and generating report-ready analysis.
 
 ### Phase 1: Data Collection (You Are Here)
 
@@ -860,7 +860,7 @@ This section provides a step-by-step workflow for collecting all data and genera
 
 5. **Generate All Analysis Artifacts**
    
-   This single command generates everything needed for your dissertation:
+   This single command generates all analysis outputs:
    ```bash
    ./run_all_experiments.sh \
      --skip-generation \
@@ -885,13 +885,13 @@ This section provides a step-by-step workflow for collecting all data and genera
    - `final-results/stats/` - Additional statistics:
      - `effect_sizes.json` - Cohen's d effect sizes
      - `environment_deltas.json` - Environment comparisons
-   - `final-results/report.pdf` - Complete dissertation-ready PDF report
+   - `final-results/report.pdf` - Complete report-ready PDF report
 
 ### Phase 4: Use Results for Dissertation
 
 6. **Access Your Results**
    
-   All dissertation-ready outputs are in `final-results/`:
+   All report-ready outputs are in `final-results/`:
    ```bash
    cd final-results/
    ls -lh figures/    # All charts and graphs
@@ -900,7 +900,7 @@ This section provides a step-by-step workflow for collecting all data and genera
    ```
 
 7. **Key Files for Dissertation**:
-   - **Figures**: `final-results/figures/*.png` - Use these in your dissertation
+   - **Figures**: `final-results/figures/*.png` - Use these in reports
    - **Tables**: `final-results/aggregated_stats.csv` - Import into your document
    - **Statistical Tests**: `final-results/hypothesis_table.csv` - Statistical significance results
    - **Interpretations**: `final-results/hypothesis_interpretation.txt` - Pre-written interpretations
@@ -917,7 +917,7 @@ This section provides a step-by-step workflow for collecting all data and genera
 - [ ] ⏳ Regenerate combined index
 - [ ] ⏳ Run complete analysis
 - [ ] ⏳ Review generated figures and statistics
-- [ ] ⏳ Use results in dissertation
+- [ ] ⏳ Use results in reports
 
 ## Next Steps (After All Data Collected)
 
@@ -926,6 +926,6 @@ After completing all three environments:
 2. Archive the `results/` directory (backup before analysis)
 3. Run analysis (generates all figures and statistics)
 4. Review generated visualizations and interpretations
-5. Use figures and tables in dissertation
+5. Use figures and tables in reports
 6. Write up results chapter using the statistical interpretations
 

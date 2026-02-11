@@ -1,6 +1,8 @@
 # TODO: Outstanding Work Items
 
-This document tracks all outstanding work items identified across the codebase, with sufficient detail to investigate and implement as separate tasks. Action items from other documentation files have been consolidated here to avoid duplication.
+**Note for readers**: This file is for maintainers and tracks internal work items. To run experiments and reproduce results, see the main [README](README.md) and [docs](docs/README.md).
+
+This document tracks outstanding work items. Action items from other documentation have been consolidated here.
 
 **⚠️ IMPORTANT**: Before working on any TODO item, read **[DEVELOPMENT_GUIDELINES.md](DEVELOPMENT_GUIDELINES.md)** for ground rules on making changes safely and reliably.
 
@@ -757,7 +759,7 @@ detailed time-series analysis if needed.
 - ✅ **RESOLVED**: Improves dissertation clarity
 
 **Related Files**:
-- ✅ `docs/dissertation-methodology.md` (updated - complete methodology documentation)
+- ✅ `docs/methodology-measurement.md` (measurement and analysis documentation)
 
 ---
 
@@ -1595,7 +1597,7 @@ pip install pandas numpy matplotlib seaborn scipy rich tqdm
 - **Status**: Completed
 - **Date**: 2025-12-10
 - **Files Modified**: 
-  - `docs/dissertation-methodology.md`
+  - `docs/methodology-measurement.md`
 - **Result**: Complete methodology documentation including measurement precision, resource utilization (CPU and memory), timestamp precision, and limitations. All sections updated based on completed work items (#1, #2, #6).
 - **Testing**: ✅ Documentation reviewed and complete
 

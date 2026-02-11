@@ -263,7 +263,7 @@ else
     echo ""
     log_info "Next steps:"
     log_info "  1. Regenerate index: ./scripts/regenerate_index_from_results.sh"
-    log_info "  2. Run analysis: Follow docs/analysis/dissertation-guide.md"
+    log_info "  2. Run analysis: Follow docs/analysis/analysis-guide.md"
 fi
 
 echo ""

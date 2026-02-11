@@ -1,20 +1,20 @@
-# Requirements Specification: Dissertation Objectives & Codebase Capabilities
+# Requirements Specification: Research Objectives & Codebase Capabilities
 
 **Date**: 2025-12-10  
 **Status**: Living Document  
-**Purpose**: Single source of truth for dissertation requirements and codebase capabilities
+**Purpose**: Single source of truth for research requirements and codebase capabilities.
 
 ---
 
 ## Executive Summary
 
-This document defines the **requirements** for the codebase to support dissertation objectives, maps **current capabilities** to those requirements, and identifies **gaps** that need to be addressed.
+This document defines the **requirements** for the codebase to support the research objectives, maps **current capabilities** to those requirements, and identifies **gaps** that need to be addressed.
 
-**Key Principle**: The codebase must enable all dissertation claims and objectives with sufficient precision, statistical rigor, and data completeness.
+**Key Principle**: The codebase must enable all research claims and objectives with sufficient precision, statistical rigor, and data completeness.
 
 ---
 
-## Part 1: Dissertation Objectives & Research Questions
+## Part 1: Research Objectives & Research Questions
 
 ### Primary Research Questions
 
@@ -30,7 +30,7 @@ This document defines the **requirements** for the codebase to support dissertat
 10. **Queue Delay Analysis**: What is the contribution of queue delay to total latency?
 11. **Error Rates**: What are the error rates across algorithms and environments?
 
-### Dissertation Claims & Objectives
+### Research Claims & Objectives
 
 #### Objective 1: Algorithm Performance Comparison
 **Goal**: Compare PQC algorithms (Kyber-512, Dilithium-2, Hybrid) against classical baselines (RSA-2048, ECDSA P-256, ECDHE P-256)
@@ -44,7 +44,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Payload size impact analysis
 - ✅ Queue delay analysis (crypto latency vs total latency)
 
-**Dissertation Claims Supported**:
+**Research Claims Supported**:
 - "Algorithm X is Y% faster than baseline Z"
 - "Statistical analysis shows significant differences (p < 0.05)"
 - "PQC algorithm X demonstrates [performance characteristic]"
@@ -62,7 +62,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Consistent measurement methodology across environments
 - ✅ Cross-environment statistical comparison
 
-**Dissertation Claims Supported**:
+**Research Claims Supported**:
 - "Containerization adds X% overhead compared to native"
 - "Cloud deployment shows Y% variability"
 - "Environment choice impacts performance by Z%"
@@ -79,7 +79,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Experiment isolation (no interference between experiments)
 - ⚠️ Native limitation: Cannot support horizontal scaling (single-process binary)
 
-**Dissertation Claims Supported**:
+**Research Claims Supported**:
 - "GCP experiments demonstrate true horizontal scaling"
 - "Algorithm X achieves Y× speedup with N replicas"
 - "Scaling efficiency is Z% with N replicas"
@@ -98,7 +98,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Confidence intervals (95% CI)
 - ✅ Multiple comparison correction (Holm-Bonferroni)
 
-**Dissertation Claims Supported**:
+**Research Claims Supported**:
 - "Statistical analysis shows significant differences (p < 0.05)"
 - "Effect size is large (Cohen's d > 0.8)"
 - "Confidence intervals indicate [interpretation]"
@@ -112,7 +112,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ CPU data should be valid (cumulative CPU time since process start)
 - ❌ CPU analysis not implemented (see TODO.md #3)
 
-**Dissertation Claims Supported** (if implemented):
+**Research Claims Supported** (if implemented):
 - "Algorithm X uses Y% more memory than baseline Z"
 - "Memory efficiency comparison across environments"
 - "CPU utilization analysis" (conditional on CPU data validity)
@@ -129,7 +129,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Burst pattern tested (enterprise patterns)
 - ✅ Pattern comparison analysis
 
-**Dissertation Claims Supported**:
+**Research Claims Supported**:
 - "Burst patterns increase latency by X% compared to constant"
 - "Algorithm X handles burst patterns better than baseline Z"
 - "Workload pattern impact varies by environment"
@@ -144,7 +144,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Error field in event data
 - ⚠️ Error rate analysis not explicitly documented
 
-**Dissertation Claims Supported**:
+**Research Claims Supported**:
 - "Error rate is X% for algorithm Y"
 - "Error rates increase with load"
 - "Environment X shows Y% higher error rates"
@@ -238,7 +238,7 @@ This document defines the **requirements** for the codebase to support dissertat
 **Statistical Power**:
 - ✅ ~80% power for medium effect sizes (d = 0.5)
 - ✅ ~95% power for large effect sizes (d > 0.8)
-- ✅ ~40% power for small effect sizes (d = 0.2) - acceptable for dissertation
+- ✅ ~40% power for small effect sizes (d = 0.2) - acceptable for the research
 
 **Gap**: None
 
@@ -338,7 +338,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Queue delay included in statistical analysis
 - ✅ Crypto latency calculated (total latency - queue delay)
 
-**Dissertation Claims Supported**:
+**Research Claims Supported**:
 - "Queue delay accounts for X% of total latency"
 - "Crypto latency (excluding queue delay) is Y% faster"
 - "Queuing overhead increases with load"
@@ -358,7 +358,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Payload size included in experimental design
 - ⚠️ Explicit payload impact analysis not documented as requirement
 
-**Dissertation Claims Supported**:
+**Research Claims Supported**:
 - "Performance scales with payload size by X% per KB"
 - "Algorithm X shows Y% better performance at payload size Z"
 - "Payload size impact varies by algorithm"
@@ -379,7 +379,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Burst pattern tested (enterprise patterns)
 - ⚠️ Pattern impact analysis not explicitly documented
 
-**Dissertation Claims Supported**:
+**Research Claims Supported**:
 - "Burst patterns increase latency by X% compared to constant"
 - "Algorithm X handles burst patterns better than baseline Z"
 - "Workload pattern impact varies by environment"
@@ -400,7 +400,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ Error tracking per event
 - ⚠️ Error rate analysis not explicitly documented
 
-**Dissertation Claims Supported**:
+**Research Claims Supported**:
 - "Error rate is X% for algorithm Y"
 - "Error rates increase with load"
 - "Environment X shows Y% higher error rates"
@@ -422,13 +422,13 @@ This document defines the **requirements** for the codebase to support dissertat
 - ❌ Cost efficiency metrics not calculated (ops/dollar, latency/dollar)
 - ❌ Cost comparison across environments not supported (native/minikube have no cost)
 
-**Dissertation Claims Supported** (if implemented):
+**Research Claims Supported** (if implemented):
 - "Algorithm X provides Y% better cost efficiency than baseline Z"
 - "GCP deployment costs $X per million operations"
 - "Cost efficiency scales with replica count"
 
 **Gap**: 
-- **Low**: Cost efficiency analysis optional (not critical for dissertation)
+- **Low**: Cost efficiency analysis optional (not critical for the research)
 
 ---
 
@@ -444,7 +444,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - ✅ GCP: One job per node, or separate namespaces (isolated)
 - ✅ No shared resources between concurrent experiments
 
-**Dissertation Claims Supported**:
+**Research Claims Supported**:
 - "Experiments run in isolation (1 job per node)"
 - "No interference between experiments"
 - "Results are reproducible"
@@ -477,7 +477,7 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ### NFR1: Precision Requirements
 
-**Requirement**: Measurement precision must support all dissertation claims
+**Requirement**: Measurement precision must support all research claims
 
 **Latency Precision**:
 - ✅ **Required**: Microsecond precision (for >1μs operations)
@@ -498,7 +498,7 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ### NFR2: Statistical Rigor
 
-**Requirement**: Sufficient statistical power for dissertation-level analysis
+**Requirement**: Sufficient statistical power for the research-level analysis
 
 **Current Design**:
 - ✅ 5 runs per configuration
@@ -555,7 +555,7 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ### NFR6: Visualization Quality
 
-**Requirement**: Generate publication-quality visualizations for dissertation
+**Requirement**: Generate publication-quality visualizations for the research
 
 **Current Status**: ✅ **IMPLEMENTED**
 
@@ -782,7 +782,7 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ## Part 7: Requirements Traceability Matrix
 
-| Requirement | Dissertation Objective | Current Status | Gap |
+| Requirement | Research Objective | Current Status | Gap |
 |------------|----------------------|----------------|-----|
 | FR1: Latency Measurement | Objective 1, 2, 3 | ✅ Implemented | None |
 | FR2: Throughput Measurement | Objective 1, 2, 3 | ✅ Implemented | None |
@@ -842,11 +842,11 @@ This document defines the **requirements** for the codebase to support dissertat
 
 1. **Native Horizontal Scaling**
    - ❌ Native is single-process binary (limitation, not bug)
-   - ✅ **Acceptable**: Documented limitation, not required for dissertation
+   - ✅ **Acceptable**: Documented limitation, not required for the research
 
 2. **Enterprise-Scale Rates**
    - ❌ Maximum tested: 10K msg/s (vs enterprise: 100K-1M+ msg/s)
-   - ✅ **Acceptable**: Relative comparison sufficient for dissertation
+   - ✅ **Acceptable**: Relative comparison sufficient for the research
 
 3. **Production Workload Duration**
    - ❌ Maximum tested: 5 minutes (vs production: 24/7)
@@ -856,7 +856,7 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ## Part 9: Validation Checklist
 
-### Pre-Dissertation Validation
+### Pre-Submission Validation
 
 - [x] **CPU Sampling**: ✅ **FIXED** - Uses `/proc/self/stat` for cumulative CPU time (TODO.md #1) - **COMPLETED**
 - [x] **Memory Analysis**: ✅ **COMPLETED** - Implemented in compute_statistics.py (TODO.md #2) - **COMPLETED**
@@ -874,7 +874,7 @@ This document defines the **requirements** for the codebase to support dissertat
 - [ ] **Cost Efficiency**: Implement cost efficiency metrics (FR13) - **LOW** (TODO.md #15)
 - [ ] **Report Generation**: Implement automated report generation (NFR8) - **LOW** (TODO.md #16)
 
-### Dissertation Claims Validation
+### Research Claims Validation
 
 - [ ] **Algorithm Comparison**: Verify all algorithms have complete data
 - [ ] **Environment Comparison**: Verify all environments have data for same experiments
@@ -894,7 +894,7 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ### Codebase is "Fit for Purpose" When:
 
-1. ✅ **All dissertation objectives supported**:
+1. ✅ **All research objectives supported**:
    - Algorithm comparison ✅
    - Environment comparison ✅
    - Horizontal scaling ✅
@@ -940,11 +940,11 @@ This document defines the **requirements** for the codebase to support dissertat
 2. ✅ **Telemetry Assessment**: Documented in `docs/analysis/telemetry-assessment.md`
 3. ✅ **Data Validation**: Documented in `docs/reference/data-validation.md`
 4. ✅ **Methodology Documentation**: Complete (TODO.md #7 - COMPLETED)
-5. ✅ **Analysis Guide**: Documented in `docs/analysis/dissertation-guide.md`
+5. ✅ **Analysis Guide**: Documented in `docs/analysis/analysis-guide.md`
 
 ---
 
-## Part 12: Dissertation Structure Mapping
+## Part 12: Requirements Structure Mapping
 
 ### Chapter 5: Results and Analysis
 
@@ -1034,9 +1034,9 @@ This document defines the **requirements** for the codebase to support dissertat
 ### How to Use This Document
 
 1. **For Development**: Use Part 2 (Functional Requirements) to guide implementation
-2. **For Validation**: Use Part 9 (Validation Checklist) before dissertation submission
+2. **For Validation**: Use Part 9 (Validation Checklist) before publication
 3. **For Gap Analysis**: Use Part 6 (Gap Analysis) to prioritize work
-4. **For Claims**: Use Part 1 (Dissertation Objectives) to validate claims
+4. **For Claims**: Use Part 1 (Research Objectives) to validate claims
 5. **For Testing**: Use Part 4 (Experimental Design Requirements) to verify coverage
 
 ---
@@ -1047,8 +1047,8 @@ This document defines the **requirements** for the codebase to support dissertat
 
 - **After completing outstanding work items**: Update gap analysis (Part 6)
 - **After adding new capabilities**: Update requirements traceability (Part 7)
-- **After dissertation submission**: Archive as historical reference
-- **When dissertation objectives change**: Revise requirements accordingly (Part 1)
+- **After publication**: Archive as historical reference
+- **When research objectives change**: Revise requirements accordingly (Part 1)
 - **After validation**: Update Part 9 (Validation Checklist) with results
 
 ### Version History
@@ -1066,8 +1066,8 @@ This document defines the **requirements** for the codebase to support dissertat
 ### Current State: ✅ **MOSTLY FIT FOR PURPOSE**
 
 **Strengths**:
-- ✅ All core dissertation objectives supported (7/7)
-- ✅ Statistical rigor appropriate for dissertation
+- ✅ All core research objectives supported (7/7)
+- ✅ Statistical rigor appropriate for the research
 - ✅ Multi-environment support complete
 - ✅ Horizontal scaling support complete
 - ✅ Precision exceeds requirements
@@ -1119,7 +1119,7 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ### Key Metrics
 
-- **Dissertation Objectives Supported**: 7/7 (100%)
+- **Research Objectives Supported**: 7/7 (100%)
 - **Functional Requirements Met**: 9/15 fully, 6/15 partially (60% fully, 100% partially)
 - **Non-Functional Requirements Met**: 6/8 fully, 2/8 partially (75% fully, 100% partially)
 - **Experimental Design Requirements Met**: 6/6 (100%)
@@ -1134,10 +1134,10 @@ This document defines the **requirements** for the codebase to support dissertat
 
 ### ✅ Comprehensive Coverage Verified
 
-**Dissertation Objectives**:
+**Research Objectives**:
 - ✅ All 7 primary objectives mapped to requirements
 - ✅ All research questions (11 total) documented
-- ✅ All dissertation claims explicitly listed
+- ✅ All research claims explicitly listed
 - ✅ All limitations documented
 
 **Functional Requirements**:
@@ -1231,7 +1231,7 @@ This document defines the **requirements** for the codebase to support dissertat
 
 **This document serves as a benchmark when**:
 - ✅ All requirements are explicitly stated
-- ✅ All dissertation claims are mapped to capabilities
+- ✅ All research claims are mapped to capabilities
 - ✅ All gaps are identified and prioritized
 - ✅ Success criteria are clearly defined
 - ✅ Validation checklist is comprehensive

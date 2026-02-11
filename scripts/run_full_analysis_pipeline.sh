@@ -2,7 +2,7 @@
 # =============================================================================
 # run_full_analysis_pipeline.sh - Complete reproducible analysis pipeline
 #
-# Runs the full analysis pipeline from raw data to dissertation artifacts:
+# Runs the full analysis pipeline from raw data to final results and reports:
 # 1. Generate experiment summaries (from raw JSONL)
 # 2. Aggregate statistics
 # 3. Generate hypothesis tests
@@ -331,7 +331,7 @@ if [[ "$SKIP_TABLES" != "true" ]]; then
         log_info "Using existing tables"
     else
         log_info "Generating performance and effect size tables..."
-        "$PYTHON_CMD" "$SCRIPT_DIR/scripts/extract_dissertation_tables.py" \
+        "$PYTHON_CMD" "$SCRIPT_DIR/scripts/extract_analysis_tables.py" \
             --aggregated "$OUTPUT_DIR/aggregated_stats.json" \
             --hypothesis "$OUTPUT_DIR/hypothesis_tests.json" \
             --output "$OUTPUT_DIR/tables" || {

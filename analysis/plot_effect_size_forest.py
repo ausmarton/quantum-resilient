@@ -209,11 +209,22 @@ def plot_effect_size_forest(comparisons: list, output_path: Path):
         print("Error: No comparisons to plot", file=sys.stderr)
         return
     
-    fig, ax = plt.subplots(figsize=(10, max(6, len(comparisons) * 0.4)))
+    fig, ax = plt.subplots(figsize=(12, max(6, len(comparisons) * 0.4)))
+    
+    # Adjust subplot to make room for labels on the left (28% of figure width for labels)
+    plt.subplots_adjust(left=0.28, right=0.95)
+    
+    # Calculate appropriate x-axis limits based on data range (before plotting)
+    max_abs_d = max(abs(comp['cohens_d']) for comp in comparisons) if comparisons else 10
+    max_abs_ci = max(abs(comp.get('ci_high', 0)) for comp in comparisons if comp.get('ci_high')) if comparisons else max_abs_d
+    # Add padding (20% or minimum 2 units)
+    xlim_padding = max(max_abs_d * 0.2, 2)
+    xlim_max = max(max_abs_d, max_abs_ci) + xlim_padding
     
     y_positions = np.arange(len(comparisons))
     
-    # Plot confidence intervals
+    # Plot confidence intervals and data points
+    label_data = []  # Store label info for positioning after xlim is set
     for i, comp in enumerate(comparisons):
         y_pos = y_positions[i]
         cohens_d = comp['cohens_d']
@@ -244,9 +255,18 @@ def plot_effect_size_forest(comparisons: list, output_path: Path):
         else:
             sig_marker = ''
         
-        # Add text label with effect size
+        # Store label info for positioning after xlim is set
         label_text = f"{comp['label']} (d={cohens_d:.2f}{sig_marker})"
-        ax.text(-8, y_pos, label_text, va='center', ha='right', fontsize=9)
+        label_data.append({'text': label_text, 'y_pos': y_pos})
+    
+    # Set x-axis limits
+    ax.set_xlim(-xlim_max, xlim_max)
+    
+    # Now add labels positioned outside the plot area (to the left of y-axis)
+    label_x_pos = -(xlim_max + 1)  # Position just outside the left edge
+    for label_info in label_data:
+        ax.text(label_x_pos, label_info['y_pos'], label_info['text'], va='center', ha='right', fontsize=9, 
+                clip_on=False)
     
     # Add vertical line at d=0
     ax.axvline(x=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
@@ -254,17 +274,20 @@ def plot_effect_size_forest(comparisons: list, output_path: Path):
     # Add effect size interpretation lines
     ax.axvline(x=0.8, color='gray', linestyle=':', linewidth=0.5, alpha=0.5)
     ax.axvline(x=-0.8, color='gray', linestyle=':', linewidth=0.5, alpha=0.5)
-    ax.text(0.8, len(comparisons) - 0.5, 'Large (d≥0.8)', rotation=90, 
-            va='bottom', ha='right', fontsize=8, color='gray')
-    ax.text(-0.8, len(comparisons) - 0.5, 'Large (d≤-0.8)', rotation=90, 
-            va='bottom', ha='left', fontsize=8, color='gray')
+    
+    # Position "Large" labels in the center of the graph (vertically) to avoid title overlap
+    center_y = len(comparisons) / 2
+    ax.text(0.8, center_y, 'Large (d≥0.8)', rotation=90, 
+            va='center', ha='right', fontsize=8, color='gray')
+    ax.text(-0.8, center_y, 'Large (d≤-0.8)', rotation=90, 
+            va='center', ha='left', fontsize=8, color='gray')
     
     ax.set_xlabel("Cohen's d (Effect Size)", fontsize=11, fontweight='bold')
     ax.set_ylabel('')
     ax.set_title("Effect Size Forest Plot: PQC vs Classical Comparisons", 
                 fontsize=12, fontweight='bold', pad=20)
     ax.set_yticks([])
-    ax.set_xlim(-10, 10)
+    # xlim already set above (line 263), before adding labels
     ax.grid(True, alpha=0.3, axis='x')
     
     # Add legend
@@ -280,7 +303,8 @@ def plot_effect_size_forest(comparisons: list, output_path: Path):
     ax.text(0.02, 0.02, '* p<0.05, ** p<0.01, *** p<0.001', 
             transform=ax.transAxes, fontsize=8, style='italic')
     
-    plt.tight_layout()
+    # Don't use tight_layout as it will override our subplots_adjust
+    # plt.tight_layout()  # Commented out to preserve left margin for labels
     fig.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"Saved: {output_path}")
     plt.close()

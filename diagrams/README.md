@@ -1,6 +1,6 @@
-# Dissertation Diagrams
+# Framework Diagrams
 
-This directory contains Mermaid diagram source files for Chapter 3 of the dissertation.
+This directory contains Mermaid diagram source files for the benchmarking framework architecture and workflow.
 
 ## Diagrams
 
@@ -9,6 +9,10 @@ This directory contains Mermaid diagram source files for Chapter 3 of the disser
 2. **live-system-comparison.mmd** - Comparison diagram showing live production system vs experimental framework with instrumentation points marked (Section 3.3)
 
 3. **high-level-overview.mmd** - High-level overview of the research methodology and framework components (Section 3.1.1)
+
+4. **complete-workflow.mmd** - **NEW** - Complete workflow diagram showing the full pipeline from experiment matrix through data collection, processing, analysis, to final reporting
+
+5. **system-architecture.mmd** - **NEW** - System architecture diagram showing all components, environments, and data flows
 
 ## Converting to SVG/PNG
 

@@ -1,57 +1,62 @@
-graph LR
-    subgraph PROD["Representative Enterprise AML Pipeline"]
-        TX_IN[Transaction Ingestion<br/>100-10,000 tx/s]
-        PROD_PIPE[Streaming Pipeline<br/>Event Processing]
-        PROD_CRYPTO[Production Cryptography<br/>Signing, Encryption]
-        PROD_ML[ML/AI Models<br/>Anomaly Detection]
-        ALERTS[Alert Generation<br/>Compliance Reporting]
-        PROD_OUT[Compliant Output]
-        PROD_MON[Production Monitoring]
-    end
-    
-    subgraph FRAMEWORK["Experimental Benchmarking Framework"]
-        WORKLOAD[Workload Generator<br/>Constant, Burst Patterns<br/>100-10,000 msg/s<br/>256B-16KB Payloads]
-        FW_PIPE[Streaming Pipeline<br/>Async Processing]
-        FW_CRYPTO[Crypto Adapters<br/>PQC & Classical<br/>Sign, Encrypt]
-        
-        subgraph INSTRUMENTATION["Instrumentation"]
-            TIMING[Timing Measurement<br/>Nanosecond Precision]
-            RESOURCES[Resource Monitoring<br/>CPU, Memory, I/O]
-            EVENTS[Event Logging<br/>JSONL Format]
-        end
-        
-        FW_TELEMETRY[Telemetry Collection]
-    end
-    
-    subgraph OUTPUTS["Telemetry Outputs"]
-        JSONL_OUT[Event Logs<br/>JSONL]
-        STATS_OUT[Statistical Summaries<br/>CSV/JSON]
-        METADATA_OUT[Environment Metadata]
-    end
-    
+---
+config:
+  layout: fixed
+---
+flowchart LR
+ subgraph PROD["Representative Enterprise AML Pipeline"]
+        TX_IN["Transaction Ingestion<br>100-10,000 tx/s"]
+        PROD_PIPE["Streaming Pipeline<br>Event Processing"]
+        PROD_CRYPTO["Production Cryptography<br>Signing, Encryption"]
+        PROD_ML["AI/ML Anomaly<br>Detection"]
+        ALERTS["Compliance<br>Alerting<br>Reporting<br>"]
+        PROD_OUT["Compliant Output"]
+        PROD_MON["Production Monitoring"]
+  end
+ subgraph INSTRUMENTATION["Instrumentation"]
+        TIMING["Timing<br>"]
+        RESOURCES["Resource<br>Metrics"]
+  end
+ subgraph FRAMEWORK["Experimental Benchmarking Framework"]
+        WORKLOAD["RNG based Workload Generation"]
+        FW_PIPE["Streaming Pipeline<br>Execution"]
+        FW_CRYPTO["Cryptographic<br>execution"]
+        INSTRUMENTATION
+  end
+ subgraph OUTPUTS["Telemetry Outputs"]
+        JSONL_OUT["Event-level<br>data"]
+        STATS_OUT["Run-level<br>summaries"]
+  end
     TX_IN --> PROD_PIPE
     PROD_PIPE --> PROD_CRYPTO
     PROD_CRYPTO --> PROD_ML
     PROD_ML --> ALERTS
     ALERTS --> PROD_OUT
-    PROD_PIPE -.->|Operational<br/>Monitoring| PROD_MON
-    
+    PROD_PIPE -. Operational<br>Monitoring .-> PROD_MON
     WORKLOAD --> FW_PIPE
     FW_PIPE --> FW_CRYPTO
-    FW_CRYPTO --> TIMING
-    FW_CRYPTO --> RESOURCES
-    FW_CRYPTO --> EVENTS
-    TIMING --> FW_TELEMETRY
-    RESOURCES --> FW_TELEMETRY
-    EVENTS --> FW_TELEMETRY
-    FW_TELEMETRY --> JSONL_OUT
-    FW_TELEMETRY --> STATS_OUT
-    FW_TELEMETRY --> METADATA_OUT
-    
-    TX_IN -.->|Representative<br/>Workload| WORKLOAD
-    PROD_PIPE -.->|Mirrors<br/>Architecture| FW_PIPE
-    PROD_CRYPTO -.->|Same<br/>Operations| FW_CRYPTO
-    
+    FW_CRYPTO --> TIMING & RESOURCES
+    TX_IN -. Representative<br>Workload .-> WORKLOAD
+    PROD_PIPE -. Mirrors<br>Architecture .-> FW_PIPE
+    PROD_CRYPTO -. Same<br>Operations .-> FW_CRYPTO
+    TIMING --> JSONL_OUT
+    RESOURCES --> STATS_OUT
+    PROD_MON -.-> INSTRUMENTATION
+    PROD_CRYPTO -.-> PROD_MON
+
+     TX_IN:::production1
+     PROD_PIPE:::production2
+     PROD_CRYPTO:::production3
+     PROD_ML:::production4
+     ALERTS:::production4
+     PROD_OUT:::production4
+     PROD_MON:::production5
+     TIMING:::instrumentation1
+     RESOURCES:::instrumentation2
+     WORKLOAD:::frameworkInput
+     FW_PIPE:::frameworkExecution
+     FW_CRYPTO:::frameworkCrypto
+     JSONL_OUT:::output1
+     STATS_OUT:::output2
     classDef production1 fill:#90a4ae,stroke:#000000,stroke-width:3px
     classDef production2 fill:#b0bec5,stroke:#000000,stroke-width:3px
     classDef production3 fill:#cfd8dc,stroke:#000000,stroke-width:3px
@@ -67,21 +72,3 @@ graph LR
     classDef output1 fill:#a5d6a7,stroke:#000000,stroke-width:3px
     classDef output2 fill:#c8e6c9,stroke:#000000,stroke-width:3px
     classDef output3 fill:#e8f5e9,stroke:#000000,stroke-width:3px
-    
-    class TX_IN production1
-    class PROD_PIPE production2
-    class PROD_CRYPTO production3
-    class PROD_ML production4
-    class ALERTS production4
-    class PROD_OUT production4
-    class PROD_MON production5
-    class WORKLOAD frameworkInput
-    class FW_PIPE frameworkExecution
-    class FW_CRYPTO frameworkCrypto
-    class FW_TELEMETRY frameworkTelemetry
-    class TIMING instrumentation1
-    class RESOURCES instrumentation2
-    class EVENTS instrumentation3
-    class JSONL_OUT output1
-    class STATS_OUT output2
-    class METADATA_OUT output3

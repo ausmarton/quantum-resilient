@@ -1,7 +1,7 @@
-# Dissertation Analysis Guide
+# Analysis Guide
 ## From Raw Data to Publication-Ready Visualizations
 
-**Complete workflow to analyze all collected experiment data and generate figures/tables for your dissertation.**
+**Complete workflow to analyze all collected experiment data and generate figures, tables, and reports.**
 
 ---
 
@@ -10,14 +10,14 @@
 You have **raw data** in `results/` directory. This guide shows you how to:
 1. **Automated Analysis** (Scripts) - Generate all standard figures and statistics
 2. **Interactive Analysis** (Jupyter Notebooks) - Custom exploration and deep dives
-3. **Dissertation Outputs** - Tables, figures, and statistical summaries
+3. **Report Outputs** - Tables, figures, and statistical summaries
 
 ---
 
 ## 📊 Two Analysis Approaches
 
 ### Approach 1: Automated Scripts (Recommended First)
-**Use for:** Standard analysis, batch processing, dissertation-ready outputs
+**Use for:** Standard analysis, batch processing, report-ready outputs
 - Fast, reproducible, generates all standard figures
 - Produces CSV/JSON files for tables
 - Best for initial analysis and getting all standard outputs
@@ -151,15 +151,15 @@ After running the analysis, check `final-results/`:
 
 ### Key Output Files
 
-| File | Purpose | For Dissertation |
-|------|---------|------------------|
-| `aggregated_stats.json` | Summary statistics (p50, p95, p99, mean, std, CI) | **Extract for tables** |
-| `aggregated_stats.csv` | Same data in CSV format | **Import into LaTeX/Excel** |
-| `hypothesis_tests.json` | Statistical test results (p-values, effect sizes) | **Statistical claims** |
-| `hypothesis_table.csv` | Test results in table format | **Results chapter tables** |
-| `figures/*.png` | All generated plots | **Use directly in dissertation** |
-| `figures/scaling/*.png` | Scaling analysis plots | **Horizontal scaling section** |
-| `report.pdf` | Complete analysis report | Reference document |
+| File | Purpose |
+|------|---------|
+| `aggregated_stats.json` | Summary statistics (p50, p95, p99, mean, std, CI) |
+| `aggregated_stats.csv` | Same data in CSV format |
+| `hypothesis_tests.json` | Statistical test results (p-values, effect sizes) |
+| `hypothesis_table.csv` | Test results in table format |
+| `figures/*.png` | All generated plots |
+| `figures/scaling/*.png` | Scaling analysis plots |
+| `report.pdf` | Complete analysis report |
 
 ### Generated Figures
 
@@ -257,7 +257,7 @@ jupyter lab
 }
 ```
 
-**For Dissertation:**
+**For reporting:**
 - Use `mean` values for main results
 - Use `ci_low` and `ci_high` for confidence intervals
 - Use `std` to discuss variability
@@ -280,14 +280,14 @@ jupyter lab
 }
 ```
 
-**For Dissertation:**
+**For reporting:**
 - `p_value < 0.05` = Statistically significant difference
 - `cohens_d > 0.8` = Large practical effect
 - Use these to support claims about algorithm differences
 
 ---
 
-## 🎨 Customizing Figures for Dissertation
+## 🎨 Customizing Figures
 
 ### Using Scripts (Standard Figures)
 
@@ -304,7 +304,7 @@ For publication-quality customizations:
 1. **Open** `99_generate_figures.ipynb`
 2. **Load your data** from `final-results/aggregated_stats.json`
 3. **Customize** plot aesthetics (colors, fonts, sizes, labels)
-4. **Export** high-resolution PNG/PDF for dissertation
+4. **Export** high-resolution PNG/PDF for reports
 
 **Example customization:**
 ```python
@@ -338,7 +338,7 @@ plt.savefig('final-results/figures/custom_figure.png', dpi=300, bbox_inches='tig
 - [ ] Check `final-results/figures/` for all plots
 - [ ] Review `aggregated_stats.csv` for table data
 - [ ] Review `hypothesis_table.csv` for statistical tests
-- [ ] Identify which figures to use in dissertation
+- [ ] Identify which figures to use in reporting
 
 ### Phase 3: Custom Analysis (Optional, 1-3 hours)
 
@@ -347,12 +347,12 @@ plt.savefig('final-results/figures/custom_figure.png', dpi=300, bbox_inches='tig
 - [ ] Validate statistical findings
 - [ ] Generate publication-quality figures
 
-### Phase 4: Dissertation Integration
+### Phase 4: Export and Report
 
 - [ ] Extract tables from CSV files
 - [ ] Select best figures from `final-results/figures/`
 - [ ] Write Results chapter using statistical summaries
-- [ ] Cite figures and tables in dissertation
+- [ ] Cite figures and tables in any written report
 
 ---
 
@@ -408,8 +408,8 @@ jupyter lab
 1. **Run automated analysis** (Phase 1 above)
 2. **Review outputs** in `final-results/`
 3. **Use notebooks** for any custom analysis needed
-4. **Extract tables/figures** for dissertation
-5. **Write Results chapter** using the generated statistics
+4. **Extract tables/figures** from `final-results/`
+5. **Use the generated statistics** for results and conclusions
 
-**All dissertation-ready outputs will be in `final-results/` directory!** 🎓
+**All analysis outputs are in the `final-results/` directory.**
 

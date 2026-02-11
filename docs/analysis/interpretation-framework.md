@@ -1,6 +1,6 @@
 # Data Interpretation Framework
 
-**Purpose**: Template and framework for creating comprehensive data interpretation document supporting all dissertation claims
+**Purpose**: Template and framework for creating comprehensive data interpretation supporting research claims.
 
 ---
 
@@ -175,7 +175,7 @@ for delta in data.get('environment_deltas', []):
 
 ## Claim Verification Checklist
 
-For each claim in `docs/dissertation-requirements.md`:
+For each claim in `docs/REQUIREMENTS_SPECIFICATION.md`:
 
 - [ ] Data available to support claim
 - [ ] Statistical test performed

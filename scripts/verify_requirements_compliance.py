@@ -7,7 +7,7 @@ Checks:
 - All required figures exist
 - All required tables exist
 - All required statistics computed
-- All dissertation claims supported
+- All research claims supported (algorithms, environments, effect sizes)
 
 Usage:
     python scripts/verify_requirements_compliance.py [--output report.json]
@@ -206,8 +206,8 @@ def verify_statistical_requirements(base_dir: Path) -> dict:
     return results
 
 
-def verify_dissertation_claims(base_dir: Path) -> dict:
-    """Verify that data supports dissertation claims."""
+def verify_research_claims(base_dir: Path) -> dict:
+    """Verify that data supports research claims (required algorithms, environments, effect sizes)."""
     results = {}
     
     # Load data
@@ -294,7 +294,7 @@ def main():
         'analysis_outputs': verify_analysis_outputs(base_dir),
         'data_completeness': verify_data_completeness(base_dir),
         'statistical_requirements': verify_statistical_requirements(base_dir),
-        'dissertation_claims': verify_dissertation_claims(base_dir),
+        'research_claims': verify_research_claims(base_dir),
     }
     
     # Summary
@@ -338,9 +338,9 @@ def main():
             passed_checks += 1
     print()
     
-    print("## Dissertation Claims Support")
+    print("## Research Claims Support")
     print("-" * 80)
-    for key, result in all_results['dissertation_claims'].items():
+    for key, result in all_results['research_claims'].items():
         total_checks += 1
         status = "✅" if result.get('valid', False) else "❌"
         print(f"{status} {result.get('description', key)}")

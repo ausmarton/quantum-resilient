@@ -86,7 +86,7 @@ The pipeline consists of 9 stages, each with built-in idempotency:
 
 ```bash
 # Manual execution
-./scripts/lib/run-python-container.sh scripts/extract_dissertation_tables.py \
+./scripts/lib/run-python-container.sh scripts/extract_analysis_tables.py \
   --input final-results/aggregated_stats.json \
   --output final-results/tables/
 ```

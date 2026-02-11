@@ -105,6 +105,12 @@ local/
 dissertation/
 research-drafts/
 
+# University/course materials (not part of project)
+data-analysis-and-presentation*
+methodology-and-techniques*
+*assessment-guide*
+*marking*criteria*
+
 # Log files and downloaded data (temporary)
 *.csv
 downloaded-logs-*.csv

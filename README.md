@@ -2,6 +2,14 @@
 
 A modular benchmark test framework for comparing Post-Quantum Cryptography (PQC) algorithms against classical cryptography in real-time streaming pipelines.
 
+## For examiners and researchers
+
+To **reproduce results** or **extend this framework**:
+1. **Run experiments**: See [Quick Start](#quick-start) and [Data Collection](docs/guides/data-collection.md).
+2. **Run analysis**: See [Analysis Guide](docs/analysis/analysis-guide.md) and [Reproducible Analysis](docs/guides/reproducible-analysis.md).
+3. **Methodology and requirements**: [Methodology (detailed)](docs/methodology-detailed.md), [Methodology (measurement)](docs/methodology-measurement.md), [Requirements](docs/REQUIREMENTS_SPECIFICATION.md).
+4. **Full documentation**: [docs/README.md](docs/README.md).
+
 ## Overview
 
 This framework provides tools for:
@@ -300,7 +308,7 @@ cargo test -p rust-core --test pqc_adapter_smoke
 
 ## Containerized Minikube Experiments
 
-Run the same benchmark inside a local Kubernetes cluster using Minikube and Podman. This verifies reproducibility between native and containerized execution — a key dissertation requirement.
+Run the same benchmark inside a local Kubernetes cluster using Minikube and Podman. This verifies reproducibility between native and containerized execution.
 
 ### Prerequisites
 
@@ -385,7 +393,7 @@ mean_throughput          485.00        462.00       -4.74%         ✅
 ✅ REPRODUCIBILITY CONFIRMED
 
 Results demonstrate strong reproducibility between native and Kubernetes
-execution. This supports reproducibility claims for the dissertation.
+execution. This supports reproducibility claims across environments.
 ```
 
 ### Container Architecture
@@ -1013,7 +1021,7 @@ p95 Latency (μs)               480.00          550.00          790.00
 p99 Latency (μs)               623.00          698.00          980.00
 Mean Throughput (ops/s)        485.00          462.00          385.00
 
-DISSERTATION PARAGRAPH (Results Chapter)
+Example results summary
 ═══════════════════════════════════════════════════════════════════════════════
 
 Across native, Minikube, and GCP execution environments, p95 latency increased
@@ -1424,7 +1432,7 @@ The analysis suite computes standard effect size metrics for algorithm compariso
 
 ## Publishing Experiment Results
 
-The framework includes tools for generating dissertation-ready research artifacts.
+The framework includes tools for generating report-ready research artifacts.
 
 ### Research Artifact Generation Pipeline
 
@@ -1500,9 +1508,9 @@ research/output/exp_001/
 └── report.md                 # Markdown report
 ```
 
-### Using in Dissertation
+### Including in reports
 
-Insert tables and figures into LaTeX documents:
+Insert tables and figures into LaTeX or other documents:
 
 ```latex
 % Include a table
@@ -1623,9 +1631,9 @@ The analysis pipeline consists of several stages:
      --output final-results/
    ```
 
-5. **Table Extraction**: Generate LaTeX/CSV tables for dissertation
+5. **Table Extraction**: Generate LaTeX/CSV tables from results
    ```bash
-   ./scripts/lib/run-python-container.sh scripts/extract_dissertation_tables.py \
+   ./scripts/lib/run-python-container.sh scripts/extract_analysis_tables.py \
      --aggregated final-results/aggregated_stats.json \
      --hypothesis final-results/hypothesis_tests.json \
      --output final-results/tables/
@@ -1816,7 +1824,7 @@ Run all experiments across all environments:
 3. **Aggregate Results**: Computes statistics across all runs
 4. **Generate Figures**: Creates publication-quality combined plots
 5. **Hypothesis Testing**: Performs statistical significance tests
-6. **Build Report**: Generates dissertation-ready final report
+6. **Build Report**: Generates report-ready final report
 
 ### Output Structure
 
@@ -1826,7 +1834,7 @@ final-results/
 ├── aggregated_stats.json   # Aggregated statistics
 ├── aggregated_stats.csv    # CSV format
 ├── hypothesis_tests.json   # Statistical test results
-├── report.md               # Dissertation-ready report
+├── report.md               # Report-ready markdown
 ├── figures/
 │   ├── combined_ecdf.png
 │   ├── scaling_curves.png
@@ -1925,6 +1933,13 @@ Reports Cohen's d with interpretations:
 ## Documentation
 
 All documentation has been reorganized into the `docs/` directory. See **[docs/README.md](docs/README.md)** for the complete documentation index.
+
+**Key Documentation**:
+- **[Component Documentation](docs/reference/component-documentation.md)** - Detailed documentation of all major components
+- **[Codebase Inventory](docs/CODEBASE_INVENTORY.md)** - Comprehensive inventory of all files and directories
+- **[Complete Workflow Diagram](diagrams/complete-workflow.mmd)** - Visual workflow from experiment matrix to final reporting
+- **[Detailed Methodology](docs/methodology-detailed.md)** - Comprehensive methodology (experimental design, data collection, analysis)
+- **[Development Guidelines](DEVELOPMENT_GUIDELINES.md)** - Development guidelines and practices
 
 ### Quick Links
 

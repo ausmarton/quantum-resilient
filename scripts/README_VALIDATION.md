@@ -4,7 +4,7 @@
 
 Two comprehensive scripts have been created to validate and manage experiment data:
 
-1. **`validate_dissertation_data.sh`** - Comprehensive validation for dissertation claims support
+1. **`validate_dissertation_data.sh`** - Validate experiment data completeness and quality for analysis
 2. **`remove_unusable_data.sh`** - Identify and remove unusable experiments for re-run
 
 ---
@@ -12,12 +12,12 @@ Two comprehensive scripts have been created to validate and manage experiment da
 ## 1. validate_dissertation_data.sh
 
 ### Purpose
-Validates all collected experiment data against dissertation requirements to ensure:
+Validates all collected experiment data against the project requirements specification to ensure:
 - Data format compliance (all required fields)
 - Data quality (no errors, valid values)
 - Completeness (all runs, all experiments)
 - Statistical validity (sufficient runs per configuration)
-- Dissertation claims support (all required data points present)
+- Readiness for downstream analysis (all required data points present)
 
 ### Usage
 
@@ -64,7 +64,7 @@ Validates all collected experiment data against dissertation requirements to ens
 - ✅ Large sample sizes (thousands of events)
 - ✅ Statistical power assessment
 
-#### Dissertation Claims Support
+#### Analysis Readiness
 - ✅ Algorithm comparison data available
 - ✅ Statistical rigor (sufficient runs)
 - ✅ Resource utilization data (CPU, memory)
@@ -91,7 +91,7 @@ Validates all collected experiment data against dissertation requirements to ens
 
 ```
 ================================================================================
-DISSERTATION DATA VALIDATION REPORT
+DATA VALIDATION REPORT
 ================================================================================
 
 Total Experiments: 115
@@ -211,7 +211,7 @@ All experiments must have:
 - **Minimum events**: 100 events per experiment (for percentiles)
 - **Statistical power**: ~80% for medium effects, ~95% for large effects
 
-### Dissertation Claims Requirements
+### Analysis Readiness Requirements
 
 The validation ensures data supports:
 1. Algorithm performance comparison
@@ -268,7 +268,7 @@ The validation scripts ensure data is ready for:
 - Aggregation (`aggregate_results.py`)
 - Hypothesis testing
 - Visualization generation
-- Dissertation claims support
+- Downstream analysis and reporting
 
 ---
 
@@ -297,6 +297,6 @@ The validation scripts ensure data is ready for:
 ## Notes
 
 - Both scripts support native, minikube, and GCP directory structures
-- Validation is comprehensive and checks all dissertation requirements
+- Validation is comprehensive and checks all requirements in REQUIREMENTS_SPECIFICATION.md
 - Removal is safe with dry-run and confirmation by default
 - Scripts can be run multiple times safely

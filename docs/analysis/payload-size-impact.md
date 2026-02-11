@@ -205,7 +205,7 @@ This document analyzes the impact of payload size on cryptographic operation lat
 
 ## Interpretation
 
-*[Interpret findings in context of dissertation claims]*
+*[Interpret findings in context of research claims]*
 
 ---
 

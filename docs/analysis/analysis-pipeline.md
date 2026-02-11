@@ -8,7 +8,7 @@
 
 ## Overview
 
-This document describes the complete analysis pipeline for processing experiment data, generating summaries, and producing dissertation-ready artifacts.
+This document describes the complete analysis pipeline for processing experiment data, generating summaries, and producing report-ready artifacts.
 
 **Related Documentation**:
 - **[Framework Architecture Diagram](../diagrams/framework-architecture.mmd)** - Visual representation of all framework components including the analysis layer
@@ -194,7 +194,7 @@ The analysis pipeline corresponds to the **Analysis Layer** in the framework arc
 ### Stage 6: Table Extraction
 
 **Status**: Pending  
-**Script**: `scripts/extract_dissertation_tables.py`  
+**Script**: `scripts/extract_analysis_tables.py`  
 **Output**: `final-results/tables/*.csv`, `*.tex`
 
 **Process**:
@@ -207,7 +207,7 @@ The analysis pipeline corresponds to the **Analysis Layer** in the framework arc
 
 **Usage**:
 ```bash
-./scripts/lib/run-python-container.sh scripts/extract_dissertation_tables.py \
+./scripts/lib/run-python-container.sh scripts/extract_analysis_tables.py \
   --aggregated final-results/aggregated_stats.json \
   --hypothesis final-results/hypothesis_tests.json \
   --output final-results/tables/
@@ -223,7 +223,7 @@ The analysis pipeline corresponds to the **Analysis Layer** in the framework arc
 
 **Process**:
 1. Extract key findings from analysis results
-2. Map to dissertation claims (from `docs/dissertation-requirements.md`)
+2. Map to research claims (from `docs/REQUIREMENTS_SPECIFICATION.md`)
 3. Update interpretation documents:
    - Executive summary
    - Algorithm performance analysis
@@ -269,7 +269,7 @@ The analysis pipeline corresponds to the **Analysis Layer** in the framework arc
 1. Verify all required outputs exist
 2. Check data completeness
 3. Validate statistical requirements
-4. Verify dissertation claims support
+4. Verify research claims support
 
 **Idempotency**: Always runs (validation step)
 
@@ -443,7 +443,7 @@ podman build -t quantum-resilient-analysis -f analysis/Dockerfile analysis/
 
 ## Related Documentation
 
-- `docs/dissertation-requirements.md` - Requirements and claims
+- `docs/REQUIREMENTS_SPECIFICATION.md` - Requirements and claims
 - `docs/analysis/interpretation-framework.md` - Interpretation template
 - `DEVELOPMENT_GUIDELINES.md` - Development standards
 - `docs/REQUIREMENTS_SPECIFICATION.md` - Complete requirements

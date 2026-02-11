@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Extract tables for dissertation from analysis results.
+Extract tables from analysis results.
 
 Generates LaTeX/CSV tables for:
 - Performance comparison tables
@@ -9,7 +9,7 @@ Generates LaTeX/CSV tables for:
 - Statistical test results
 
 Usage:
-    python scripts/extract_dissertation_tables.py \
+    python scripts/extract_analysis_tables.py \
         --aggregated final-results/aggregated_stats.json \
         --hypothesis final-results/hypothesis_tests.json \
         --output final-results/tables/
@@ -131,7 +131,7 @@ def extract_environment_delta_table(aggregated_stats: dict, output_dir: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Extract dissertation tables")
+    parser = argparse.ArgumentParser(description="Extract analysis tables (LaTeX/CSV) from results")
     parser.add_argument('--aggregated', type=Path, help='Path to aggregated_stats.json')
     parser.add_argument('--hypothesis', type=Path, help='Path to hypothesis_tests.json')
     parser.add_argument('--output', type=Path, required=True, help='Output directory')
