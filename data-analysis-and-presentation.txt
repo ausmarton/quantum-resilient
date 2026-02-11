@@ -1,0 +1,693 @@
+Unless otherwise stated, copyright © 2025 The Open University, all rights reserved.
+Printable page generated Sunday 14 December 2025 at 18:39
+
+Data presentation, analysis and interpretation
+Having designed your experiments and executed them according to your chosen methods (as discussed in
+Methodology and techniques, this document deals with handling and presenting the data that you have
+collected. Although I will give you some pointers here, you should consult closely with your supervisor to
+decide on the best way of using data to address your research aim.
+In a T802 dissertation, poor data analysis can lead to unjustified conclusions, which will cause the
+dissertation to lose marks or even fail. In a practical situation, unjustified conclusions might lead to serious
+financial, social, environmental or health and safety consequences. As your research progresses and you
+are faced with having to analyse a lot of data, you need to keep in mind the following points:
+Reaching valid conclusions requires careful analysis of relevant data.
+Conclusions have a context; that is, they apply to a particular situation and are not (normally)
+universal truths.
+Although you will have considered how you anticipated handling the data in the early stages of your
+proposal, you will probably need to consider new means of presentation and interpretation when you
+start your actual analysis.
+
+Although judgement and intuition play their part, it is well worth considering the wide range of techniques
+available to carry out the organising, presenting and analysing tasks that are needed to produce useful
+conclusions.
+The aims of this document are therefore to:
+explain the role of data collection in primary research
+explain the options for extracting useful information from the raw data
+explain the options for summarising and presenting data in a form that will make it easy to interpret
+explain the process of reaching conclusions
+explain the significance of your conclusions in a wider context than the particular experiment or case
+study.
+
+I do not go into detail here about the many statistical techniques available, nor indeed into the detail of
+various techniques for handling qualitative (non-numerical) data. Should you require these techniques (and
+
+the requirements for technological research are numerous and varied), you should consult the books listed
+in the References.
+
+1 Introduction to data presentation, analysis and interpretation
+Part of the process of developing your research proposal goes beyond the activity of collecting the data
+and deals with what you intend to do with it. There is no point in spending all your research time collecting
+vast quantities of data, only to find that it does not help you address your research aim. In the early stages
+of your project, you will probably not consider the precise details of how to process the data, but you do
+need to be able to show that the data you collect will enable you to achieve the research aim. This implies
+that you must be able to:
+process the raw data collected
+decide how to present the data, e.g. in tabular or pictorial form
+analyse data using appropriate techniques
+reach conclusions from the analysed data.
+
+This assumes that you will be able to interpret the data in order to come to some conclusions that are both
+valid and useful. When referring to ‘data’ here I include various types and formats, including numerical
+quantities obtained from physical experiments, case-study observations and qualitative data such as the
+comments made by participants in an interview.
+
+1.1 A note on terminology
+The word data is often used synonymously with the phrase raw data to describe the facts and figures and
+opinions (of respondents to a survey, for example) collected through primary research.
+When the data has been processed, aggregated or arranged in some way such that it gains meaning, it is
+referred to as information. We use information to answer questions (that is, to inform ourselves), and the
+information may be further processed, combined and compared to produce more information, and so on.
+Ultimately, the information obtained should enable you to achieve your research objectives, and hence
+contribute to our knowledge of the subject.
+The term ‘results’ is frequently encountered in research reports. Although it is a valid and colloquially useful
+word, it is used in several different contexts and can sometimes cause confusion. ‘Results’ can be used to
+mean:
+data obtained as the outputs of primary research
+results of analysis, implying information
+the successful or unsuccessful outcomes of the research.
+
+For this reason I have not used the term in this document. The word ‘findings’ is also ambiguous, and for
+the same reason is avoided here.
+Here is an example intended to illustrate the distinctions made.
+
+Data concerning refuse sorting was obtained from households on the quantities of separated glass,
+paper, cans, etc. collected for recycling, and on people’s ability and willingness to sort them. This led
+to information about the extent to which recycling of refuse was being achieved, and how much
+further education was needed. This in turn led to conclusions about actions that could be taken by
+the refuse-collecting organisation. Consequent changes in refuse collection would, it was hoped, lead
+to greater knowledge of how recycling rates can be improved.
+
+1.2 The process of reaching conclusions
+In the early stages of the research, you need to establish your aim and develop the research objectives
+that are intended to address the aim. The methodology should produce the data that you will need to
+achieve the objectives. When you were deciding what data to collect, you should also have been thinking
+about how you would use it to achieve your research objectives, so as you are collecting the data, you
+should already have some ideas about how to analyse it.
+However, once you have started collecting your data, you may find that it accumulates at an alarming rate,
+and you are less clear about what to do with it all. So here are the next stages you need to undertake.
+1. Process the data so that you have recorded it in a useful format.
+2. Select and use a presentation method such as a graph, figure or table in order to arrange the data in
+a form that will help to derive meaning (that is, provide useful information).
+3. Interpret the data to obtain the information that will achieve the objectives.
+4. Explain how achieving the objectives addresses the research aim.
+5. Derive conclusions about the wider applicability of the research.
+6. Suggest where further progress could be made by continuing the research.
+
+Bear in mind that this will be an iterative process; you are likely to go through this cycle two or three times
+in the course of your research.
+
+1.3 Using information to draw conclusions
+When are your conclusions justified by the data? Value judgement may be used in the process of reaching
+conclusions, such as in deciding which data to select and analyse. However, this must be done as
+objectively as possible, and result in conclusions that are demonstrably based on the evidence obtained.
+Conclusions arise from the use of reasoning, carefully accumulated data, some intuition and experience.
+Data must be interpreted carefully, with due regard to accuracy, relevance and appropriate statistical
+interpretation. Matters of human judgement are important, but are not in themselves sufficient to make a
+case without detailed supporting evidence, at least not in the technological context of T802.
+So what kinds of data are most widely used in the context of T802 research? Some of the most valuable
+kinds of data are:
+data obtained by observation
+data obtained from experimentation
+identification of trends
+
+tests of significance
+tests for correlation
+comments from stakeholders, experts and practitioners.
+
+The final bullet point may seem to lack objectivity, and indeed the comments of one stakeholder or expert
+may differ from, or explicitly contradict, those of another. However, the collected comments of a
+representative sample may provide useful evidence for part of the process of forming conclusions. Bear in
+mind at all times, that if meaningful inferences are to be made from this sort of data, then it must be very
+carefully collected, and any conclusions drawn must take into account the limitations of the dataset (in
+particular, see Section 3.3 of Methodology and techniques on sampling).
+
+1.4 Information and conclusions in their context
+The quality of information obtained and the validity of conclusions reached are crucially dependent on what
+you choose to investigate (i.e. your experimental sample, whether that is the performance of a piece of
+equipment, or responses from participants in a survey). The information and conclusions you derive are
+bounded by the sample chosen, and must be explained in terms of this context. Consider a practical
+example:
+A prototype of some innovative computer-aided design (CAD) software has been tested for usability
+with five experienced CAD users as subjects, their backgrounds being in mechanical, civil and
+electronic (circuit-board design) engineering. Whilst a range of views were expressed, the testing has
+resulted in a coherent set of conclusions about which aspects were deemed satisfactory and which
+need improvement. It can be reasonably asserted that these conclusions are valid (that is, true, with
+high probability) in the context of all engineers experienced in using CAD. The conclusions could not,
+at this stage, be claimed to be valid in the context of (a) all engineers, (b) engineering trainees, (c)
+CAD users from non-engineering backgrounds or (d) all computer users, though the validity of the
+conclusions in these contexts might later be assessed by conducting further tests.
+
+Activity 1
+Go to Activity 1 on the use of data and information in your project.
+
+2 Analysis and interpretation of data using basic statistical
+techniques
+The term statistics tends to be used in a number of different contexts and with different shades of
+meaning. The term is usually used to mean either:
+descriptive statistics, which is about the use of metrics and visualisations to present summaries of
+a collection of related data (such as average rainfall by location), or
+inferential statistics, which is about using statistical techniques to learn about the properties of a
+collection of objects from a sample. Such claims are, of course, subject to error, so much statistical
+
+analysis is about determining how confident one can be about the inferences made.
+
+In this section, I briefly consider some of the statistical methods that you might use to present and interpret
+your data. As ever, the main issue is how to select the appropriate technique for what is required; that is,
+the appropriate way to view the data in order to answer questions posed or reveal useful information. The
+danger is that it is easy to be misled if an inappropriate technique is selected. Similarly, overuse of
+mathematics or statistics can lead readers to believe that your results are better-founded than they actually
+are. When you use statistical analyses, it is important to consider the following questions:
+Have you considered the nature and completeness of your data selected when deciding how the data
+should be processed?
+Is the quantity of data sufficient to justify any statistical claims that you are making?
+Is the chosen statistical method appropriate and justifiable in the context being considered?
+
+Bear in mind that there are two possible contexts in which you may be carrying out these analyses: you
+might be analysing an initial data set to suggest how you will carry on the research, or you might be
+choosing a means of presenting data in the most informative way for your final dissertation. In these
+cases, the context will affect your choice of analysis and presentation.
+An excellent (and short!) guide to the possible ways of abusing statistics, is Darrell Huff’s How To Lie With
+Statistics (1991). This is well worth reading to show how badly choosing or presenting statistics
+(unintentionally, as well as deliberately) can mislead readers and make unfounded inferences from the
+available data.
+
+2.1 Basic statistical measures
+Arithmetic mean
+The very basic concept of the arithmetic mean is fundamental to many a statistical investigation, but be
+careful in using the term ‘average’ to refer to the arithmetic mean, as it can also be used for the median
+value of a set of data (see below). The ‘arithmetic mean’, or ‘mean average’ is obtained by adding up all
+the values of the occurrences and dividing by the number of occurrences. For instance, the mean of the
+data set 6, 3, 1, 9, 4, 3, 3, 7, 1, 3 is
+(6 + 3 + 1 + 9 + 4 + 3 + 3 + 7 + 1 + 3) / 10 = 4
+The mean value may be the principal factor in reaching a conclusion, as in the following examples:
+The mean average quantity of recycled paper per household per week was …, which is
+commendable.
+The mean average temperature recorded for the month was …, which is unusually cold for March.
+The mean average wage for the organisation was … per hour, which is high for the industry sector.
+
+Yet such conclusions may be of little value because they don’t tell the whole story, and may even be
+dangerously misleading.
+
+The mean average quantity of recycled paper may have been strongly influenced by a small number
+of atypical households. Perhaps some houses were also used as home-offices, which produced large
+amounts of waste and masked the low rates of recycling by other households.
+The supposedly cold month of March might have included a few unusually frosty nights, so that for
+gardening and agricultural purposes, ‘unusually cold’ could be a misleading conclusion.
+The wages for the organisation might have included some very low wages, counterbalanced by some
+very high wages, so that overall the conclusion of ‘high for the industry sector’ is not convincing.
+
+In such cases, we clearly need more information than just the mean average in order to describe the
+situation and reach a conclusion that tells a more realistic and useful story. Pictorial representation, for
+example in the form of a bar chart, may be sufficient. We may also need to look at other calculable factors,
+in particular the median, the mode and the spread (measured by its standard deviation).
+
+Median
+Given an ordered set of numerical data, the median is the value that has the same number of values
+above it as below (for an even number of values, the median is often taken to be the mean of the two
+middle values, if these are different). For instance, ordering the data set above gives 1, 1, 3, 3, 3, 3, 4, 6,
+7, 9; here the two middle values are both 3, so the median is 3.
+For a symmetric spread of data, the median and mean will be the same (or at least, very close). In the
+case of heavily skewed data, the median may be of more interest than the mean, in that it is less likely to
+be skewed by small numbers of unusually high or low values. Therefore, it is often used to better identify a
+‘typical’ value than the arithmetic mean.
+
+Mode
+If one value predominates in a set of data, this is termed the mode. For example, the most frequent value
+in the data set above is 3, so this is the mode.
+The mode may be of use in identifying a strong preference or an overriding numerical value, but is
+otherwise not frequently encountered. Note that there could be two or more modes, which would be shown
+clearly on a line graph or bar chart as peaks of equal height, adding more useful information than just the
+mean and median.
+
+Spread and standard deviation
+Given several sets of values, shown in the form of a line graph or bar chart, it could be that they have the
+same arithmetic mean but are different in the spread of their values. Consider the sets of values A and B:
+A: 6, 3, 1, 9, 4, 3, 3, 7, 1, 3
+B: 3, 4, 4, 5, 4
+
+Here A and B have the same arithmetic mean, 4, but clearly A has a wider spread of values.
+
+A commonly used measure of the spread of data is the standard deviation, which expresses the extent to
+which data is dispersed away from the arithmetic mean. Arithmetically it is the square root of the variance,
+which is the average of squares of the distances between the arithmetic mean and the data points.
+To calculate the standard deviation of the set A above, first calculate the mean average:
+(6 + 3 + 1 + 9 + 4 + 3 + 3 + 7 + 1 + 3) / 10 = 4
+Then calculate the variance:
+[(6 - 4)﻿2 + (3 - 4)﻿2 + (1 - 4)﻿2 + (9 - 4)﻿2 + (4 - 4)﻿2 + (3 - 4)﻿2 + (3 - 4)﻿2 + (7 - 4)﻿2 + (1 - 4)2 + (3 - 4)﻿2)] / 10
+= (4 + 1 + 9 + 25 + 0 + 1 + 1 + 9 + 9 + 1) / 10 = 6
+And finally, the standard deviation is the (positive) square root of the variance:
+√6 ≈ 2.5
+Similarly for set B:
+mean average of B = (3 + 4 + 4 + 5 + 4) / 5 = 4
+variance = [(3 - 4)2 + (4 - 4)2 + (4 - 4)2 + (5 - 4)2 + (4 - 4)2) / 5 = 0.4
+standard deviation = √0.4 ≈ 0.63
+So A has a higher standard deviation than B.
+The standard deviation is also referred to as the root mean square (RMS) deviation of the data values from
+the arithmetic mean.
+The more the data is located near the mean, the smaller the standard deviation is; the more it is dispersed
+away from the mean, the larger the standard deviation is. This concept and technique may be of use in the
+T802 context when considering sets of data that change over time. In such a case the standard deviation
+as well as the arithmetic mean would be of interest.
+
+2.2 Carrying out statistical tests
+The question to ask is not which statistical test should be used, but whether your experiment design was
+one to which statistical tests can be applied. There are many ways of comparing the results of
+experiments, and statistical tests can only be properly applied if the experiment design is itself sound. So
+the most important factor is not doing the statistical tests but looking carefully at the experimental design.
+Some introductory information on carrying out statistical tests is available from Rowntree’s Statistics
+Without Tears (2000). In general, statistical tests are applied to different sets of data in order to give a
+measure of whether any differences observed in those sets are a result of a genuine difference, or whether
+they could be accounted for by the natural random variation in the data. The output of a statistical test is
+
+expressed as a decimal number with a value equal to or less than one (≤1) This number represents the
+probability that the differences between two (or more) data sets are due to chance variations caused by
+some unknown variable. A probability of 0.1 indicates that the likelihood that a set of results occurred by
+chance is 10%. The lower the probability score from a given statistical test, the greater the significance
+that can be attached to the results. Two levels of significance are widely used. A probability of 0.05 (5%) is
+generally regarded as significant, and a probability of 0.01 (1%) as highly significant.
+A wide range of statistical tests are available using the data analysis tools provided with most spreadsheet
+software, such as Microsoft Excel or the (freely available) OpenOffice Calc.
+
+2.3 Correlation and causality
+Correlation describes the degree of closeness of two (or more) measures and the direction in which
+changes in one measure are reflected by changes in the other. When large values in one measure, e.g.
+rate of pay, co-occur with large values in the other measure, e.g. some quantitative measure of job
+satisfaction, this is called a positive correlation. If larger values in one measure, e.g. frequency of rest
+periods, co-occur with smaller values of another measure, e.g. frequency of making errors, this is said to
+be a negative correlation.
+Let us look at some simple examples of the correlation between two variables from an imaginary
+experiment. Suppose we were to measure the length in centimetres and weight in grams of a bunch of
+carrots. We plot the length and weight of the carrots on a scatter diagram in which one axis is length and
+the other is weight. Suppose that we discover in doing this plot that the dots form an absolutely straight
+line so that for each increase in 1 cm of length there is a corresponding increase of 8 g in weight. The plot
+would look like that shown in Figure 1 and describes a perfect positive correlation. A perfect negative
+correlation would result in a perfectly straight line going from a high value on the y-axis to a low value on
+the y-axis of a scatter diagram.
+
+Figure 1 Height and weight correlation in an imaginary sample of carrots
+Show description
+
+The scales chosen on graphs of this kind can exaggerate or minimise the degree of change graphed, so
+they should be chosen carefully to avoid misleading the reader.
+Perfect correlations are extremely rare in experimental data, so our plot of the carrots is likely to look (a bit)
+more like that in Figure 2. If some of the dots fall a little to the sides of this straight line, then there is still a
+positive correlation, but the correlation isn’t perfect.
+
+Figure 2 Height and weight correlation in an imaginary sample of carrots
+Show description
+
+No correlation exists if points plotted do not form a weak or strong association along a line. Figure 3 shows
+an example where no correlation exists.
+
+Figure 3 Uncorrelated points
+Show description
+
+For further discussions on correlation, including how to interpret measures of correlation, you should
+consult a text such as Rowntree (2000) or Rees (2000).
+It is essential to note that correlation does not imply a causation. For example, while there may be a
+correlation between higher rates of pay and job satisfaction, this is not to say that higher rates of pay
+cause job satisfaction. Similarly, suppose that in a manufacturing context a strong correlation has been
+identified between late arrival of raw materials and outsourced components (X), and late delivery of
+products to customers (Y). It might appear self-evident that X causes Y because of the strong correlation.
+Indeed it might be true, but it could be that X has a partial or even minimal effect on Y. Other factors, such
+as a processing bottleneck at a particular machine, poor scheduling of skilled operators, faulty output
+requiring re-working or many others, might be more significant. To reach conclusions about causes, a
+researcher would need to look at the detail of product manufacture that resulted in specific late deliveries.
+The causes of the various delays that contributed to the overall delay could then be identified and
+prioritised, resulting in a more coherent view of the cause of Y.
+
+2.4 The Pareto principle
+A frequently quoted concept is the 80:20 ‘rule’, often referred as the Pareto principle after its originator, in
+which 80% of something is related to 20% of something else (although you should treat it as an illustrative
+rule of thumb, rather than a reliable rule about phenomena in the world). A typical example is encountered
+in the statement ‘80% of our turnover comes from 20% of our customers’ – typical, at least in
+approximation, in much of the manufacturing industry. However, this is a rule of thumb or heuristic, and by
+no means a universal truth. For example, in the postal industry, it is questionable whether 20% of
+customers post 80% of letters. The Pareto principle is commonly encountered, but can be misleading, and
+at best should only be used as an approximation.
+
+It is clearly unrealistic to assume that the 80:20 distribution applies to all situations. However, it can be
+useful to investigate such distributions as a starting point in analysis, such as investigating fault/cause
+situations. We can therefore use Pareto analysis, which is not the same as assuming the Pareto principle,
+but is based on the search for the most significant factors, those that could be dominant. In a situation
+where over 50 categories of faults are recorded, but the most frequently occurring fault situations appear
+to be caused by only a small proportion of the fault categories, then Pareto analysis may be a useful
+shortcut to establishing where to apply fault correction most effectively.
+One approach would be to analyse the fault occurrences and establish the most frequent causes (for
+example, see the discussion by Schulmeyer and McCabe (1998)). There could be around 10 causes (20%
+of 50) causing 80% of the occurrences, but there is no natural law that insists on it. Having examined the
+overall spread of faults it may be useful to examine in detail the top 3, 7, 15 (or whatever) causes. The
+decision would come from the practicalities and context of the actual situation, not from adherence to an
+80:20 rule. Pareto analysis refers here to the identification of causes in descending order of frequency, but
+could be similarly applied in other distributions of categories.
+In summary, Pareto analysis is a useful technique in statistical analysis, but it should not be used with the
+assumption of an 80:20 distribution.
+
+2.5 Summary of statistical methods
+What can we conclude from this discussion? First, bear in mind that this is not intended to be a detailed
+treatise on statistical methods; statistics is a difficult area, and the resources given in the References will
+provide you only with an introduction. Here, I want to emphasise the following points.
+Be careful about how you use statistical methods, and in any case only use them if dealing with
+sufficient quantities of data. Read about your chosen method before using it and be sure you are
+using it in an appropriate context. If you do not have a background in statistics, you are advised to
+consult with your supervisor on the most appropriate methods to use.
+Basic calculations of properties such as the arithmetic mean are useful in themselves, but rarely tell
+the whole story. Presenting the complete range of data in suitable graphical form, and calculating
+other factors such as standard deviation, can lead to more convincing and reliable conclusions.
+
+Activity 2
+Go to Activity 2 on statistical interpretation of quantitative data.
+
+3 Graphical representation of quantitative data
+The key to successfully interpreting data is to select the most appropriate way to present the data. If you
+choose well, you will be able to see patterns or trends in your data that may not have been visible from the
+raw data alone. However, it is easy to choose visualisations of the data which either do not convey a
+genuine pattern, or which mislead you into seeing a pattern that is not really there.
+
+It is important to bear in mind that you are likely to use representations in two different ways during your
+project.
+1. You will find that using some initial plots is invaluable to help you get a feel for the ‘shape’ of the data,
+and to spot initial trends. This use of representations is vital to start pointing to the ways you should
+go about your final analyses.
+2. When writing up your final dissertation, you will use a careful selection of representations that best
+convey the key points that you want to make.
+
+Point 2 above is not intended to suggest that you should artificially select a subset of data or a
+representation which is most sympathetic to your preferred conclusion. Rather, that your choice of
+representation needs to be appropriate for the kind of data that you wish to discuss. For example:
+A bar chart is useful for showing the absolute and relative values of discrete variables.
+A time-related graph or a histogram is useful for showing trends.
+A pie chart will readily show up proportions and quantitative categorisations.
+A star or radar chart is a useful pictorial means of comparing several different values of a number of
+discrete variables.
+
+The figures in the following sections demonstrate the main methods that can be used for graphical
+representation of data. They can readily be reproduced using the graph drawing options in software such
+as Microsoft Excel or the OpenOffice suite. They are by no means a comprehensive set, and there are
+many variants not shown.
+
+3.1 Line charts and scatter diagrams
+A line chart can often be the most useful way to show the correlation between two variables. The most
+common type is the straight line chart (Figure 4), which plots a dependent variable (the vertical axis)
+against an independent variable (the horizontal axis). Samples are usually taken at regular intervals, but if
+a more accurate graph is required then a continuous chart may be used (Figure 5).
+
+Figure 4 Example of a straight line chart: oven temperature vs time
+
+Maximise
+
+Show description
+
+Figure 5 Example of a continuous chart: wind speed variation over 24 hours
+
+Maximise
+Show description
+
+A scatter diagram (Figure 6) is also a good way of showing the correlation between two variables. In this
+case the variables may be dependent or independent; the plot just shows the association (or lack of
+association) between the two.
+
+Figure 6 Example of a scatter diagram: plots of lead time vs complexity
+
+Maximise
+Show description
+
+3.2 Bar charts and histograms
+It is easy to confuse bar charts and histograms. In general, bar charts are more often used when one of
+the variables being considered is discrete – for instance, different companies or different countries.
+
+Histograms, on the other hand, are frequently used when the independent variable is continuous; here the
+variable on the horizontal axis is divided into intervals (which may or may not be of equal size) and the
+area of the bar represents the information about all the occurrences in the interval.
+The main difference between the two types of chart is that in a bar chart it is the height of the bar that
+denotes the value, whereas in a histogram it is the area. This distinction is not always obvious, since if the
+intervals in a histogram are of equal size then essentially it is the height that matters. However, it is
+important to remember the difference when you come across a histogram that has ‘bars’ of different
+widths.
+
+Bar charts
+A bar chart should be used for showing discrete data, although it can also be useful for revealing trends
+over time. However, the bar chart does not attempt to present a continuous picture of how the dependent
+variable changes; instead, it compares values for discrete time periods such as weeks, months or years.
+Figure 7 shows effluent discharge rates for each of seven weeks. The implication is that this represents
+seven different measurements (at one per week). To illustrate the total continuous discharge over a seven
+week period, a histogram might be more appropriate.
+
+Figure 7 Example of a bar chart: weekly effluent discharge
+
+Maximise
+Show description
+
+A typical spreadsheet will allow you to make many variants of the basic charts, some of which are more
+useful than others. For example, Figure 8 shows effluent discharge over a period of 5 weeks, compared
+across the years 2009-2011.
+
+Figure 8 Example of a clustered bar chart: effluent discharges compared for weeks 1–5
+
+Maximise
+
+over three years
+Show description
+
+In Figure 8, it is clear what the relative values are over the three year periods. It is also reasonably easy to
+see what the three individual trends are, although less so than in a chart containing the values from only
+one year. Increasing the number of types of object being plotted in a single diagram will usually result in
+less clarity.
+There are many other means of plotting the data: Figure 9 contains the same data as Figure 8, in a 3D
+plot. Although this plot might look impressive, in practice it is less informative than the simpler plot in
+Figure 8. For example, in Figure 8 it is straightforward to see the absolute values of the individual bars.
+This is much harder in Figure 9. Also, the relative heights of the bars are often less clear. In Figure 8 it is
+clear that the week 5 bars are increasing in size over the three years. This is much harder to see in Figure
+9.
+
+Figure 9 Example of a 3D clustered bar chart: effluent discharges compared for weeks
+
+Maximise
+
+1–5 over three years
+Show description
+
+Bar charts may also be presented horizontally (Figure 10), with the independent and dependent variables
+swapping axes. This format is often used in order to compare values of the dependent variable for several
+organisations or other entities in a particular month or year, rather than values for the same organisation
+over a number of months or years.
+
+Figure 10 Example of a horizontal bar chart: annual profit for companies in 2011
+
+Maximise
+Show description
+
+Histograms
+The main purpose of a histogram (Figure 11) is to show how samples of continuous data fall into each of
+the intervals under consideration. The most common and least common intervals can be seen clearly from
+the chart, as can the general shape of the sample distribution.
+
+Figure 11 Example of a histogram: heights of 100 plants using fertiliser A
+Show description
+
+Remember that it is area and not height that is important in a histogram. Thus if the areas of all the ‘bars’
+are added, the total should be equal to the total number of samples taken. This may involve some
+calculation in order to draw the histogram correctly, as shown in the table in Figure 11.
+Note that although the figure shows (for example) that a total of eight plants had a height of between 12
+and 20 cm, it does not show where in this range they fell – it would be incorrect to assume that the 12–20
+cm interval may be divided into smaller intervals of equal frequency. Thus choice of interval size in a
+histogram may have a significant effect on the information that may be gained from it.
+
+3.3 Pie Charts
+A pie chart (Figure 12) can be useful to show the proportions of different categories that make up a whole.
+However, pie charts are only really effective where there are few variables being compared, and they do
+not convey the absolute size of the segments. For this reason, it is uncommon to see pie charts being
+used in technical literature, where bar charts are more commonly used. A bar chart showing the data from
+Figure 12 is given in Figure 13.
+Depending on the purpose of the chart it is usually the case that a bar chart is more informative.
+
+Figure 12 Example of a pie chart: proportions of different fault types
+
+Maximise
+Show description
+
+Figure 13 Example of a bar chart: absolute number of different fault types
+Show description
+
+3.4 Radar charts
+A spider or radar chart (Figure 14) is useful for comparing two or more organisations, or one organisation
+on several different occasions. By plotting two charts on the same set of axes you can also compare, for
+instance, the budget for different departments against their actual spending. Figure 14 shows, from Year 1
+to Year 2, a decrease in defective products and an increase in customer satisfaction and turnover.
+
+Figure 14 Example of a radar chart: profile of company performance for Years 1 and 2
+
+Maximise
+
+Show description
+
+Activity 3
+Go to Activity 3 on graphical representation of quantitative data.
+
+4 Qualitative data acquisition
+4.1 Analysing qualitative materials
+Quantitative data implies the collecting of numerical data, yet technological research does not always deal
+solely with numbers and statistical calculations. Useful raw data might include:
+graphical data such as photographs, diagrams and sketches
+observations of how people work and react to situations
+observation of machines and mechanical processes
+observation of natural processes in the wider environment
+personal comments, both oral and written.
+
+Any of these can potentially provide information and insights that help to achieve the objectives. Indeed,
+they form the typical components of case-study research. However, of particular importance is the
+
+qualitative data provided by personal comments, which may range from casual chats to formal interviews
+and written reports.
+I will not go into depth about how to analyse qualitative data from interviews, observations and general
+questionaires here. These are potentially very difficult areas, and you are strongly advised to consult a
+suitable source for your methodology such as Silverman (2004) or Blaxter et al. (2006). When analysing
+qualitative data, you should bear in mind that a weak methodology, or general comments on unsystematic
+or arbitrary data are unlikely to provide the evidence required for a successful T802 project.
+As an illustration, I will briefly discuss Likert tests, which many T802 students find useful for questionnairebased research.
+
+4.2 Likert tests
+Many students working on case studies find it useful to ask respondents to use a Likert scale when
+canvassing opinions. When using a Likert scale, a respondent is given a list of statements, and asked to
+give the degree to which they agree or disagree with each one. Each statement in the list is called a Likert
+item; an example is given in Figure 15.
+
+Figure 15 Example of a 5-point Likert item for a survey question
+Show description
+
+The response format for each Likert item is typically a 5-point or 7-point scale, where the middle point
+represents ‘no opinion’. By using a well-designed set of Likert items, the respondents' opinions on an issue
+can be gauged.
+Although Likert tests seem straightforward to use, there are several pitfalls that T802 students commonly
+fall into (a good, technical overview of these issues is given by Carifio and Perla (2007)).
+
+1. Using too few items
+A well-designed survey should use a range of Likert items to obtain a rounded view of the respondent's
+opinion. The 5-point scale typically used for a Likert item is a very coarse-grained tool for an individual
+question, particularly when the response might also be swayed by misinterpretation of the question, or
+different cultural or technological presumptions on the part of the respondent.
+
+A similar danger is attempting to interpret a single response outside the context of the rest of the survey
+(although with a well-designed survey, this should not be a problem).
+
+2. Using an inappropriate response format
+A common mistake made by T802 students is to omit the middle point from the response list. For example,
+the survey might use a 4-point response list with options, ‘Strongly disagree’, ‘Somewhat disagree’,
+‘Somewhat agree’ and ‘Strongly agree’. This is known as a ‘forced choice’ questionnaire. Survey writers
+sometimes feel that this is a useful technique to stop respondents from sitting on the fence. However, in
+T802 research, this attitude is quite inappropriate: your respondents may genuinely hold no opinion and
+should have the scope in the survey to express this. If you think that neutral responses will not give you
+the information that you require, you should reconsider the items in your survey, rather than force your
+respondents to answer in ways that they might consider incorrectly reflect their views.
+Even worse is the use of an unbalanced response list; that is, one in which there are not an equal number
+of points either side of neutrality. Using an unbalanced response list runs the risk of skewing the data.
+
+Figure 16 Example of a forced choice, unbalanced Likert item – do not do this!
+Show description
+
+The example in Figure 16 illustrates both of these problems. The respondent has not been allowed to state
+that (s)he has no opinion (which would presumably fall somewhere between ‘slightly disagree’ and ‘slightly
+agree’), and there are two options below this mid-point, and three options above it.
+
+3. Interpreting responses as numerical values
+When analysing the results of a Likert item from a survey, it is common to find students (and others!)
+attempting to scale the items to try to find a mean or a standard deviation. For example, you might be
+tempted to assign values to the possible-responses for the 5-point Likert item in Figure 15 as:
+
+Response
+
+Score
+
+Strongly disagree
+
+-2
+
+Somewhat disagree
+
+-1
+
+Neither agree nor disagree
+
+0
+
+Somewhat agree
+
+1
+
+Strongly agree
+
+2
+
+Then if, say, three respondents selected ‘Somewhat disagree’ while six responded ‘Strongly agree’ you
+might conclude that the average response was:
+[(3 x -1) + (6 x 2)] / 9 = 1
+and so conclude that the average (perhaps representing the dominant view of the population?) is 1, or
+‘Somewhat agree’.
+This attempted analysis makes no sense. What, for example, is a mean score of 1 supposed to mean
+(what are the units of opinion)? How is a response of ‘Strongly agree’ supposed to represent twice as
+much of what ‘Somewhat agree’ represents? Twice as much of what? Why not three, four or five times?
+Some respondents are more likely than others to respond at the extremes of the available responses; how
+does this sort of numerical approach compensate for that?
+Bear in mind that although the data you collect have an inherent order, (‘Somewhat disagree’ and ‘Strongly
+agree’ both represent more agreement than ‘Strongly disagree’), this does not mean that the responses
+can be placed at equally spaced points along some numerical scale. So do not assume, for example, that
+the difference between ‘Somewhat disagree’ and ‘Neither agree nor disagree’ is somehow the same as the
+difference between ‘Somewhat agree’ and ‘Strongly agree’.
+So when analysing responses to Likert tests:
+1. Do not attempt to take a mean from some numerical coding of the responses. The mode is a usable
+statistic, if using the mode will give you a useful insight into the responses.
+2. For the same reason, do not attempt to calculate a standard deviation. As the responses to Likert
+items are not, in fact, numerical, the standard deviation from a numerical encoding will not be
+meaningful. It is reasonable to talk about the range of responses (so you might write something like
+‘Responses ranged from ‘Strongly disagree’ to ‘Somewhat agree’, with most (55% of) respondents
+selecting ‘Neither agree nor disagree’).
+3. The best way to present the responses is in a bar chart, with a separate bar for each item in the
+response set. Do not merge separate response items into single bars, and do not present the results
+as a histogram, or any other format which suggests that the results exist on a continuum.
+
+Activity 4
+Go to Activity 4 on the use of qualitative data.
+
+5 Deriving conclusions from data: context and reliability
+The issue of how certain you can be about your conclusions, and the extent to which you can generalise
+from them, is always dependent on the sample size you are able to work with in your data gathering. The
+size and scope of your sample will always be a compromise. Ideally, you should select a large number of
+samples possessing an appropriate range of features that represent the whole population being
+investigated. In practice, you may be severely limited by the constraints of time and money, particularly in
+T802 for which less than six months is allocated for data collection. Where you would ideally like to carry
+out ten case studies, you may be limited to three, with the consequent difficulty of having to select the
+three that can be classed as most representative of the target population. Consequently you need to be
+modest about your conclusions and whether they can be abstracted or generalised for a much larger
+population.
+Some more general overviews of how you can use and interpret data to support your research can be
+found in general guides such as Moore (1999) or Potter (2006). A good work which focuses heavily on how
+to handle evidence to validate hypotheses is given by Sapsford and Jupp (2006).
+Also, it is rarely (if ever) appropriate to conclude that your conclusions are absolutely ‘proved’ or
+‘disproved’. In almost all cases, the most that you can conclude is that your evidence achieves your
+research objectives to a greater or lesser degree. Indeed, it is quite possible that some evidence will
+support it and other evidence will contradict it. It is your job to determine how far your data goes in
+addressing your research aim, and explain that to your readers.
+
+References
+Blaxter, L., Hughes, C. and Tight, M. (2006) How to Research, 3rd edn, Open University Press.
+Carifio, J. and Perla, R. J. (2007) ‘Ten Common Misunderstandings, Misconceptions, Persistent Myths and
+Urban Legends about Likert Scales and Likert Response Formats and their Antidotes’, Journal of Social
+Sciences, vol. 3, no. 3, pp. 106–116.
+Huff, D. (1991) How to Lie with Statistics, London, Penguin.
+Moore, N. (1999) How to do Research: The Complete Guide to Designing and Managing Research
+Projects, 3rd edn, London, Library Association.
+Potter, S. (ed) (2006) Doing Postgraduate Research, 2nd edn, London, Sage Publications/Milton Keynes,
+The Open University.
+Rees, D.G. (2000) Essential Statistics, 4th edn, London, Chapman and Hall.
+Rowntree, D. (2000) Statistics Without Tears: An Introduction for Non-Mathematicians, London, Penguin
+Books.
+Sapsford, R. and Jupp, V. (eds) (2006) Data Collection and Analysis, 2nd edn, London, Sage
+Publications/Milton Keynes, The Open University.
+Schulmeyer, G. G. and McCabe, T. J. (1998) ‘The Pareto Principle Applied to Software Quality Assurance’
+in Schulmeyer, G. G. and McManus, J. I. (eds) Handbook of Software Quality Assurance, 3rd edn, Upper
+
+Saddle River, New Jersey, Prentice Hall PTR.
+Silverman, D. (2004) Doing Qualitative Research: A Practical Handbook, 2nd edn, London, Sage
+Publications.
+
+

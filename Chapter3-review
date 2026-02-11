@@ -1,0 +1,199 @@
+Great — I’ll verify this **as an examiner**, not as a collaborator.
+
+I’ll structure this verification exactly as promised:
+
+* For each **required change**, I’ll state:
+
+  * **Status**: ✅ Correctly applied / ⚠️ Partially applied / ❌ Missing or insufficient
+  * **Examiner judgement**
+  * **If needed: precise corrective guidance**
+
+I am **not** re-reviewing the whole dissertation here — only whether **Iteration 2 has been correctly and sufficiently applied** to the *Methodology* section.
+
+---
+
+# Iteration 2 — Verification Outcome (Methodology)
+
+---
+
+## CHANGE 1 — Explicit research paradigm statement
+
+### Status: ✅ **Correctly applied**
+
+### Examiner judgement
+
+The added *Research Paradigm and Strategy* subsection:
+
+* Explicitly states **quantitative, positivist, experimental**
+* Clearly frames the work as **comparative**, not causal
+* Correctly limits claims to **contextual inference**
+
+This now:
+
+* Anchors all later statistical choices
+* Removes ambiguity about intent
+* Would satisfy an external examiner immediately
+
+✔️ **No further action needed**
+
+---
+
+## CHANGE 2 — Hypothesis framing (exploratory vs confirmatory)
+
+### Status: ⚠️ **Mostly applied, but needs tightening**
+
+### What you did well
+
+* You clearly frame the study as **exploratory comparative**
+* You explicitly state that statistics support interpretation, not population inference
+
+### Remaining issue (important but subtle)
+
+There are **still residual hypothesis-like phrases elsewhere** in Methodology (e.g. wording implying “demonstrates”, “confirms”, or “validates” differences).
+
+### Examiner concern
+
+> “The candidate says the study is exploratory, but still uses confirmatory language.”
+
+### Required micro-fix
+
+You **do not need new sections**, only wording hygiene:
+
+* Replace verbs like:
+
+  * “demonstrates”
+  * “confirms”
+  * “establishes”
+* With:
+
+  * “indicates”
+  * “suggests”
+  * “is consistent with”
+
+📌 **Action**: Do a single wording sweep in *Methodology only* to ensure alignment.
+
+---
+
+## CHANGE 3 — Representativeness and boundary setting
+
+### Status: ✅ **Correctly and strongly applied**
+
+### Examiner judgement
+
+Your representativeness paragraph now:
+
+* Explicitly distinguishes **internal vs external validity**
+* Clearly states what is *not* modelled
+* Strengthens, rather than weakens, credibility
+
+This is examiner-safe and well judged.
+
+✔️ **No further action needed**
+
+---
+
+## CHANGE 4 — Sampling and workload justification
+
+### Status: ⚠️ **Applied, but slightly underpowered**
+
+### What works
+
+* You explain pragmatic constraints
+* You correctly reject population sampling interpretation
+* You explain diminishing returns
+
+### What is still missing
+
+One **explicit linking sentence** tying sampling to **comparative validity**.
+
+### Examiner concern
+
+> “Is this enough data to compare configurations reliably?”
+
+### Required addition (1–2 sentences only)
+
+Add a sentence along the lines of:
+
+> “The selected sampling scale is sufficient to ensure consistent relative ordering of cryptographic configurations across repeated runs, which is the primary requirement for comparative performance evaluation.”
+
+This explicitly closes the loop.
+
+---
+
+## CHANGE 5 — Statistical assumptions and test rationale
+
+### Status: ⚠️ **Applied, but needs one clarification**
+
+### What you did well
+
+* You explicitly discuss parametric vs non-parametric use
+* You caution against over-interpreting statistical significance
+* You correctly mention effect sizes
+
+### Missing clarity
+
+You **do not explicitly state** *how* test choice was decided (ex ante vs ex post).
+
+### Examiner concern
+
+> “Were non-parametric tests used because assumptions failed, or as confirmation?”
+
+### Required clarification (short)
+
+Add one sentence such as:
+
+> “Parametric tests were applied where assumptions were approximately satisfied, with non-parametric alternatives used as confirmatory analyses where distributional uncertainty remained.”
+
+This protects you from p-hacking accusations.
+
+---
+
+## CHANGE 6 — Ethics section strengthening
+
+### Status: ✅ **Correctly applied**
+
+### Examiner judgement
+
+The ethics section now:
+
+* Explicitly states no human subjects
+* Explicitly states synthetic data
+* Explicitly addresses risk
+
+This is exactly the level expected for technical research.
+
+✔️ **No further action needed**
+
+---
+
+# Overall verdict for Iteration 2
+
+### Examiner confidence level: **HIGH**, with minor refinements pending
+
+You have:
+
+* Correctly reframed the methodology as **methodologically rigorous, bounded, and defensible**
+* Removed the biggest risks identified in Iterations 0 & 1
+* Made Chapter *Methodology* something an examiner can **trust**
+
+### Remaining required actions (very small)
+
+Before we move on, please:
+
+1. Do a **terminology sweep** in *Methodology* to remove confirmatory language (CHANGE 2)
+2. Add **1 sentence** strengthening comparative sufficiency in sampling (CHANGE 4)
+3. Add **1 sentence** clarifying statistical test decision logic (CHANGE 5)
+
+Once those are done, this chapter is **locked**.
+
+---
+
+## Next step
+
+After you apply those **minor final tweaks**, come back and say:
+
+> “Iteration 2 refinements applied — ready to proceed.”
+
+We will then move to **Iteration 3: Analysis & Interpretation**, which is the other high-risk, high-mark chapter — and now can be evaluated cleanly because Methodology is defensible.
+
+You’re in very good shape at this point.

@@ -280,8 +280,8 @@ Based on the dissertation abstract and content:
 - [ ] Deterministic conditions verified
 
 ### Size and Bandwidth Claims
-- [ ] Key size inflation measured (2-45x range)
-- [ ] Signature size inflation measured
+- [x] Key size inflation measured (2-45x range) - Table 4.6 added
+- [x] Signature size inflation measured - Table 4.6 added
 - [ ] Bandwidth impact analyzed
 
 ---

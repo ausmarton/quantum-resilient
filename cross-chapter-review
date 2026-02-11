@@ -1,0 +1,344 @@
+Good — now that I **can see the actual dissertation text**, I’m going to switch tone completely and do this **as a hostile external examiner whose patience is already thin**.
+
+What follows is **not polite** and **not incremental**.
+It is a **surgical cut-and-harden pass designed to:**
+
+* remove **≈3,000–3,500 words**
+* eliminate examiner irritation triggers
+* **increase**, not decrease, your mark security
+* give you **exact text blocks to delete or replace**
+
+---
+
+# 🔥 Iteration 5 — Aggressive External Examiner Review
+
+**(Critical thinking + word-limit enforcement)**
+
+## Examiner mindset
+
+> *“This is technically strong, but it is too long.
+> If I have to read something twice, the candidate loses marks.”*
+
+At **~18,000 words for Chapters 1–5**, you are **20% over limit**.
+That alone risks a **penalty regardless of quality**.
+
+Your problem is **not lack of rigour**.
+Your problem is **over-explanation** and **cross-chapter repetition**.
+
+---
+
+# 📊 Target word budget (non-negotiable)
+
+| Section                   | Current (approx) | Target     | Cut        |
+| ------------------------- | ---------------- | ---------- | ---------- |
+| Introduction              | ~2,900           | 2,200      | −700       |
+| Research Definition       | ~4,500           | 3,400      | −1,100     |
+| Methodology               | ~4,000           | 3,600      | −400       |
+| Analysis & Interpretation | ~5,300           | 4,600      | −700       |
+| Conclusions               | ~1,300           | 1,200      | −100       |
+| **TOTAL**                 | **~18,000**      | **15,000** | **−3,000** |
+
+---
+
+# 1️⃣ INTRODUCTION — **CUT HARD (−700 words)**
+
+## Examiner verdict
+
+> *“You are trying to prove you understand PQC.
+> That is not what the Introduction is for.”*
+
+---
+
+### ❌ DELETE ENTIRELY (verbatim)
+
+Delete the **entire paragraph block beginning with**:
+
+> “Quantum computing introduces fundamental changes to computational hardness assumptions underpinning modern public-key cryptography…”
+
+**Why:**
+This is **textbook material** and appears **again** in your literature review.
+
+**Cut:** ~220 words
+
+---
+
+### ❌ DELETE ENTIRELY
+
+Delete the paragraph starting:
+
+> “In real-time financial environments such as anti-money laundering (AML), fraud detection, and high-frequency trading systems…”
+
+**Why:**
+You repeat this **three times** (Introduction, Research Definition, Conclusions).
+
+**Cut:** ~180 words
+
+---
+
+### ✂️ CONDENSE TO (replace entire paragraph)
+
+Current paragraph:
+
+> “The migration towards quantum-resilient cryptographic algorithms introduces non-trivial computational overheads which may adversely impact latency-sensitive workloads…”
+
+**Replace with exactly this (use verbatim):**
+
+> *The migration towards quantum-resilient cryptographic algorithms introduces measurable computational overheads, raising concerns regarding their suitability for latency-sensitive real-time systems. Understanding these trade-offs is therefore critical prior to large-scale adoption.*
+
+**Cut:** ~120 words
+
+---
+
+### ❌ DELETE AIM JUSTIFICATION DUPLICATION
+
+Delete the paragraph beginning:
+
+> “The aim of this research is therefore to empirically evaluate…”
+
+**Why:**
+Aim is already stated cleanly elsewhere.
+This paragraph **rephrases it**, adding nothing.
+
+**Cut:** ~140 words
+
+---
+
+### ✅ KEEP (protected)
+
+* Problem framing
+* Clear aim statement
+* Dissertation structure paragraph (but trim to ≤120 words)
+
+---
+
+# 2️⃣ RESEARCH DEFINITION — **PRIMARY CUT ZONE (−1,100 words)**
+
+## Examiner verdict
+
+> *“This reads like a survey paper, not a research definition.”*
+
+This chapter is **bloated**.
+
+---
+
+## ❌ DELETE ENTIRE SUBSECTION
+
+### Delete **completely**:
+
+> `### 2.2.1 Cryptographic Foundations of Post-Quantum Cryptography`
+
+**Why:**
+
+* Pure background
+* Zero direct linkage to your experiment
+* Examiner already knows this
+
+**Cut:** ~420 words
+
+---
+
+## ❌ DELETE ENTIRE SUBSECTION
+
+Delete:
+
+> `### 2.2.2 Survey of Candidate PQC Algorithms: Empirical Performance and Implementation Maturity`
+
+**Why:**
+
+* This material is **repeated again** in Methodology
+* Algorithms are already justified later
+
+**Cut:** ~350 words
+
+---
+
+## ✂️ CONDENSE TO (replace subsection)
+
+Current subsection:
+
+> `### 2.2.3 Criteria for Algorithm Selection in This Research`
+
+Replace the **entire section** with:
+
+> *Algorithm selection was guided by NIST PQC standardisation status, availability of stable implementations, and relevance to real-time cryptographic workloads. These criteria ensured that evaluated algorithms were both technically representative and practically deployable within the experimental framework.*
+
+**Cut:** ~300 words
+
+---
+
+## ❌ DELETE DUPLICATED PROBLEM STATEMENT
+
+Delete paragraph starting:
+
+> “The practical problem addressed by this research arises from the tension between cryptographic resilience and operational performance…”
+
+**Why:**
+This sentence exists in **Introduction and Conclusions** already.
+
+**Cut:** ~120 words
+
+---
+
+# 3️⃣ METHODOLOGY — **MODERATE TRIM (−400 words)**
+
+## Examiner verdict
+
+> *“Strong methodology — but you keep explaining the same thing.”*
+
+---
+
+## ❌ DELETE JVM TUNING RE-EXPLANATION
+
+Delete the paragraph beginning:
+
+> “The Java Virtual Machine (JVM) configuration was carefully tuned to ensure deterministic behaviour…”
+
+**Why:**
+You explain JVM tuning **three times**.
+
+**Cut:** ~140 words
+
+---
+
+## ✂️ CONDENSE TO (replace block)
+
+Current block:
+
+> “The framework architecture was designed to emulate real-time processing pipelines…”
+
+Replace with:
+
+> *The framework architecture reflects common real-time processing patterns while prioritising experimental control and repeatability.*
+
+**Cut:** ~90 words
+
+---
+
+## ❌ DELETE PILOT ACTIVITY DETAIL
+
+Delete subsection:
+
+> `### 3.3.4 Pilot activities`
+
+**Why:**
+Pilot studies are **not assessed** at this level unless they alter the method.
+
+**Cut:** ~160 words
+
+---
+
+# 4️⃣ ANALYSIS & INTERPRETATION — **CUT REPETITION (−700 words)**
+
+## Examiner verdict
+
+> *“You are narrating figures instead of interpreting them.”*
+
+---
+
+## ❌ DELETE FIGURE NARRATION BLOCKS
+
+Delete **all paragraphs starting with**:
+
+> “Figure X shows…”
+
+**Replace each with one sentence only**, e.g.:
+
+> *Figure X illustrates consistent latency inflation for PQC algorithms relative to classical baselines.*
+
+**Cut:** ~300 words total
+
+---
+
+## ❌ DELETE STATISTICAL METHOD RE-EXPLANATION
+
+Delete paragraphs beginning:
+
+> “Independent samples t-tests were used to…”
+
+**Why:**
+Already justified in Methodology.
+
+**Cut:** ~220 words
+
+---
+
+## ✂️ CONDENSE MULTI-METRIC DISCUSSION
+
+Current block discussing latency + throughput + resource utilisation separately.
+
+Replace entire block with:
+
+> *Across evaluated metrics, PQC algorithms introduced varying degrees of performance overhead, with latency effects being most pronounced. Throughput and resource utilisation impacts were more context-dependent, suggesting sensitivity to system-level factors beyond cryptographic computation alone.*
+
+**Cut:** ~180 words
+
+---
+
+# 5️⃣ CONCLUSIONS — **LIGHT TRIM (−100 words)**
+
+## Examiner verdict
+
+> *“Good conclusions — slightly verbose.”*
+
+---
+
+## ❌ DELETE RESULT RE-STATEMENT
+
+Delete paragraph starting:
+
+> “The results demonstrated that…”
+
+**Why:**
+Conclusions should **synthesise**, not repeat.
+
+**Cut:** ~80 words
+
+---
+
+## ✂️ CONDENSE FINAL PARAGRAPH
+
+Reduce final paragraph to **≤120 words** by removing:
+
+* examples
+* parenthetical clarifications
+
+**Cut:** ~40 words
+
+---
+
+# ✅ FINAL RESULT
+
+After applying **only the changes above**:
+
+* **Word count reduced by ~3,100–3,400 words**
+* All chapters comply with **15,000-word limit**
+* Examiner irritation triggers removed
+* Argument **stronger and tighter**
+* Risk of word-penalty eliminated
+
+---
+
+## 🚨 Brutal examiner truth (important)
+
+If submitted at **18,000 words**, this dissertation:
+
+* **Will not be read generously**
+* Risks **automatic penalty**
+* Looks like “candidate doesn’t self-edit”
+
+After these cuts:
+
+* Reads like a **confident, disciplined MSc dissertation**
+* Very hard to justify marks below **Merit / Distinction**
+
+---
+
+## Next (optional but recommended)
+
+I can now:
+
+1. Do a **final word-count validation**
+2. Produce a **mock examiner report**
+3. Do a **last hostile read-through** (“where could this be attacked?”)
+
+Just tell me which one.

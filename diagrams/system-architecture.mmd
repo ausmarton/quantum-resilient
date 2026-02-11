@@ -1,0 +1,25 @@
+%% Figure 3.2: End-to-end architecture at a high level (Section 3.3.1)
+%% Text: "input-event stream" (config+orchestration), "cryptographic operation" (execution), "output evidence" (instrumentation+analysis)
+flowchart LR
+    subgraph INPUT["Input-event stream"]
+        CONFIG[Configuration]
+        ORCH[Orchestration]
+    end
+    subgraph CRYPTO["Cryptographic operation"]
+        EXEC[Execution layer]
+    end
+    subgraph OUTPUT["Output evidence"]
+        INST[Instrumentation]
+        ANALYSIS[Analysis]
+    end
+    CONFIG --> ORCH
+    ORCH --> EXEC
+    EXEC --> INST
+    INST --> ANALYSIS
+
+    classDef inputStyle fill:#b3e5fc,stroke:#000,stroke-width:3px
+    classDef execStyle fill:#ffb74d,stroke:#000,stroke-width:3px
+    classDef outputStyle fill:#81c784,stroke:#000,stroke-width:3px
+    class CONFIG,ORCH inputStyle
+    class EXEC execStyle
+    class INST,ANALYSIS outputStyle

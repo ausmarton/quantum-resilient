@@ -10,6 +10,10 @@ This directory contains Mermaid diagram source files for Chapter 3 of the disser
 
 3. **high-level-overview.mmd** - High-level overview of the research methodology and framework components (Section 3.1.1)
 
+4. **complete-workflow.mmd** - **NEW** - Complete workflow diagram showing the full pipeline from experiment matrix through data collection, processing, analysis, to final reporting
+
+5. **system-architecture.mmd** - **NEW** - System architecture diagram showing all components, environments, and data flows
+
 ## Converting to SVG/PNG
 
 ### Prerequisites

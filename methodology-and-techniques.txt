@@ -1,0 +1,766 @@
+Unless otherwise stated, copyright © 2025 The Open University, all rights reserved.
+Printable page generated Sunday 14 December 2025 at 20:06
+
+Methodology and techniques
+1 Aim, terminology and initial concepts
+1.1 Aim of this document and outcomes
+The aim of this document is to provide a framework that will help you to plan and execute a robust, valid
+T802 investigation. Within this overall aim, the subsidiary aims are to:
+identify the appropriate research methods
+identify the investigative techniques associated with each method
+provide a process for checking the technical validity and practicability of your proposed methodology.
+
+The outcomes of successfully studying the material will be:
+an understanding of the distinction between secondary and primary research
+an ability to make an informed selection of data-collection techniques that will address your research
+aim and objectives
+a methodology that is technically valid for your research
+a methodology that is practicable and that minimises risk.
+
+The single activity associated with this document is designed to encourage you to apply the various
+concepts and techniques to your own research. As it is directly relevant to both your research proposal and
+the work described in TMA 01, I recommend that you do not miss it out.
+
+1.2 Terminology
+A distinction is made here between the individual methods used, such as case study, review and
+laboratory experiment, and the term methodology, which refers to the combination of methods used and
+how they will be implemented to obtain all the required data. Whilst methods can, to a varying degree, be
+prescriptive and well defined, the means by which they are used in combination must be a matter for
+careful consideration. Even if the constituent methods are by themselves valid and useful, a researcher
+must be sure that, overall, the appropriate range of data will be collected. Methodology therefore concerns
+what data you need to collect and the sum total of methods you propose to use. Good methodology design
+will enable you to address your research aim and objectives. The penalty for getting it wrong is that you
+can put in a lot of effort, then finally realise that certain vital data is lacking.
+
+Study note
+In the context of T802, it is likely that your methodology will consist of your secondary research plus
+
+one or two primary research methods.
+
+The term ‘technique’ is used colloquially in a similar manner to ‘method’. However, in this context I make a
+distinction. A method such as a survey could draw upon a variety of techniques. A survey (the method) of
+six industrial processes might be achieved by six observation visits or alternatively by six telephone
+interviews (the techniques), depending on the nature of the data sought.
+
+Study note
+This will turn out to be an important point. The way that this document is constructed might imply a
+sequence of events, in that a researcher decides on the methodology, then the method and finally the
+technique. This is probably not the best way to look at it now, although it is likely to be the way you
+present it in your dissertation. In Section 3, I will show how the technique employed follows on from
+the data needed to meet an objective. This means that the overall methodology should be dictated by
+the data that is required to meet the objectives.
+
+A survey of stakeholders involved with the locating of a wind farm might use a questionnaire, raising the
+issue of whether to design a paper version sent by post or an electronic version distributed by email.
+Similarly, a method such as a case study might entail techniques such as in-depth interviews with
+functional managers, review of internal documented information and observation of organisational
+processes. In selecting the technique to employ, a researcher needs to consider a range of practical
+matters including relevance, cost, speed, reliability and effectiveness.
+
+1.3 Primary and secondary research
+The various activities that you will undertake during T802 can conveniently be divided into the three
+categories shown in Figure 1 (also met in Section 3.5 of Preparing for Research). The rectangle
+represents the totality of work undertaken during the course of T802 research. The area devoted to the
+three main categories of activity illustrates their changing relative importance over the duration of the
+research as the work progresses. The three headings shown may be further subdivided into more detailed
+activities:
+secondary research: literature searches, reading, considering
+primary research: research design, planning, execution, talking to experts in the field, recording
+data, data analysis
+writing: note-taking, record-keeping, reflecting, summarising, concluding, drafting, drawing, revising,
+writing up.
+
+It will be clear from this list that there is a degree of overlap between the three sets of activities shown in
+Figure 1. The relative proportions of the categories should be regarded as illustrative only.
+
+Figure 1 Categories of activity in T802 and their relative importance
+
+Maximise
+Show description
+
+The significance of the scheme illustrated in Figure 1 is that at the heart of T802 (and all research) is the
+category of activities labelled ‘investigation’. With this in mind, it is worth reminding you of the distinction
+between the concepts of primary and secondary research.
+
+Secondary research
+This refers to the reading process in Figure 1. It is the search for information through reading what other
+researchers have reported. You are doing this in order to understand the relevant issues and to identify
+gaps in knowledge, and in due course this will provide much of the information you will write about in
+Chapter 2 of your dissertation – ‘Research definition’. A significant amount of secondary research must
+precede primary research because it establishes what the primary research should set out to achieve, as
+encapsulated in the research aim and objectives.
+
+Primary research
+This refers to your own investigation; the new data collection that you will carry out for the purpose of
+addressing the research aim you have posed. The design of this research will be described in Chapter 3 of
+the dissertation – ‘Methodology’. It is important to make a clear distinction between study of the existing
+work in an area (the secondary research described in the previous paragraph) and the new work involved
+in the investigation that you will undertake. The relationship between Chapters 2 to 5 of the dissertation
+template is illustrated in Figure 2.
+
+Figure 2 The relationship between Chapters 2 to 5 of the T802 model dissertation
+
+Maximise
+
+Show description
+
+1.4 Quantitative and qualitative research
+Study note
+1.4 and 1.5 are covered in more detail in the document Theories and paradigms: their relevance in
+research.
+
+Research can address many different questions of how, what, when and why. Investigating something that
+can be observed and measured in a way that can be repeated by other researchers tends to address
+questions such as ‘how often?’ or ‘how many?’ or ‘how much?’. This is the long-standing tradition of
+quantitative research, often, but not exclusively, associated with the positivist research paradigm.
+However, questions about human behaviour and their social contexts often cannot be quantified,
+particularly many of the ‘why?’ questions that explore meaning and that need description and words rather
+than numbers. The tradition of qualitative research applies here, developed by people working in social
+sciences. Qualitative research is often associated with the naturalistic research paradigm, but, again, not
+exclusively so.
+A lot of research crosses the boundaries of quantitative and qualitative research, using elements of both.
+As far as T802 is concerned, it is important to note that both quantitative and qualitative research traditions
+have some well-established and rigorous research methods, methodology and data-collection techniques.
+Mixed methods have also been developed that bring quantitative and qualitative approaches together.
+Make sure you consult relevant literature to check that you use appropriate methods, methodology and
+techniques, and that you are using them in an appropriate way.
+Further discussion can be found in Yates (2004, pp. 147–53) and Remenyi et al. (1998).
+
+1.5 The researcher as stakeholder
+It is likely that you will have some involvement with the subject of your research beyond the investigation
+itself. For example, you may be the manager of a process you are seeking to improve or have a long
+association with the organisation on which your research is based. This means that you have a stake in
+the research subject beyond merely the quality of the research that will be carried out. This is both a
+strength and a weakness, and it is important to recognise both aspects.
+Since you already have an interest in, and knowledge of, the research subject and context, you are likely
+to have insights into the causes of problems and the factors that have an impact on them. You may
+consider that you implicitly understand, perhaps, how to go about investigating the problem to achieve the
+best results. This, however, only gives you a potential advantage over a researcher who comes into the
+field ‘cold’. Whilst it is entirely appropriate to take full advantage of your inside knowledge, it is important to
+recognise the corresponding downside of this situation. Your existing knowledge may lead to a lack of
+objectivity, a tendency to make subjective judgements instead of evaluation based on sound evidence, or a
+distortion of the events being investigated as a result of your participation. It is, therefore, important to
+
+recognise how your role beyond that of researcher could affect the research itself, and to take steps to
+avoid potential pitfalls. For example, you might seek verification of your perceptions from a third party, or
+gather objective evidence to ‘prove’ that your own subjective view is correct. Some of the principles of
+action research (see Section 2.1) may be relevant.
+
+Study note
+Just to emphasise the cautionary note here. What this section is saying is that the possession of
+heuristic or experiential knowledge is not a substitute for a scientific approach. You will, typically, still
+need to do as much secondary research for the purpose of situating the research within the body of
+knowledge. In addition, you will need to validate your approach to the primary research with reference
+to existing, accepted methods.
+
+1.6 Design of primary research
+The research design process consists of the four stages shown in Figure 3. Sections 2 and 3 will explore
+the activities and issues involved in each stage, with the aim of underpinning the development of a robust
+methodology for your primary research.
+
+Figure 3 The research methodology design process
+
+Show description
+
+You will notice that the design process is presented as a set of steps that are essentially sequential in
+character. It is to be expected that the day-to-day realities of research will differ from the stages presented
+in Figure 3; the process is likely to be even more iterative than indicated. However, the benefits of using
+the model in Figure 3 as a reference framework are that it:
+provides the basis for planning
+acts as a common ‘language’
+enables progress to be discussed
+acts as a checklist to ensure that all necessary tasks have been undertaken.
+
+Before you embark on the detailed design of your research investigation, it is vital to have a clear definition
+of the research problem you are intending to tackle. In turn, this requires you to have done sufficient
+secondary research to know that a gap in the existing knowledge exists. For your research proposal to be
+accepted you will only have to demonstrate a partially completed design – enough to indicate that it is
+likely that the design will address the research aim. For TMA 01 significant progress will need to be
+demonstrated and by TMA 02 it should be finalised.
+
+1.7 Summary of Section 1
+There is a distinction to be made between methodology and method. The former describes the
+entirety of your approach to addressing the research aim. The latter refers to a particular way of
+conducting your research such as a survey. A research technique is a further sub classification of
+method and should be thought of as the description of the way that data gathering takes place in a
+given context.
+Primary research is the process of collecting data which is original and turning that data into
+information and then new knowledge. Secondary research is the search for information by reading
+what other researchers have reported. Although there will be constant iterations between the two
+over the course of your research, in the main, secondary research precedes primary research. There
+should be a clear link between the two with the secondary research informing the primary research.
+Both quantitative and qualitative research methods can be appropriate for T802; possibly even a
+mixture of the two. The important factor with any methodology is that it is rigorous and fit for purpose.
+You need to be aware of the pitfalls of introducing bias into your research because of your own
+position as stakeholder.
+The process of research design is iterative. The final design will only become completely clear by
+TMA 02.
+
+2 Research (investigation) methods
+It is essential that, from an early stage in the preparation of your research proposal, you consider how you
+might go about the data gathering and analysis that will be involved in your investigation. This section
+gives an overview and further sources of information are given in the Additional resources section of the
+module website. In addition, you should also seek to identify possible methods/techniques in your own
+literature review by considering what other researchers have done in similar areas.
+
+T802 research can be classified as:
+Experiments: practical tests of theory, typically in a laboratory or factory but could also be in ‘field’
+trials.
+Case studies: investigations into the occurrence of a phenomenon – which might be a trend, a
+concept or the use of a technique – within a specific context and using multiple sources of
+information.
+Surveys: systematic collection of information about a representative set of subjects, using a variety
+of techniques including questionnaires and interviews.
+Reviews: either a reassessment of existing work in a subject or re-evaluation of it in the light of new
+information.
+
+Data gathering that involves practical work of any kind, whether in a laboratory, office or outdoor situation,
+is referred to as empirical. This applies to the first three methods listed above, but not to review research.
+All four methods are expanded upon in the following subsections.
+
+2.1 Experiments
+Experiments are sometimes based around a hypothesis, in the form of a statement of a relationship to be
+tested. For example:
+(i) The use of neural networking improves the accuracy of production-cost estimates when
+compared with existing methods based on linear regression.
+(ii) The use of reagent A is more effective than reagent B in the reduction of Cryptosporidium
+parasite in solution at a specified temperature range.
+
+The research then gathers data that enables the experimenter to evaluate the extent to which the
+postulated hypothesis is valid. It is almost always possible to express a hypothesis in the form of an openended research objective:
+(i) To discover whether the use of neural networking improves the accuracy of production-cost
+estimates.
+(ii) To decide which of reagents A and B is more effective in the reduction of Cryptosporidium
+parasite, and under what temperature conditions.
+
+Open-ended research objectives are slightly simpler and more direct in expression, so you are encouraged
+in T802 to use them in preference to posing a hypothesis.
+Experiments are also often based around ‘What if…?’ questions. They share some characteristics with
+conventional feasibility studies in that they seek an answer to the question ‘If we did X, what would
+result?’. They are clearly focused or deductive in character, in that a specific kind of answer is sought and
+anticipated. Occasionally, laboratory research has the character of ‘let’s do this experiment and see what
+
+happens’, but you are strongly advised to avoid highly speculative experimentation for T802 purposes, as
+it can could result in much time being wasted in achieving minimal results.
+Experiments can be categorised as either abstracted or in situ.
+Abstracted experiments are undertaken in a laboratory or an analogous setting such as a field trial
+ground. The subjects of the experiment are taken from their normal setting and subjected to closely
+controlled experimental procedures. One aim of the process of abstraction is to exclude factors that
+might influence the results of the experiment and so threaten the validity of the conclusions.
+In situ experiments are undertaken in the place where the phenomenon under study occurs. In situ
+experiments are frequently encountered in technological research, though it should be appreciated
+that setting them up can require a lot of time, effort and expenditure.
+If you are considering such an experiment, you must carry out a detailed assessment of the
+resources required and any inherent risk.
+Example 1: testing whether the requirement for segregation of recyclable domestic waste into paperbased, plastic and metal would result in less material being collected when compared with nonsegregated collection.
+Example 2: testing the extent to which the reorganisation of a particular manufacturing assembly line
+could improve the quality of the finished product.
+Action research is a particular form of practical in situ experimentation, in which the researcher is a
+key participant in the operation being studied. An example might involve changing the way a team
+operates a manufacturing cell where the researcher is also a member of the team. The issue for a
+researcher who carries out action research is that it involves one person in two roles: being the
+experimenter as well as the subject (or one of them) being observed. It can be tricky, but not
+impossible, to keep the roles distinct. Use of action research also raises another problem – the linear
+nature of the steps in the process mean that action research can take too long for the limited T802
+timescale. Nevertheless if these limitations are taken into account, action research is viable for T802
+research.
+
+Further discussion on experiments can be found in Wadsworth (1997), Flowerdew and Martin (2003),
+Coghlan and Brannick (2001) and Stringer (2007).
+A suitable alternative to a real experiment might be to carry out a preliminary study, based on analysis of
+current ‘live’ data, followed by detailed planning for a projected situation and a prediction or simulation of
+how it might perform. Such ‘thought experiments’ are essentially imagined experiments to test a principle
+or theory. They can be used as precursors to practical experiments or as investigations in their own right.
+There are many historically important examples in the fields of science and philosophy. A thought
+experiment might be a way of exploring the ethics of a particular course of action, for example, or the
+consequences of making a change to a process.
+
+2.2 Case studies
+
+Case study research has distinctive characteristics that have led to a general acceptance that it forms a
+separate type of research. This view has been put forward most notably by Yin (2003), from which the
+following definition is adapted (pp. 13–14).
+A case study is an empirical [that is, practical] inquiry that
+investigates a contemporary phenomenon within its real-life context, especially when
+the boundaries between phenomenon and context are not clearly evident, [and that]
+relies on multiple sources of evidence.
+
+For further discussion of this, see also Yin (1981a, pp. 97–114; 1981b, pp. 58–65; 2003).
+This definition not only helps us to understand case studies but also distinguishes them from other
+research methods.
+Case studies in T802 involve the observation of real, live situations that are relevant to the problem or
+issue being investigated, and potentially cover a wide scope. They might involve an office, a section within
+a factory, an organisation, a community or a group of people with a shared aim.
+Past T802 studies have featured all of these, plus the more unusual case study environments of an island,
+an airport, fish in a lake, New Zealand pest infestation, fuel usage in a crematorium, a chemical industry
+joint venture and oil pollution in a sea location.
+There are three categories of case study: exemplar, cross-sectional and longitudinal.
+An exemplar case study examines the application of theory in an unusual, critical or interesting
+setting.
+Cross-sectional case studies are used to explore the extent to which a characteristic or
+phenomenon occurs in a set of people, organisation or other subject at the current point in time.
+Longitudinal case studies examine the development of a phenomenon over a period of time.
+
+All three types are encountered in and are relevant to T802-type research. Note, however, that a
+longitudinal case study might require access to data for a long period, whereas the scope of T802 allows
+observations to be made only over a comparatively short period. Hence you will need to discuss the
+possible use of a longitudinal study carefully with your supervisor.
+
+2.3 Surveys
+According to Thomas, a survey is:
+a procedure in which information is collected systematically about a set of cases (such as people,
+organisations, objects). The cases (or sample units) are selected from a defined population and the
+aim is to construct a data set from which estimates can be made and conclusions reached about this
+population
+
+(Thomas, 1996)
+
+Surveys often seem to offer a simple, clear-cut way of gathering primary data on a particular topic.
+However, behind every successful survey is a lot of hard work, both at the planning and at the execution
+stage. Do not underestimate the difficulties associated with surveys.
+Thomas (1996, pp. 115–24) argues that there are four basic operations involved in undertaking a survey:
+selecting a sample of units from a defined population
+developing and testing standardised ways to measure the units
+applying them to the sample units
+making inferences about the population from which the sample was selected.
+
+Although the term ‘survey’ is often used colloquially, to mean the same as a questionnaire, it is used here
+in the wider sense as defined above by Thomas (1996). A questionnaire, whether using paper, internet or
+telephone, is one technique for carrying out a survey, but is not synonymous with it. Other techniques,
+such as interviewing and internet searching, might alternatively be used for a survey. In addition there are
+other techniques which, although not strictly adhering to Thomas’s definition, can be regarded as being
+part of the survey category. These are the Nominal Group, Focus Group and Delphi techniques, which will
+be covered in more detail in Section 3.1.
+A survey always involves the systematic collection of data about a sample of subjects selected from a
+population, the aim being to identify the characteristic of the population as a whole from the relatively small
+sample of data collected. The main advantage of surveys is their efficiency in comparison with gathering
+data from the whole population (as is done in a census). However, there are also significant theoretical and
+practical problems in selecting the sample and identifying the data sought.
+There are three categories of survey: cross-sectional, longitudinal and discovery.
+Cross-sectional surveys are used to explore the extent to which a characteristic or phenomenon
+occurs in a set of people, a single or group of organisations, or other subjects at the time of the
+survey. They may also be used to test the application of theory to contrasting sets of circumstances.
+Such surveys are potentially applicable to T802.
+Longitudinal surveys involve repeated sampling at different intervals and have the aim of identifying
+the development of a characteristic or phenomenon over a period of time. They may be
+contemporary or historical. It would be possible, for example, to undertake a survey of environmental
+statutes regarding sites of special scientific interest for the period 1994–2004. Whilst not totally
+inappropriate to T802, longitudinal surveys are unlikely to be of use in primary research because of
+the short timescale involved.
+Discovery surveys are more speculative than the other two. You may not be entirely sure what
+findings you are looking for, so the questions in these surveys tend to be open ended – hence they
+are often the precursor to other primary data collection. Be wary of attempting a discovery survey for
+T802, unless you are convinced that there is indeed something out there to be discovered. See also
+the section on Grounded Theory in ‘Theories and paradigms: their relevance in research’.
+
+2.4 Reviews
+The final category of research is the review approach, which could be:
+theoretical – attempting a synthesis of existing research in the chosen area
+reinterpretive – either reviewing an established theory in the light of new data, reinterpreting existing
+data in the light of a new theory or methodology, or combining two or more data sets.
+
+Periodic reviews of research in a particular topic are necessary because of the way scientific discovery
+proceeds. Occasional ‘paradigm’ shifts that establish a new theoretical basis for a subject are interspersed
+with often lengthy periods in which the scientific community undertakes ‘normal’ science. The aim of
+normal science is to solve puzzles, not to pursue major conceptual novelty. In a similar manner, most T802
+research is technological and concerned with the solving of problems.
+In the T802 context, review research is rare but not unknown. It is unlikely to be aimed at producing a
+paradigm shift, but could realistically aim to produce a novel solution to a problem using, for example,
+published experimental data from two or more sources. The task would then be to use the totality of the
+data to solve the problem or give new insights, where the previous individual experimenters had not
+succeeded. Alternatively, review research might synthesise a new conceptual model that is applicable
+across a range of different circumstances from several separate published pieces of research that were
+each undertaken from a very particular limited perspective.
+Review research is not the same as a literature review. They are different activities and serve different
+purposes. Literature reviewing is secondary research for the purpose of understanding the current ‘state of
+the art’. Review research is primary research that creates new solutions from existing knowledge. As such,
+review research can be even more demanding than empirical research, requiring both access to relevant
+existing data and a good grasp of the previous research that generated it. It is by no means an easy
+option. If you are considering undertaking review research then you will need to discuss with your
+supervisor, as part of the proposal phase, how your plans differ from secondary research.
+
+2.5 Summary of Section 2
+There are four basic subdivisions of methods: experiments, case studies, surveys and reviews. Each
+has various techniques which could be employed and it is important to apply the most appropriate
+variation to your research problem.
+Words are used precisely in some of the contexts so beware of misunderstanding if a word has
+another or less precise meaning in everyday usage.
+Some methods are less suitable for T802 research than others. The following ones should only be
+used if you are really sure there is not a better alternative:
+action research
+thought experiments
+longitudinal case studies
+longitudinal surveys
+reviews.
+
+Beware of regarding the use of a survey as a ‘quick fix’ or ‘sure fire’ way of success. There are
+significant issues in selecting the sample and identifying the data sought.
+
+3 Research methodology design
+The first stage of the design problem consists of making informed decisions about:
+1. choice of method – empirical (experiment, survey, case study) or review
+2. choice of investigative technique(s).
+
+A good statement of the methodology used in a particular piece of research will start with a discussion of
+the choices made at each level. The options at each level of choice are discussed in the following
+sections. The conceptual model shown in Figure 4 summarises the complete range of applicable options.
+You would be well advised to consider again at this stage what you can bring to your research from your
+diploma-level studies, especially but not exclusively from the core (compulsory) modules in your
+programme. You will have met a wealth of theoretical models, problem-solving approaches and analytical
+techniques, one or more of which could be an important tool for your research. Systems ideas in particular
+may be very helpful in defining and explaining the particular problem to be addressed. See Additional
+resources for suggestions and advice relevant to your particular MSc qualification.
+
+3.1 Choice of method and associated techniques
+The left hand side of Figure 4 shows the three methods for empirical research and the review approach,
+subdivided into eleven research categories. Taken as a whole, this figure represents a classification of
+technological research and shows the options that are available. The relationship between methods and
+the range of possible data-collection techniques is shown on the right hand side of Figure 4.
+
+Figure 4 The relationship between category and technique
+
+Maximise
+Show description
+
+The techniques under consideration in the T802 context are summarised as follows:
+Laboratory process – not common, but appropriate where the problem or issue can be defined in
+terms of physical or chemical processes. This could also be a prototype build and test, particularly in
+a computing context, for example.
+Shop floor/administration process analysis – often encountered in research related to the control
+of manufacturing and to supporting administration.
+Modelling and simulation – often used, including real and conceptual models. Computer modelling
+and simulation is an appropriate and useful technique.
+Analysis of company records – encountered in research involving management, financial and
+policy issues. It may have confidentiality implications if the records are not in the public domain.
+Analysis of public records – encountered particularly in matters of legislation and in standards
+documents.
+
+Use of secondary material – this refers to reports by other investigators and is mainly applicable to
+review research.
+Questionnaire – often used. Useful where a range of facts and opinions can be obtained through
+straightforward questions to a relatively large number of subjects, at least in comparison with the
+number that can be interviewed.
+Focus group / Nominal group – potentially useful group interaction techniques. Both are applicable
+where discussion amongst experts might produce new ideas or a consensual view on an issue. The
+nominal group technique has its origins in decision making but it also has value in research. It tends
+to have more formal procedures than the focus group technique.
+Delphi – an asynchronous and anonymous form of the focus group. Therefore likely to be more
+robust.
+Unstructured and semi-structured interviews – useful where an expert can provide useful
+information through discussion and prompting, rather than just answering set questions.
+Structured interviews – useful where the views of a number of experts are sought and can be
+obtained from a set of questions. Often, structured interviews are used in conjunction with another
+technique. For example, following a questionnaire, which gives breadth, another technique is used to
+explore something in more depth.
+Observation and measurement – essential where detailed data is required from a wide range of
+processes, including factory operations and natural and social environments.
+Action research – occurs mainly in real-life experimentation; difficult to control and evaluate since
+the researcher is both an observer and a participant.
+
+You should find Figure 4 useful in narrowing down the potential techniques for your chosen method.
+However, the applicability of each technique is only one factor in the choice – other factors will be
+considered during the two testing stages of the research design process, described in Section 3.3. It is
+also important to consider the choice of data-gathering techniques in relation to the way that you intend to
+analyse and manipulate the data. Knowing what you are going to do with the data once collected must
+therefore be an integral part of your decisions about data-collection techniques.
+Example 1: Pat J’s research aim was to forecast the adoption of a particular technology. She
+decided to make use of the analytical tool graphical extrapolation, which required the acquisition of
+historical data from published sources, and then validated that data for currency using the Delphi
+method. The latter involved the use of two rounds of questionnaires completed anonymously by
+appropriate experts.
+Example 2: The aim of Tarek P’s research was to improve an existing industrial process. He decided
+to make use of process maps as an analytical tool, both to describe the current practice and to
+develop and communicate the design of the improved process. This entailed use of three dataacquisition techniques: observation of people’s behaviour in operating the process, interviews with
+people involved in the process, and physical measurements of materials used through the various
+stages of the process.
+
+You are likely to have met analytical tools and perhaps also data-collection techniques specific to, or
+commonly used within, your own subject area during your postgraduate diploma-level studies. It is as
+
+important to consider all the relevant sources of information about research methods applicable to your
+research as it is to research the subject itself. You should aim to become an expert in your chosen
+research method/techniques as well as in the subject matter of your research.
+
+3.2 Methods, tasks and deliverables
+In the final section of ‘Preparing for research’ you identified the objectives for your research. It was
+emphasised that these objectives should be method independent. You should now be ready to begin to
+unpack those objectives and to look at how you will achieve them.
+The first thing that you will need to do is to identify the data that you will need to collect. Then identify the
+method, and associated technique, which will deliver the data – I will call the actions that you will need to
+do to undertake the method tasks. Tasks should be described using strong, clear verbs like: read,
+interview, plan, perform, specify, implement, design, test, analyse.
+Finally in this sequence you should identify deliverables. A deliverable should specify exactly what is to be
+the result when some work has been completed. Examples of deliverables include:
+books and journals obtained and read
+notes taken
+tests performed
+software written
+TMAs written
+a write-up of your literature survey
+a questionnaire developed
+data gathered
+data analysed
+any hardware assembled
+conclusions reached.
+
+Figure 5a
+
+Maximise
+Show description
+
+Figures 5a and 5b The links between research problem and deliverables
+
+Maximise
+Show description
+
+When you have your list of intended deliverables you then need to ask yourself how achievable each of
+the tasks is for you, given your circumstances and environment. Only take on what you are sure you can
+do. If, for example, your topic involves robotics but you need to build a robot or write the controlling
+software from scratch and you’ve never done this or anything like it before, don’t take this on. Inevitably,
+problems will arise that will take a great deal of your time and trouble to sort out – time that you
+desperately need elsewhere, not in trying to sort out ancillary problems.
+So some key questions are:
+What resources do I need to do these tasks? Have I got or can I acquire the hardware, software,
+access to a laboratory, access to subjects for any interviews or surveys?
+
+How long will each of these tasks take me?
+
+When you are able to assure yourself (and convince your supervisor) that what you are intending to do for
+your primary research is feasible within the time constraints of T802, you will be well on your way to an
+appropriate research proposal. Activity 1, at the end of this document, is an important feature of this
+proposal. There are, however, just two more sets of issues to consider before it is appropriate to undertake
+that activity – methodology validity and methodology practicability. These are dealt with in Sections 3.3 and
+3.4.
+
+3.3 Methodology validity
+This subsection represents a ‘change of gear’ in the sense that the first part looks at some new concepts
+in significant detail, whilst the second part takes the results of that and turns them into questions. It is OK
+to skim the information in ‘Criteria for methodology validity’ in the first instance and only refer to it again if
+the questions in ‘Testing methodology validity’ need elucidating in any way.
+
+Criteria for methodology validity
+The aim of a good methodology is to lead to valid results and conclusions. Ultimately, it must:
+address the research aim
+be executed in accordance with best practice with any variations justified
+produce conclusions that are generalisable; insofar as it is possible to reconcile this with the research
+paradigm applicable to your situation.
+
+The overall validity of the methodology may be decomposed into four elements:
+1. construct validity to express the relationship of the data gathered to the research problem
+2. internal validity for issues concerned with cause and effect and how it is tested
+3. external validity to demonstrate the generalisability of conclusions in the wider context of the
+problem or issue investigated
+4. data validity which is concerned with the need for the data collected to be accurate, sufficient and
+relevant.
+
+1. Construct validity
+A research design must provide the framework and processes that will enable the research aim to be
+achieved. At this stage it is important to establish the potential of the design by asking five basic questions:
+1. What are the deliverables essential to achieving the aim of the research?
+2. What information is required to produce the deliverables?
+3. What data must be collected to provide the information?
+4. Will the proposed methodology be appropriate to obtain the data?
+5. How can the data (quantitative and/or qualitative) be analysed and presented effectively?
+
+The construct validity is really a check that you have put together your methodology logically.
+
+2. Internal validity
+Internal validity is concerned with the way you select and interpret your data. A simple illustration is that the
+incorrect use of statistical analysis will lead to an untrustworthy result. A robust design needs to avoid
+weaknesses that could lead to misleading and inconclusive results. The following examples of threats to
+internal validity, based on Frankfort-Nachmias and Nachmias (1999, pp. 106–13), should be kept in mind.
+
+Selection bias
+Suppose you were investigating the change in attitude and morale resulting from the introduction of a new
+technique in an office. You might do this by observing a group that had been affected by the change – the
+experimental group – and comparing that with one which hadn’t – a control group. In comparing the two
+groups, you would need to consider whether changes observed would be due solely to the new technique
+introduced or whether the selection process itself might affect the results. It is essential to ensure that the
+experimental and control groups are neutral in terms of the variable being investigated.
+
+Passage of time
+This refers to those changes that might be expected to occur with the passage of time, irrespective of the
+experiment being carried out. Consider, for example, an investigation into the effectiveness of training. If
+the period of training is long, it might be the case that any improvements observed are due to other factors
+such as a growing familiarity with the work. This problem could also apply to machines used in a piece of
+research. Suppose you wished to study the effect of different robot ‘arms’ over a long period. Repeatability
+of results and the accuracy of the arms are a function not only of their design; wear and tear caused by
+normal usage of the robot might also influence the results of the study.
+
+Subject group deficiency
+This is concerned with dropout, which prevents the researcher from obtaining complete information.
+Suppose, for example, in researching the effects of a new method of selecting suppliers for a range of
+services, 30 are selected at random for a survey but only 10 agree to take part. It needs to be ascertained
+whether or not the reduced experimental base will be sufficiently representative to provide consistent
+results. See Additional resources for more on this.
+
+The measuring process
+This is concerned with the degree to which the measurements used in any testing are comparable. If a
+change occurs in the instrumentation or its calibration, differences in results may be attributable to this
+cause rather than to the effects of the phenomenon being investigated. This is an important factor in
+physical experiments but may also be significant, in a less literal sense, in survey work. Suppose your
+research design involves carrying out a series of structured interviews. You undertake the interviews over
+a period of time, during which your experience and attitude may change with respect to your investigation.
+You cannot be sure that this will not influence the way that you interpret answers to your questions.
+Wetherall (1968, pp. 152–8) provides the following sources of personal variation in research:
+the limits of human sensation and perception
+misinterpretation
+
+effects of repetition, such as practice and fatigue
+irrelevant stimulation (distraction)
+selective, preconceived observation
+memory and time lapses in recording
+motivation.
+
+The greater the degree of reliance on the human recording of research data, the greater the potential for
+psychological, social and physiological factors to affect the accuracy of the data.
+
+Testing (Hawthorne effect)
+This is concerned with the way that the process of testing can itself alter the results of the investigation.
+For example, if you were testing the change in attitudes to quality created by awareness training, the very
+act of interviewing or otherwise investigating the members of the control group might change their
+attitudes. The ‘Hawthorne effect’, named after the series of experiments led by Elton Mayo at the
+Hawthorne Plant of the Western Electric Company in Cicero, Illinois, is an example of the problem of
+testing. Researchers found that the activities involved in the research altered the results obtained. For
+example, they undertook an experiment to determine the relationship between the level of illumination on
+the shop floor and production output. They discovered that if the lighting was improved, performance
+increased as might be expected. Counter-intuitively, they also observed that when the lighting was
+returned to its previous level of illumination, performance still increased. It was the experiment itself that
+was producing the change in the dependent variable, rather than the action of the independent variable.
+
+3. External validity
+After you have studied Theories and paradigms: their relevance in research you will realise that some
+research paradigms recognise that some research will be context specific and not amenable to
+generalisation. However, even if you are faced with this situation you should consider, and state if
+appropriate, in what ways your research may be of relevance to others.
+One of the key aspects of much of the research which follows the positivist paradigm is that it should be
+possible to generalise the results from the specific setting of the investigation to the subject area as a
+whole. There are two reasons, however, why such an investigation may not be generalisable in terms of
+the field of study or class of problems in which it is located:
+1. The research problem is ill-defined or does not derive from the question ‘What is it important to
+know?’. This question is, in turn, derived from an analysis of the gap in knowledge. It is important to
+locate the research problem within the body of existing knowledge. The challenge is then to establish
+the relevance of the work in a wider context and to reflect that relevance in the research problem.
+2. The selection of an atypical unit to investigate. This may mean that the results cannot be generalised
+to a wider class of problem.
+
+4. Data validity
+Data is the raw material from which you will obtain the information required to produce your deliverables.
+Much useful information will come from observation of behaviour and from verbal comments, neither of
+which can be quantitatively represented. In planning your data-collection method and considering its
+validity, you need to ask yourself the following four broad questions:
+
+1. How do I justify the method of collection selected as appropriate for the data required, in comparison
+with other methods?
+2. In what ways will the data collected be relevant, sufficient and accurate for the purpose required?
+3. Do I need to consider undertaking a pilot study?
+4. Will the sample I have selected be representative of the whole population?
+
+If you can answer these questions convincingly, then you have completed an important task.
+
+Testing methodology validity
+Questions to be considered
+1. Does the proposed methodology enable each and every objective to be achieved? It is useful to list
+the data needed to address each objective and to identify exactly how the intended methodology and
+techniques will provide that data. Sub-questions here are:
+What are the deliverables essential to achieving the aim of the research?
+What information is required to produce the deliverables?
+What data must be collected to provide the information?
+Will the data collected be relevant, sufficient and accurate for the purpose required?
+Will the proposed methodology be appropriate to obtain the data?
+How can the data (quantitative and/or qualitative) be analysed and presented effectively?
+Do I need to consider undertaking a pilot study?
+
+2. Is it appropriate to adopt an experimental/control group approach and establish a comparison
+between the subject of interest and a control subject?
+3. How will selection bias be avoided?
+4. Will the ‘passage of time’ problem be a threat to validity? If so, how can I ensure that it is avoided?
+5. Is there a danger that my subject group will be insufficiently representative?
+6. Do I need to be aware of side effects from the measuring process?
+7. Will it be possible to ensure that testing, interviewing and measuring do not themselves alter the
+results of the investigation?
+8. How can I ensure that, if appropriate for the research paradigm, the results of the investigation will be
+generalisable? Can what I learn from, say, a single case study be considered applicable to other
+situations? If not, why not, and what can I do about it?
+
+3.4 Testing the practicability of your methodology
+So far Sections 2 and 3 have been concerned mainly with ‘What is to be done?’. This section concentrates
+on ‘How will it be achieved?’. Almost certainly, while you were reading about the selection of datacollection techniques and assessment of their validity, you also had in mind questions regarding the
+practicability of following your own methodology. Will it take too long? Will the subjects selected be
+
+prepared to provide the data required at the time you need it? Can you fit in activities such as site visits
+and interviewing with your other commitments?
+Hence, the next stage of the research design process is concerned with how to check that the
+investigation can be carried out in the time available. This involves detailed planning and evaluation using
+the Gantt chart that you started in Preparing for research.
+There is, however, one final concept that is important before you actually begin work on your own plans;
+that of milestones. A milestone is a major point in your project work that you must pass in order to get to
+your goal. A milestone is that date by which a deliverable needs to be delivered!
+The University sets some milestones such as the dates your TMAs are due, and the date your dissertation
+has to be submitted. Whilst these milestones are obvious ones to include on your Gantt chart, the ones
+that you create yourself are just as important.
+To do this you will need to use your lists of tasks and deliverables to determine what needs to be done in
+what order. It is very likely that the start of one of your tasks will be dependent on a deliverable. For
+example you will have to identify, obtain and read the relevant materials before you can write up your
+literature survey, or you may have to assemble the necessary hardware components before you can begin
+an experiment. Key aspects you will need to consider are:
+What is the date that each deliverable is needed?
+What is the duration of each task?
+What is the relationship between tasks?
+
+An example of milestones and associated deliverables, tasks and methods (similar to Figure 5(b)) is given
+in Additional resources.
+
+3.5 Summary of Section 3
+Section 3 is one of the most important sections of the whole of the T802 module materials and it
+introduces key concepts that you will need both for your research proposal and as your research
+proceeds. You will note that it is supported by several other parts of the module materials; most notably
+(but not exclusively) by Theories and Paradigms: their relevance in research and also the material in the
+Generic methods section and the Additional reading list in the Additional resources.
+Key points to note:
+Your choice of method(s) is crucial to the success of your research. This choice should be driven by
+the data needed to achieve each objective. You may need a combination of methods to form an
+overall methodology.
+Once you have identified an overall methodology, appropriate techniques should be identified for
+each associated method. Then, appropriate tasks and deliverables identified. You might want to
+sketch out a diagram similar to that in Figure 5(b) in order represent how your ideas are developing.
+
+There are then a series of questions to be considered in order to test the overall validity of the
+methodology. These questions are not applicable in every case and there may be additional
+questions which need answering. This is something to discuss with your supervisor.
+Finally there is the concept of a milestone to be considered. This is important in testing the
+practicability of your methodology. A milestone is a major point in your project work that you must
+pass in order to get to your goal. Each milestone will have an associated deliverable.
+
+4 Developing an outline methodology
+Having read Sections 1–3 of this part of T802 and, assuming that you have also completed the activity at
+the end of ‘Preparing for research’, you should be in good shape to complete a major aspect of your initial
+research proposal.
+
+Activity 1
+Activity 1 gives you the opportunity to sum up what you’ve learned in Section 3. You may find that
+you need to reread the section as you undertake this activity.
+
+References
+Coghlan, D. and Brannick, T. (2001) Doing Action Research in Your Own Organization, London, Sage.
+Flowerdew, R. and Martin, D. (2003) Methods of Human Geography: A Guide for Students Doing
+Research Projects, Harlow, Prentice Hall.
+Frankfort-Nachmias, C. and Nachmias, D. (1999) Research Methods in the Social Sciences, London,
+Arnold.
+Remenyi, D., Williams, B., Money, A. and Swartz, E. (1998) Doing Research in Business and
+Management, London, Sage.
+Stringer, E.T. (2007) Action Research, London, Sage.
+Thomas, R. (1996) ‘Surveys’ in Greenfield, T. (ed.) Research Methods: Guidance for Postgraduates,
+London, Arnold.
+Wadsworth, Y. (1997) Do It Yourself Social Research, Allen and Unwin.
+Wetherall, M. (1968) Scientific Method, London, The English Universities Press.
+Yates, S.J. (2004) Doing Social Science Research, London, Sage Publications/Milton Keynes, The Open
+University.
+Yin, R.K. (1981a) ‘The case study as a serious research strategy’, Knowledge: Creation, Diffusion,
+Utilization, vol. 3, September.
+Yin, R.K. (1981b) ‘The case study crisis: some answers’, Administrative Science Quarterly, vol. 26, March.
+
+Yin, R.K. (2003) Case Study Research. Design and Methods (3rd edn), Thousand Oaks, CA, Sage
+Publications.
+
+

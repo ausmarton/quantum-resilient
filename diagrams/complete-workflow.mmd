@@ -1,0 +1,128 @@
+%%{init: {'theme':'base', 'themeVariables': {'primaryColor':'#fff','primaryTextColor':'#000','primaryBorderColor':'#000','lineColor':'#000','secondaryColor':'#f4f4f4','tertiaryColor':'#fff','fontSize':'14px'}}}%%
+
+flowchart TB
+    %% Configuration Phase
+    subgraph Config["📋 Configuration Phase"]
+        Matrix["Experiment Matrix<br/>(experiment_matrix.yaml)"]
+        Generator["Scenario Generator<br/>(generate_scenarios.py)"]
+        Scenarios["Generated Scenarios<br/>(generated-scenarios/*.yaml)"]
+        Matrix --> Generator
+        Generator --> Scenarios
+    end
+
+    %% Data Collection Phase
+    subgraph Collection["🔬 Data Collection Phase"]
+        direction TB
+        subgraph Native["Native Environment"]
+            NativeRun["run_local.sh"]
+            NativeExec["pqc-bench binary"]
+            NativeData["Raw JSONL Files<br/>(results/native/*/raw/)"]
+            NativeRun --> NativeExec
+            NativeExec --> NativeData
+        end
+        
+        subgraph Minikube["Minikube Environment"]
+            K8sRun["run_minikube.sh"]
+            K8sBuild["Build Container Image"]
+            K8sDeploy["Deploy K8s Job"]
+            K8sExec["pqc-bench in Pod"]
+            K8sData["Raw JSONL Files<br/>(results/minikube/*/raw/)"]
+            K8sRun --> K8sBuild
+            K8sBuild --> K8sDeploy
+            K8sDeploy --> K8sExec
+            K8sExec --> K8sData
+        end
+        
+        subgraph GCP["GCP Environment"]
+            GCPRun["deploy_gcp.sh"]
+            GCPTerraform["Terraform: Create GKE"]
+            GCPBuild["Build & Push Image"]
+            GCPDeploy["Deploy K8s Job"]
+            GCPExec["pqc-bench in GKE"]
+            GCPUpload["Upload to GCS"]
+            GCPData["Raw JSONL Files<br/>(results/gcp/*/raw/)"]
+            GCPRun --> GCPTerraform
+            GCPTerraform --> GCPBuild
+            GCPBuild --> GCPDeploy
+            GCPDeploy --> GCPExec
+            GCPExec --> GCPUpload
+            GCPUpload --> GCPData
+        end
+    end
+
+    %% Data Processing Phase
+    subgraph Processing["📊 Data Processing Phase"]
+        direction TB
+        Merge["Merge JSONL Files<br/>(merge_jsonl.py)"]
+        Stats["Compute Statistics<br/>(compute_statistics.py)"]
+        Summaries["Experiment Summaries<br/>(stats/summary.json)"]
+        Index["Generate Index<br/>(regenerate_index_from_results.sh)"]
+        Merge --> Stats
+        Stats --> Summaries
+        Summaries --> Index
+    end
+
+    %% Analysis Phase
+    subgraph Analysis["📈 Analysis Phase"]
+        direction TB
+        Aggregate["Aggregate Results<br/>(aggregate_results.py)"]
+        Hypothesis["Hypothesis Tests<br/>(hypothesis_tests.py)"]
+        Plots["Generate Plots<br/>(plot_*.py)"]
+        Aggregated["Aggregated Statistics<br/>(aggregated_stats.json)"]
+        Tests["Test Results<br/>(hypothesis_tests.json)"]
+        Figures["Publication Figures<br/>(figures/*.png)"]
+        Aggregate --> Aggregated
+        Hypothesis --> Tests
+        Plots --> Figures
+    end
+
+    %% Reporting Phase
+    subgraph Reporting["📝 Reporting Phase"]
+        direction TB
+        Report["Build Final Report<br/>(build_final_report.py)"]
+        Tables["Extract Tables<br/>(extract_dissertation_tables.py)"]
+        Research["Research Artifacts<br/>(research/scripts/)"]
+        FinalReport["Final Report<br/>(report.md)"]
+        LaTeXTables["LaTeX Tables<br/>(tables/*.tex)"]
+        Artifacts["Research Artifacts<br/>(provenance.json, etc.)"]
+        Report --> FinalReport
+        Tables --> LaTeXTables
+        Research --> Artifacts
+    end
+
+    %% Flow connections
+    Scenarios --> NativeRun
+    Scenarios --> K8sRun
+    Scenarios --> GCPRun
+    
+    NativeData --> Merge
+    K8sData --> Merge
+    GCPData --> Merge
+    
+    Index --> Aggregate
+    Index --> Hypothesis
+    Index --> Plots
+    
+    Aggregated --> Report
+    Tests --> Report
+    Figures --> Report
+    
+    Aggregated --> Tables
+    Tests --> Tables
+    
+    FinalReport --> Research
+    LaTeXTables --> Research
+
+    %% Styling
+    classDef configStyle fill:#b3e5fc,stroke:#000,stroke-width:3px
+    classDef collectionStyle fill:#90caf9,stroke:#000,stroke-width:3px
+    classDef processingStyle fill:#a5d6a7,stroke:#000,stroke-width:3px
+    classDef analysisStyle fill:#81c784,stroke:#000,stroke-width:3px
+    classDef reportingStyle fill:#c8e6c9,stroke:#000,stroke-width:3px
+
+    class Matrix,Generator,Scenarios configStyle
+    class NativeRun,NativeExec,NativeData,K8sRun,K8sBuild,K8sDeploy,K8sExec,K8sData,GCPRun,GCPTerraform,GCPBuild,GCPDeploy,GCPExec,GCPUpload,GCPData collectionStyle
+    class Merge,Stats,Summaries,Index processingStyle
+    class Aggregate,Hypothesis,Plots,Aggregated,Tests,Figures analysisStyle
+    class Report,Tables,Research,FinalReport,LaTeXTables,Artifacts reportingStyle
+

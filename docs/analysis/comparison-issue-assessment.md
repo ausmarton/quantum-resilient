@@ -166,7 +166,8 @@ The reviewer raises a valid concern: **Kyber-512 (KEM operations) is being compa
 **Fix**: Add explicit operational framing to all comparison statements
 **Add**: Justification paragraph explaining why KEM vs Signature comparison is meaningful
 
-### 3. Section 4.3.4 (Line 652)
+### 3. Section 4.2.2 (Statistical Hypothesis Testing) - UPDATED
+**Note**: Section 4.3.4 referenced in the original document does not exist. This has been replaced with Figure 4.2a (Effect Size Forest Plot) in Section 4.2.2, which visualises the 59 comparisons with large effect sizes (|d| ≥ 0.8).
 **Fix**: "Kyber-512 key encapsulation operations significantly outperform classical signature generation operations (RSA-2048, ECDSA P-256), with 8.3x lower latency."
 
 ### 4. Section 4.4.1 (Line 693)

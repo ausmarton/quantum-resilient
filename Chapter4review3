@@ -1,0 +1,219 @@
+Excellent — I’ll verify **Iteration 3** now, again strictly in **external examiner mode**.
+
+As before, I’ll go item by item against the **explicit change requirements**, and I’ll be very clear about whether anything still needs tightening before we lock this chapter.
+
+---
+
+# Iteration 3 — Verification Outcome
+
+**Section(s): Analysis & Interpretation / Results / Performance Evaluation**
+
+---
+
+## A. Structural discipline: results → statistics → interpretation
+
+### Status: ✅ **Correctly applied**
+
+### Examiner judgement
+
+You have consistently separated:
+
+* **Observed results** (distributions, medians, trends)
+* **Statistical support** (tests, effect sizes, significance)
+* **Interpretation** (bounded, contextualised)
+
+This is now:
+
+* Easy to follow
+* Easy to examine
+* Very difficult to criticise
+
+✔️ This alone materially improves examiner confidence.
+
+---
+
+## B. Causal / confirmatory language control
+
+### Status: ⚠️ **Applied well, with one minor residual issue**
+
+### What you fixed well
+
+* Most causal verbs have been downgraded appropriately
+* “Indicates”, “suggests”, “is consistent with” are now dominant
+* Exploratory framing is respected
+
+### Remaining micro-issue
+
+There are **one or two places** (typically in subsection wrap-up sentences) where phrasing still implies **operational suitability**, e.g.:
+
+* “supports use in real-time pipelines”
+* “appropriate for latency-sensitive environments”
+
+### Examiner concern
+
+> “This is edging from interpretation into recommendation.”
+
+### Required micro-fix
+
+Add **one qualifying phrase** where this occurs, e.g.:
+
+* “under the experimental conditions evaluated”
+* “within the constraints of the tested framework”
+
+📌 This is a **language polish**, not a conceptual fix.
+
+---
+
+## C. Statistical significance vs operational significance
+
+### Status: ✅ **Correctly applied**
+
+### Examiner judgement
+
+You now:
+
+* Pair significance with effect size
+* Explicitly question operational materiality
+* Avoid treating p-values as endpoints
+
+This is exactly what examiners want to see at Master’s level.
+
+✔️ No further action required.
+
+---
+
+## D. Multiple comparisons handling
+
+### Status: ⚠️ **Adequate, but one clarification recommended**
+
+### What you did well
+
+* You acknowledge multiple comparisons
+* You downgrade claims appropriately
+* You distinguish descriptive vs inferential analysis in several places
+
+### Remaining ambiguity
+
+In one multi-algorithm comparison section, it is **not fully explicit** whether:
+
+* Correction was applied, or
+* Results are purely descriptive
+
+### Examiner concern
+
+> “I shouldn’t have to infer which interpretation regime applies.”
+
+### Required micro-addition (one sentence)
+
+Add something like:
+
+> “Given the exploratory nature of these comparisons, results are interpreted descriptively, with corrected inferential statistics used only to support high-level trends.”
+
+This closes the loop cleanly.
+
+---
+
+## E. Figures: interpretation vs narration
+
+### Status: ✅ **Correctly applied**
+
+### Examiner judgement
+
+Your figure references now:
+
+* Focus on *what the figure means*
+* Avoid narrating axes or obvious trends
+* Add analytical value
+
+This is **very strong** and above average for T802.
+
+✔️ No further action needed.
+
+---
+
+## F. Handling ambiguous / null results
+
+### Status: ✅ **Correctly applied**
+
+### Examiner judgement
+
+You now:
+
+* Explicitly acknowledge overlap and variance
+* Avoid forcing conclusions
+* Use ambiguity as analytical insight
+
+This significantly increases examiner trust.
+
+✔️ Well handled.
+
+---
+
+## G. Alignment with Methodology constraints
+
+### Status: ⚠️ **Mostly correct, with one boundary reinforcement needed**
+
+### What works
+
+* Most interpretations are now clearly anchored to the experimental framework
+* You avoid production-level claims
+
+### Remaining issue
+
+In the **transition toward conclusions**, there is still a slight broadening of scope — not egregious, but noticeable.
+
+### Examiner concern
+
+> “The analysis is careful, but the synthesis is starting to stretch.”
+
+### Required fix
+
+Add a **single anchoring sentence** near the end of Analysis, e.g.:
+
+> “These findings should be interpreted strictly within the controlled experimental framework described earlier and are intended to inform comparative evaluation rather than predict production-scale behaviour.”
+
+This protects the Conclusions chapter downstream.
+
+---
+
+# Overall verdict for Iteration 3
+
+### Examiner confidence level: **VERY HIGH**, pending minor language fixes
+
+You have successfully:
+
+* Aligned analysis with methodology
+* Eliminated overclaiming
+* Demonstrated statistical maturity
+* Shown intellectual honesty
+
+At this point, the **Analysis & Interpretation chapter is essentially locked**, subject to **very minor final polish**.
+
+---
+
+## Remaining required actions (very small)
+
+Please apply these **three micro-fixes**:
+
+1. Add qualifying phrases to any remaining “operational suitability” language
+2. Clarify one remaining multiple-comparison interpretation case
+3. Add one anchoring sentence reinforcing methodological scope near the end of Analysis
+
+Once done, come back and say:
+
+> **“Iteration 3 refinements applied — ready to proceed.”**
+
+---
+
+## What comes next (Iteration 4)
+
+Iteration 4 will be:
+
+* **Cross-chapter coherence**
+* **Conclusions**
+* **Abstract & extended abstract alignment**
+* **Final examiner-hostility sweep**
+
+This is the final consolidation phase.
+
+You’re now very clearly in **distinction-quality territory**, and the remaining work is about *precision*, not substance.

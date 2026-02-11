@@ -1926,6 +1926,13 @@ Reports Cohen's d with interpretations:
 
 All documentation has been reorganized into the `docs/` directory. See **[docs/README.md](docs/README.md)** for the complete documentation index.
 
+**Key Documentation**:
+- **[Component Documentation](docs/reference/component-documentation.md)** - Detailed documentation of all major components
+- **[Codebase Inventory](docs/CODEBASE_INVENTORY.md)** - Comprehensive inventory of all files and directories
+- **[Complete Workflow Diagram](diagrams/complete-workflow.mmd)** - Visual workflow from experiment matrix to final reporting
+- **[Detailed Methodology](docs/dissertation-methodology-detailed.md)** - Comprehensive methodology for dissertation Chapter 3
+- **[Development Guidelines](DEVELOPMENT_GUIDELINES.md)** - Development guidelines and practices
+
 ### Quick Links
 
 - **[Data Collection Guide](docs/guides/data-collection.md)** - Complete guide for full-scale data collection

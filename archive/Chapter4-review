@@ -1,0 +1,282 @@
+1. Are there further improvements worth making?
+
+Yes — but they are second-order improvements, not corrections. They fall into three buckets:
+
+Make certain comparisons visually undeniable
+
+Refine a few comparison choices to avoid subtle methodological criticism
+
+Improve readability by collapsing some text into tables/figures
+
+Nothing here threatens validity; these are about maximising clarity and examiner confidence.
+
+2. What would benefit most from additional or improved visualisation?
+
+You already have many good figures. The remaining gap is that some of your strongest claims are still numerically proven rather than visually obvious. Examiners tend to trust figures more than tables.
+
+2.1 One missing “killer” figure: PQC vs Classical distribution comparison
+Problem
+
+You say:
+
+PQC distributions are tighter
+
+Tail latency is lower
+
+Variance is reduced
+
+You show:
+
+ECDFs per algorithm
+
+ECDFs are statistically sound, but not intuitive for all examiners.
+
+Strong improvement
+
+Add one combined visual:
+
+🔹 Recommended figure
+
+Violin plot or box-and-whisker plot:
+
+X-axis: Algorithm (grouped: Classical vs PQC)
+
+Y-axis: Latency (log-scale if needed)
+
+Overlay:
+
+median
+
+p95
+
+p99 markers
+
+This makes three things instantly visible:
+
+Median shift
+
+Variance reduction
+
+Tail compression
+
+📌 This directly reinforces your “predictable latency” and “real-time suitability” claims.
+
+2.2 Effect sizes are crying out for a forest plot
+Problem
+
+You report very large Cohen’s d values (correctly caveated), but in table form they:
+
+Look abstract
+
+Invite “n is small” criticism
+
+🔹 Recommended figure
+
+Effect size forest plot:
+
+Y-axis: Comparison (Kyber vs RSA, Kyber vs ECDHE, etc.)
+
+X-axis: Cohen’s d
+
+Horizontal CI bars (bootstrapped if available)
+
+Why this helps
+
+Visually communicates magnitude dominance
+
+Shows that effects are not borderline
+
+Reinforces that even with small n, effects are overwhelming
+
+This is PhD-level statistical communication and examiners notice.
+
+2.3 Payload scaling: table → log–log line plot
+
+Table 4.5 is good, but it’s doing visual work.
+
+🔹 Recommended change
+
+Keep Table 4.5, add a log–log plot:
+
+X-axis: Payload size
+
+Y-axis: p95 latency
+
+One line per algorithm
+
+Add a slope annotation:
+
+“Sub-linear scaling (slope ≈ 0.3–0.4)”
+
+This visually proves:
+
+Efficiency
+
+Absence of payload explosion
+
+Engineering scalability
+
+3. What would be better as a table (rather than prose)?
+3.1 Collapse “Key Statistical Findings” into a summary table
+
+You currently:
+
+Describe findings in text
+
+Then show Table 4.3
+
+Improvement
+
+Add a compact summary table before the narrative:
+
+Table: Primary Findings Summary
+
+Dimension	Result
+Latency	PQC lower than classical across all evaluated conditions
+Tail latency	p95/p99 consistently lower for PQC
+Throughput	Comparable or higher
+Variance	Lower for PQC
+Environment sensitivity	Algorithm-independent
+Trade-offs	Memory/key size inflation
+
+This gives examiners a one-glance understanding before details.
+
+3.2 Environment comparison: normalised table
+
+Table 4.4 is fine, but still invites:
+
+“These are very different machines…”
+
+🔹 Improvement
+
+Add one normalised table:
+
+Environment	Relative Latency (vs classical baseline)
+Native	PQC −85%
+Minikube	PQC −82%
+GCP	PQC −79%
+
+This reinforces:
+
+Hardware independence of relative result
+
+Validity of within-environment inference
+
+4. Are you comparing things the right way around?
+Short answer
+
+Mostly yes — but two subtle refinements would make it bullet-proof.
+
+4.1 The “aggregate classical” baseline is slightly risky
+
+You use:
+
+“PQC vs Classical (aggregate)”
+
+Why this can be questioned
+
+Classical algorithms serve different roles
+
+Aggregation can hide structure
+
+An examiner may ask:
+“Which classical primitive exactly?”
+
+🔹 Improvement (simple, not disruptive)
+
+Always pair:
+
+Kyber ↔ ECDHE
+
+Dilithium ↔ ECDSA
+
+RSA used as a legacy baseline only
+
+You already do this implicitly — just make it explicit in framing.
+
+📌 Suggestion:
+Rename:
+
+“PQC vs Classical (aggregate)” →
+“PQC vs selected classical baselines (role-aligned)”
+
+4.2 Throughput comparisons need one extra guardrail
+
+You explain throughput vs latency very well, but one number is still risky:
+
+GCP throughput is much higher
+
+An examiner might say:
+
+“Isn’t this just because you have more cores?”
+
+🔹 Improvement
+
+Add one normalised metric:
+
+Throughput per vCPU
+
+Or messages/sec/core
+
+This instantly defuses the criticism and strengthens your cloud analysis.
+
+5. Any flaws in what you’re comparing?
+
+No fatal flaws. But there are three comparison caveats worth tightening (you already partially address them):
+
+5.1 Classical baselines are not “best possible”
+
+You already acknowledge this — good.
+
+Improvement
+
+Add one sentence in Section 4.2.1:
+
+“The study compares PQC algorithms against representative, not necessarily optimal, classical implementations, consistent with real-world enterprise defaults.”
+
+This reframes the comparison as pragmatic, not theoretical.
+
+5.2 Primitive-level vs protocol-level comparison
+
+You handle this well, but I’d strengthen it slightly:
+
+Add:
+
+“Protocol-level costs (e.g. TLS handshakes) would add fixed overheads to both PQC and classical primitives and are therefore unlikely to reverse the observed relative ordering.”
+
+This anticipates a common objection.
+
+5.3 Event-level independence (already handled well)
+
+Your “Statistical Unit of Analysis” section is excellent.
+I would not change it.
+
+If anything, it is stronger than many PhDs.
+
+6. Are you achieving the aim and objectives optimally?
+
+Yes — and this is now one of the strongest aspects.
+
+Why this works so well
+
+Each objective is:
+
+Restated
+
+Answered with evidence
+
+Closed explicitly
+
+Scope language is consistent everywhere
+
+Claims never exceed evidence
+
+Minor stylistic improvement
+
+In Objectives 3–5, reduce repetition of:
+
+“for the evaluated implementations, parameterisations, and workload conditions”
+
+You can safely replace later instances with:
+
+“under the evaluated conditions”

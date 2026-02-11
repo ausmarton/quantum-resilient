@@ -1,0 +1,39 @@
+%% Figure 3.4: Only elements referenced in Sections 3.3.3–3.3.5
+%% "execution and data collection"; workload generation (RNG seed), pipeline execution,
+%% cryptographic operation boundary, instrumentation (timing, resource), telemetry outputs (event-level, run-level)
+flowchart LR
+    subgraph WG["Workload Generation"]
+        RNG[RNG seed<br/>deterministic]
+    end
+    subgraph PE["Pipeline Execution"]
+        PIPE[Streaming pipeline]
+    end
+    subgraph CE["Cryptographic Execution"]
+        CRYPTO[Crypto adapter<br/>operation boundary]
+    end
+    subgraph INST["Instrumentation"]
+        TIMING[Timing]
+        RESOURCE[Resource metrics]
+    end
+    subgraph OUT["Telemetry Outputs"]
+        EVENT[Event-level data]
+        RUN[Run-level summaries]
+    end
+    RNG --> PIPE
+    PIPE --> CRYPTO
+    CRYPTO --> TIMING
+    CRYPTO --> RESOURCE
+    TIMING --> EVENT
+    RESOURCE --> EVENT
+    EVENT --> RUN
+
+    classDef wg fill:#b3e5fc,stroke:#000,stroke-width:3px
+    classDef pe fill:#ffb74d,stroke:#000,stroke-width:3px
+    classDef ce fill:#ffe082,stroke:#000,stroke-width:3px
+    classDef inst fill:#fff9c4,stroke:#000,stroke-width:3px
+    classDef out fill:#a5d6a7,stroke:#000,stroke-width:3px
+    class RNG wg
+    class PIPE pe
+    class CRYPTO ce
+    class TIMING,RESOURCE inst
+    class EVENT,RUN out

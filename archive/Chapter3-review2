@@ -1,0 +1,156 @@
+1. Methodology vs implementation creep ⚠️
+Issue
+
+Chapter 3 is exceptionally detailed, but at times it reads like a systems design specification rather than a methodology justification.
+
+An examiner may think:
+
+“This is impressive engineering—but is all of this methodologically necessary?”
+
+This is a common penalty risk in technically strong dissertations.
+
+Where it shows up
+
+Very deep descriptions of orchestration layers, execution modes, adapters, telemetry plumbing
+
+Repetition of framework architecture details already justified earlier
+
+Language like “provides”, “implements”, “exposes” dominates over “enables measurement of”, “controls for”, “isolates”
+
+Fix (important but easy)
+
+Add explicit methodological framing sentences at the start or end of major subsections.
+
+Example fix (template you can reuse):
+
+“This architectural design is not presented for implementation completeness, but to justify how the experimental framework controls for confounding variables, ensures repeatability, and enables fair comparison across cryptographic algorithms.”
+
+Do this once per major layer description.
+
+✅ This reframes complexity as methodological necessity, not overengineering.
+
+2. Explicit traceability: Research Questions → Methods ⚠️
+Issue
+
+Your objectives are clear, but Chapter 3 never explicitly maps:
+
+Research Question → Measurement → Statistical Test
+
+Examiners often look specifically for this mapping.
+
+Fix (high value, low effort)
+
+Add a short subsection at the start or end of 3.1:
+
+Suggested subsection: “3.X Mapping of Research Objectives to Methodology”
+
+Example table:
+
+Research Objective	Measurement Approach	Metrics	Statistical Method
+Assess latency impact of PQC	Controlled pipeline execution	p50, p95, p99 latency	t-test, Mann–Whitney
+Compare throughput	Sustained load tests	msgs/sec	Effect size (Cohen’s d)
+Evaluate resource overhead	System telemetry	CPU time, RSS	Descriptive + CI
+
+This dramatically improves examiner confidence and costs ~½ page.
+
+3. Experimental validity & bias controls (make them explicit) ⚠️
+Issue
+
+You do control for bias—but it’s implied rather than asserted.
+
+An examiner may ask:
+
+“How do we know the framework doesn’t favour one algorithm class?”
+
+Fix
+
+Add a short “Threats to Validity” subsection (even 3–4 paragraphs).
+
+Explicitly name:
+
+Internal validity (same hardware, same workload, same instrumentation)
+
+Construct validity (latency definition, monotonic clocks)
+
+Conclusion validity (multiple runs, non-parametric tests)
+
+External validity (representative but not exhaustive workloads)
+
+Example sentence (use almost verbatim):
+
+“All cryptographic algorithms are executed through an identical adapter interface and measured using the same instrumentation paths, ensuring that observed differences arise from algorithmic characteristics rather than framework artefacts.”
+
+This is examiner-bait—in a good way.
+
+4. Statistical unit of analysis — critical precision issue 🚨
+Issue (important)
+
+You correctly state that:
+
+Telemetry is event-level
+
+Statistics are computed at run-level
+
+However, this distinction is not emphasised strongly enough, and examiners are extremely sensitive to pseudo-replication.
+
+Risk
+
+An examiner might incorrectly think you are treating millions of events as independent samples, which would invalidate hypothesis testing.
+
+Fix (must do)
+
+Add one explicit, unambiguous paragraph (you already hint at this, but strengthen it):
+
+“Although latency is captured at the event level, statistical hypothesis testing is performed exclusively on run-level aggregates. Individual events are not treated as independent observations for significance testing, thereby avoiding pseudo-replication and ensuring statistical independence.”
+
+I strongly recommend bolding or italicising this sentence in the final version.
+
+5. Ethical considerations section is currently too thin ⚠️
+Issue
+
+Section 3.4 exists, but for a Cybersecurity MSc, examiners expect more than “no human subjects”.
+
+Fix (small expansion)
+
+Explicitly mention:
+
+No live or personal data
+
+Synthetic workloads only
+
+No cryptographic misuse
+
+Compliance with institutional research ethics guidelines
+
+No export-controlled material
+
+Example addition:
+
+“The study does not involve human participants, personal data, or live production systems. All workloads are synthetic, and all cryptographic implementations are publicly available, standardised algorithms. No novel cryptographic primitives are proposed, and no activities pose ethical or legal risk.”
+
+This protects you from ethics-related downgrades.
+
+6. Scope control: explicitly state what is not measured ⚠️
+Issue
+
+Because the framework is so capable, an examiner may ask:
+
+“Why didn’t you also measure X?”
+
+(e.g. ML inference, network jitter, TLS stacks, hardware accelerators)
+
+Fix
+
+Add a clear scope boundary paragraph, e.g.:
+
+“This research deliberately excludes end-to-end application latency, network jitter, machine learning inference, and business logic execution. These factors are orthogonal to cryptographic cost and would confound attribution of performance differences.”
+
+This shows discipline, not limitation.
+
+Minor but worthwhile polish items
+
+Ensure Figure references are always forward-referenced before appearing
+
+Reduce repeated phrasing of “nanosecond precision” (say once, then refer back)
+
+Ensure consistent terminology: “PQC algorithms” vs “post-quantum cryptographic algorithms”

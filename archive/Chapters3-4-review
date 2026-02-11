@@ -1,0 +1,78 @@
+What is still missing (important, but fixable)
+1. Sample size / unit-of-analysis clarity ⚠️ (still the biggest risk)
+What’s improved
+
+You’ve clarified scenarios and runs more clearly.
+
+What’s still missing
+
+It is still not unambiguously clear whether:
+
+The reported distributions are based on:
+
+Per-operation timings (thousands/millions of points), or
+
+Per-run aggregates (hundreds of points)
+
+An examiner will ask:
+
+“What exactly is one data point in these distributions?”
+
+Why this matters
+
+Without crystal clarity:
+
+Claims about distribution shape and stability are vulnerable
+
+Statistical power is ambiguous
+
+Minimal fix (recommended)
+
+Add one explicit sentence early in Chapter 4, e.g.:
+
+“Each data point represents the latency of a single cryptographic operation invocation, aggregated across n runs per scenario, yielding approximately X total measurements per algorithm.”
+
+or, if aggregated:
+
+“Each data point represents the median latency per run, yielding n observations per scenario.”
+
+This is a high-leverage fix.
+
+2. Tail latency interpretation is still underdeveloped ⚠️
+
+You report p95 / p99 — good.
+But interpretation still focuses primarily on means and medians.
+
+An examiner in cybersecurity + real-time systems may ask:
+
+“Does PQC increase jitter or tail amplification even if the mean impact is small?”
+
+Minimal fix
+
+Add one short paragraph explicitly stating one of the following:
+
+Either:
+
+“No systematic tail amplification was observed across PQC variants.”
+
+Or:
+
+“While tail latencies increased slightly, the absolute deltas remained within operational tolerance.”
+
+You do not need more plots — just interpretation.
+
+3. Environment confounding: now implied, not explicit ⚠️
+
+You implicitly handle environment noise well, but you no longer explicitly say:
+
+“Environment effects were treated as constant within each experimental run.”
+
+This was clearer in earlier drafts.
+
+Minimal fix
+
+Add one sentence in Chapter 4 methodology recap:
+
+“All comparative analyses were conducted within identical execution environments, ensuring that observed differences are attributable to cryptographic algorithm choice rather than deployment context.”
+
+This pre-empts a very common examiner question.

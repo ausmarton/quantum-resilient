@@ -1,0 +1,16 @@
+%% Figure EA1: Experimental evaluation pipeline (conceptual)
+%% Pipeline: Ingress → Parse/Validate → Crypto (KEM/sign) → Downstream → Egress/Telemetry
+%% Caption in dissertation includes: PQC or Classical swapped; Environments; Metrics
+flowchart LR
+    INGRESS[Ingress]
+    PARSE[Parse / Validate]
+    CRYPTO["Crypto stage<br/>KEM / sign"]
+    DOWNSTREAM[Downstream processing]
+    EGRESS[Egress / Telemetry]
+
+    INGRESS --> PARSE --> CRYPTO --> DOWNSTREAM --> EGRESS
+
+    classDef pipe fill:#b3e5fc,stroke:#000,stroke-width:2px
+    classDef crypto fill:#ffe082,stroke:#000,stroke-width:2px
+    class INGRESS,PARSE,DOWNSTREAM,EGRESS pipe
+    class CRYPTO crypto
